@@ -1,5 +1,6 @@
 # server/datos_lne.R
 # Sistema de carga de datos de Lista Nominal Electoral (LNE)
+# Versión CORREGIDA: Soporte para filtrado de extranjero por estado
 
 library(data.table)
 library(dplyr)
@@ -161,77 +162,13 @@ encontrar_archivo_lne <- function(tipo_corte, fecha, dimension = "completo") {
   }
 }
 
-# ========== FUNCIÓN AUXILIAR: DETECTAR DELIMITADOR ==========
-
-detectar_delimitador <- function(ruta_archivo) {
-  delimitador <- tryCatch({
-    # Leer las primeras 3 líneas para mayor certeza
-    lineas <- readLines(ruta_archivo, n = 3, encoding = "UTF-8", warn = FALSE)
-    
-    # Si no se pudo leer, intentar con Latin-1
-    if (length(lineas) == 0) {
-      lineas <- readLines(ruta_archivo, n = 3, encoding = "Latin-1", warn = FALSE)
-    }
-    
-    if (length(lineas) == 0) {
-      message("   ⚠️ No se pudieron leer líneas para detectar delimitador, usando coma por defecto")
-      return(",")
-    }
-    
-    # Usar la primera línea (encabezados)
-    primera_linea <- lineas[1]
-    
-    # Contar ocurrencias de cada delimitador
-    n_comas <- length(gregexpr(",", primera_linea, fixed = TRUE)[[1]])
-    n_puntos_coma <- length(gregexpr(";", primera_linea, fixed = TRUE)[[1]])
-    n_tabs <- length(gregexpr("\t", primera_linea, fixed = TRUE)[[1]])
-    n_pipes <- length(gregexpr("|", primera_linea, fixed = TRUE)[[1]])
-    
-    # Ajustar conteo (gregexpr devuelve -1 si no encuentra)
-    if (n_comas == 1 && gregexpr(",", primera_linea, fixed = TRUE)[[1]][1] == -1) n_comas <- 0
-    if (n_puntos_coma == 1 && gregexpr(";", primera_linea, fixed = TRUE)[[1]][1] == -1) n_puntos_coma <- 0
-    if (n_tabs == 1 && gregexpr("\t", primera_linea, fixed = TRUE)[[1]][1] == -1) n_tabs <- 0
-    if (n_pipes == 1 && gregexpr("|", primera_linea, fixed = TRUE)[[1]][1] == -1) n_pipes <- 0
-    
-    message("   🔍 Delimitadores detectados: comas=", n_comas, ", puntos_coma=", n_puntos_coma, 
-            ", tabs=", n_tabs, ", pipes=", n_pipes)
-    
-    # Elegir el más común (debe haber al menos 3 para ser considerado)
-    conteos <- c(coma = n_comas, punto_coma = n_puntos_coma, tab = n_tabs, pipe = n_pipes)
-    conteos <- conteos[conteos >= 3]  # Filtrar los que tienen al menos 3 ocurrencias
-    
-    if (length(conteos) == 0) {
-      message("   ⚠️ No se detectó un delimitador claro, usando coma por defecto")
-      return(",")
-    }
-    
-    delimitador_elegido <- names(which.max(conteos))
-    
-    delim_map <- c(
-      "coma" = ",",
-      "punto_coma" = ";",
-      "tab" = "\t",
-      "pipe" = "|"
-    )
-    
-    delim_final <- delim_map[delimitador_elegido]
-    
-    return(delim_final)
-    
-  }, error = function(e) {
-    message("   ❌ Error detectando delimitador: ", e$message, ", usando coma por defecto")
-    return(",")
-  })
-  
-  return(delimitador)
-}
-
 # ========== FUNCIÓN PRINCIPAL: CARGAR LNE ==========
 
 cargar_lne <- function(tipo_corte, fecha, dimension = "completo", 
                        estado = "Nacional", distrito = "Todos", 
                        municipio = "Todos", seccion = "Todas",
-                       incluir_extranjero = TRUE) {
+                       incluir_extranjero = TRUE,
+                       solo_extranjero = FALSE) {  # ✅ NUEVO PARÁMETRO
   
   inicio_total <- Sys.time()
   
@@ -251,39 +188,49 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   
   message("📂 [cargar_lne] Cargando: ", ruta_archivo)
   
-  # ========== DETECTAR DELIMITADOR AUTOMÁTICAMENTE ==========
-  delimitador <- detectar_delimitador(ruta_archivo)
-  message("   🔧 [DEBUG] Delimitador seleccionado: '", 
-          ifelse(delimitador == "\t", "TAB", ifelse(delimitador == ";", "PUNTO_COMA", "COMA")), "'")
-  
-  # ========== LEER ARCHIVO CSV CON DELIMITADOR CORRECTO ==========
+  # ========== LEER ARCHIVO CSV CON FREAD (MÁS ROBUSTO) ==========
   inicio_lectura <- Sys.time()
   
   dt <- tryCatch({
-    df_temp <- read.csv(
-      ruta_archivo, 
-      sep = delimitador,  # ← NUEVO: usar delimitador detectado
-      stringsAsFactors = FALSE, 
-      colClasses = "character",
-      fileEncoding = "UTF-8",
-      check.names = FALSE,
-      strip.white = TRUE,
+    # fread es mucho más robusto que read.csv para manejar encoding
+    fread(
+      ruta_archivo,
+      encoding = "Latin-1",  # INE usa Latin-1
+      stringsAsFactors = FALSE,
       na.strings = c("", "NA"),
-      skipNul = TRUE
+      strip.white = TRUE,
+      showProgress = FALSE,
+      blank.lines.skip = TRUE
     )
-    
-    message("📊 [cargar_lne] Filas leídas: ", nrow(df_temp))
-    message("📊 [cargar_lne] Columnas leídas: ", ncol(df_temp))
-    as.data.table(df_temp)
   }, error = function(e) {
-    message("❌ [cargar_lne] Error leyendo CSV: ", e$message)
-    return(NULL)
+    message("❌ [cargar_lne] Error leyendo CSV con fread: ", e$message)
+    message("   Intentando con read.csv...")
+    
+    # Fallback a read.csv
+    tryCatch({
+      df_temp <- read.csv(
+        ruta_archivo,
+        stringsAsFactors = FALSE,
+        colClasses = "character",
+        fileEncoding = "Latin-1",
+        check.names = FALSE,
+        strip.white = TRUE,
+        na.strings = c("", "NA")
+      )
+      as.data.table(df_temp)
+    }, error = function(e2) {
+      message("❌ [cargar_lne] Error leyendo CSV con read.csv: ", e2$message)
+      return(NULL)
+    })
   })
   
   if (is.null(dt) || nrow(dt) == 0) {
     message("❌ [cargar_lne] CSV vacío o NULL")
     return(NULL)
   }
+  
+  message("📊 [cargar_lne] Filas leídas: ", format(nrow(dt), big.mark = ","))
+  message("📊 [cargar_lne] Columnas leídas: ", ncol(dt))
   
   # Verificar que se leyeron múltiples columnas
   if (ncol(dt) <= 1) {
@@ -359,9 +306,6 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
     # Asignar nombres normalizados a los valores RAW
     nombres_normalizados <- colnames(dt)
     
-    # Agregar las columnas que se crean después (nombre_entidad, etc.)
-    # Por ahora, solo usar las columnas del CSV
-    
     if (length(fila_totales_raw) == length(nombres_normalizados)) {
       names(fila_totales_raw) <- nombres_normalizados
       fila_totales <- fila_totales_raw
@@ -375,12 +319,9 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
       col_lista_ext <- grep("^lista_extranjero$", names(fila_totales), ignore.case = TRUE, value = TRUE)[1]
       
       if (!is.na(col_padron_nac)) {
-        # CRÍTICO: Quitar comas (si existen) ANTES de convertir
         valor_padron <- as.numeric(gsub(",", "", as.character(fila_totales[[col_padron_nac]])))
         if (!is.na(valor_padron)) {
           message("   📊 Padrón Nacional: ", format(valor_padron, big.mark = ","))
-        } else {
-          message("   ⚠️ Padrón Nacional: valor='", fila_totales[[col_padron_nac]], "' no convertible")
         }
       }
       
@@ -388,8 +329,6 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
         valor_lista <- as.numeric(gsub(",", "", as.character(fila_totales[[col_lista_nac]])))
         if (!is.na(valor_lista)) {
           message("   📊 Lista Nacional: ", format(valor_lista, big.mark = ","))
-        } else {
-          message("   ⚠️ Lista Nacional: valor='", fila_totales[[col_lista_nac]], "' no convertible")
         }
       }
       
@@ -414,22 +353,43 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
     message("⚠️ [DESPUÉS NORMALIZAR] No hay fila de totales para procesar")
   }
   
-  
   # ========== AGREGAR MAPEOS GEOGRÁFICOS ==========
   
   if ("clave_entidad" %in% colnames(dt)) {
     dt[, nombre_entidad := entidades[sprintf("%02d", as.integer(clave_entidad))]]
   }
   
-  if (all(c("clave_entidad", "clave_distrito") %in% colnames(dt))) {
-    dt[, cabecera_distrital := sprintf("%02d", as.integer(clave_distrito))]
+  # ========== MAPEO DE DISTRITO ==========
+  # IMPORTANTE: cabecera_distrital YA viene en el CSV con NOMBRES
+  # Solo crear si NO existe (caso excepcional)
+  
+  if (!"cabecera_distrital" %in% colnames(dt)) {
+    # Solo crear si NO existe
+    if ("clave_distrito" %in% colnames(dt)) {
+      dt[, cabecera_distrital := sprintf("%02d", as.integer(clave_distrito))]
+      message("⚠️ cabecera_distrital no encontrada, creada desde clave_distrito")
+    }
+  } else {
+    message("✅ cabecera_distrital ya existe en CSV con nombres")
   }
   
-  if (all(c("clave_entidad", "clave_municipio") %in% colnames(dt))) {
-    dt[, nombre_municipio := paste0(
-      sprintf("%02d", as.integer(clave_entidad)), "-",
-      sprintf("%03d", as.integer(clave_municipio))
-    )]
+  # Crear columna adicional con CÓDIGO de distrito (útil para ordenamiento)
+  if ("clave_distrito" %in% colnames(dt)) {
+    dt[, codigo_distrito := sprintf("%02d", as.integer(clave_distrito))]
+  }
+  
+  # IMPORTANTE: nombre_municipio ya viene en el CSV, solo asegurar que existe
+  # Si no existe, crear uno basado en claves
+  if (!"nombre_municipio" %in% colnames(dt)) {
+    if (all(c("clave_entidad", "clave_municipio") %in% colnames(dt))) {
+      dt[, nombre_municipio := paste0(
+        sprintf("%02d", as.integer(clave_entidad)), "-",
+        sprintf("%03d", as.integer(clave_municipio))
+      )]
+      message("⚠️ nombre_municipio no encontrado, creado desde claves")
+    }
+  } else {
+    message("✅ nombre_municipio ya existe en CSV")
   }
   
   # ========== PROCESAR COLUMNAS NUMÉRICAS ==========
@@ -459,26 +419,68 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   # ========== APLICAR FILTROS ==========
   inicio_filtros <- Sys.time()
   
-  if (estado != "Nacional" && "nombre_entidad" %in% colnames(dt)) {
-    dt <- dt[toupper(nombre_entidad) == toupper(estado)]
-    message("🔍 Filtro estado: ", estado, " → ", nrow(dt), " filas")
+  # ✅ NUEVA LÓGICA: Filtrado para solo_extranjero
+  if (solo_extranjero) {
+    message("🌍 [FILTRO EXTRANJERO] Filtrando datos de extranjero...")
+    
+    # Paso 1: Filtrar por criterios de extranjero (seccion=0, etc.)
+    condicion_extranjero <- rep(FALSE, nrow(dt))
+    
+    if ("seccion" %in% colnames(dt)) {
+      condicion_seccion <- (dt$seccion == "0" | dt$seccion == 0)
+      condicion_extranjero <- condicion_extranjero | condicion_seccion
+      message("   🔍 Criterio seccion=0: ", sum(condicion_seccion, na.rm = TRUE), " filas")
+    }
+    
+    if ("cabecera_distrital" %in% colnames(dt)) {
+      condicion_distrito <- grepl("RESIDENTES EXTRANJERO", toupper(dt$cabecera_distrital))
+      condicion_extranjero <- condicion_extranjero | condicion_distrito
+      message("   🔍 Criterio cabecera RESIDENTES EXTRANJERO: ", sum(condicion_distrito, na.rm = TRUE), " filas")
+    }
+    
+    if ("nombre_municipio" %in% colnames(dt)) {
+      condicion_municipio <- grepl("RESIDENTES EXTRANJERO", toupper(dt$nombre_municipio))
+      condicion_extranjero <- condicion_extranjero | condicion_municipio
+      message("   🔍 Criterio municipio RESIDENTES EXTRANJERO: ", sum(condicion_municipio, na.rm = TRUE), " filas")
+    }
+    
+    dt <- dt[condicion_extranjero, ]
+    message("🔍 Filtro EXTRANJERO aplicado → ", nrow(dt), " filas")
+    
+    # Paso 2: Si hay filtro de estado específico, aplicarlo
+    if (estado != "Nacional" && "nombre_entidad" %in% colnames(dt)) {
+      dt <- dt[toupper(nombre_entidad) == toupper(estado)]
+      message("🔍 Filtro estado en EXTRANJERO: ", estado, " → ", nrow(dt), " filas")
+    }
+    
+    # Paso 3: NO aplicar filtros de distrito/municipio/sección específicos
+    message("⏭️ Saltando filtros de distrito/municipio/sección (solo_extranjero=TRUE)")
+    
+  } else {
+    # ========== FILTRADO NORMAL (NO extranjero) ==========
+    
+    if (estado != "Nacional" && "nombre_entidad" %in% colnames(dt)) {
+      dt <- dt[toupper(nombre_entidad) == toupper(estado)]
+      message("🔍 Filtro estado: ", estado, " → ", nrow(dt), " filas")
+    }
+    
+    if (distrito != "Todos" && "cabecera_distrital" %in% colnames(dt)) {
+      dt <- dt[cabecera_distrital == distrito]
+      message("🔍 Filtro distrito: ", distrito, " → ", nrow(dt), " filas")
+    }
+    
+    if (municipio != "Todos" && "nombre_municipio" %in% colnames(dt)) {
+      dt <- dt[nombre_municipio == municipio]
+      message("🔍 Filtro municipio: ", municipio, " → ", nrow(dt), " filas")
+    }
+    
+    if (!is.null(seccion) && length(seccion) > 0 && !("Todas" %in% seccion) && "seccion" %in% colnames(dt)) {
+      dt <- dt[seccion %in% seccion]
+      message("🔍 Filtro secciones: ", length(seccion), " → ", nrow(dt), " filas")
+    }
   }
   
-  if (distrito != "Todos" && "cabecera_distrital" %in% colnames(dt)) {
-    dt <- dt[cabecera_distrital == distrito]
-    message("🔍 Filtro distrito: ", distrito, " → ", nrow(dt), " filas")
-  }
-  
-  if (municipio != "Todos" && "nombre_municipio" %in% colnames(dt)) {
-    dt <- dt[nombre_municipio == municipio]
-    message("🔍 Filtro municipio: ", municipio, " → ", nrow(dt), " filas")
-  }
-  
-  if (!is.null(seccion) && length(seccion) > 0 && !("Todas" %in% seccion) && "seccion" %in% colnames(dt)) {
-    dt <- dt[seccion %in% seccion]
-    message("🔍 Filtro secciones: ", length(seccion), " → ", nrow(dt), " filas")
-  }
-  
+  # ========== FILTRO PARA EXCLUIR EXTRANJERO (SI SE SOLICITA) ==========
   if (!incluir_extranjero && "nombre_entidad" %in% colnames(dt)) {
     dt <- dt[nombre_entidad != "EXTRANJERO"]
     message("🔍 Excluir extranjero → ", nrow(dt), " filas")

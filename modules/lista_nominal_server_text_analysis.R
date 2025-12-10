@@ -1,4 +1,5 @@
 # modules/lista_nominal_server_text_analysis.R
+# Versión: 2.0 - Control total por botón Consultar para análisis de texto
 
 # Función auxiliar para formatear fechas en español (debe estar disponible del módulo principal)
 if (!exists("formatear_fecha_es")) {
@@ -21,7 +22,7 @@ if (!exists("formatear_fecha_es")) {
   }
 }
 
-lista_nominal_server_text_analysis <- function(input, output, session, datos_columnas) {
+lista_nominal_server_text_analysis <- function(input, output, session, datos_columnas, estado_app) {
   ns <- session$ns
   
   # ========== TÍTULO DEL ANÁLISIS ==========
@@ -39,14 +40,15 @@ lista_nominal_server_text_analysis <- function(input, output, session, datos_col
       "<h3>Lista Nominal Electoral</h3>",
       "<h4 class='cargo-subtitulo'>Corte: ", fecha_formateada, "</h4>"
     ))
-  })
+  }) %>%
+    bindEvent(estado_app(), input$btn_consultar, input$date, ignoreNULL = FALSE, ignoreInit = FALSE)
   
-  # ========== ALCANCE DEL ANÁLISIS (MEJORADO - ESTILO ELECCIONES FEDERALES) ==========
+  # ========== ALCANCE DEL ANÁLISIS ==========
   
   output$`text_analysis-alcance_lista` <- renderUI({
     req(input$entidad)
     
-    # Construir texto de alcance similar a Elecciones Federales
+    # Construir texto de alcance
     alcance_partes <- c()
     
     # Estado
@@ -70,16 +72,13 @@ lista_nominal_server_text_analysis <- function(input, output, session, datos_col
         if (length(input$seccion) == 1) {
           alcance_partes <- c(alcance_partes, paste("Sección:", input$seccion))
         } else if (length(input$seccion) <= 5) {
-          # Si son 5 o menos, mostrar todas
           secciones_texto <- paste(input$seccion, collapse = ", ")
           alcance_partes <- c(alcance_partes, paste("Secciones:", secciones_texto))
         } else {
-          # Si son más de 5, mostrar cantidad
           alcance_partes <- c(alcance_partes, paste("Secciones:", length(input$seccion), "seleccionadas"))
         }
       }
       
-      # Unir con guiones como en Elecciones Federales
       alcance_texto <- paste(alcance_partes, collapse = " - ")
     }
     
@@ -87,11 +86,31 @@ lista_nominal_server_text_analysis <- function(input, output, session, datos_col
       "<h4>Alcance del análisis</h4>",
       "<p class='alcance-analisis'>", alcance_texto, "</p>"
     ))
-  })
+  }) %>%
+    bindEvent(estado_app(), input$btn_consultar, input$entidad, input$distrito, 
+              input$municipio, input$seccion, ignoreNULL = FALSE, ignoreInit = FALSE)
   
-  # ========== RESUMEN GENERAL ==========
+  # ========== ✅ RESUMEN GENERAL CON CONTROL POR BOTÓN ==========
   
   output$`text_analysis-resumen_general_lista` <- renderUI({
+    
+    # ========== ✅ VALIDACIÓN DE ESTADO ==========
+    estado_actual <- estado_app()
+    
+    if (estado_actual == "inicial") {
+      message("⏸️ [ANÁLISIS TEXTO] Estado inicial - Mostrando mensaje")
+      return(HTML("<p class='sidebar-alert' style='text-align: center; color: #999; padding: 20px;'>Configure su consulta y presione 'Consultar' para ver el análisis</p>"))
+    }
+    
+    # ========== VALIDAR ESTADO CONSULTADO ==========
+    if (estado_actual == "consultado") {
+      req(input$btn_consultar > 0)  # ✅ CRÍTICO: Requiere botón presionado
+      message("🔍 [ANÁLISIS TEXTO - RESUMEN] Renderizando en estado CONSULTADO - Botón: ", input$btn_consultar)
+    } else {
+      message("🔍 [ANÁLISIS TEXTO - RESUMEN] Renderizando en estado RESTABLECIDO")
+    }
+    
+    # ========== OBTENER DATOS ==========
     datos <- datos_columnas()
     
     if (is.null(datos) || nrow(datos$datos) == 0) {
@@ -154,11 +173,36 @@ lista_nominal_server_text_analysis <- function(input, output, session, datos_col
       "en la lista nominal (por ejemplo, trámites pendientes o suspensiones de derechos políticos).</p>",
       "<p><em>Análisis basado en ", resumen$num_secciones, " secciones electorales.</em></p>"
     ))
-  })
+    
+  }) %>%
+    # ========== ✅ BINDEVET CRÍTICO ==========
+  bindEvent(
+    estado_app(),
+    input$btn_consultar,
+    ignoreNULL = FALSE,
+    ignoreInit = FALSE
+  )
   
-  # ========== DEMOGRAFÍA ==========
+  # ========== ✅ DEMOGRAFÍA CON CONTROL POR BOTÓN ==========
   
   output$`text_analysis-demografia_lista` <- renderUI({
+    
+    # ========== ✅ VALIDACIÓN DE ESTADO ==========
+    estado_actual <- estado_app()
+    
+    if (estado_actual == "inicial") {
+      return(NULL)
+    }
+    
+    # ========== VALIDAR ESTADO CONSULTADO ==========
+    if (estado_actual == "consultado") {
+      req(input$btn_consultar > 0)  # ✅ CRÍTICO: Requiere botón presionado
+      message("🔍 [ANÁLISIS TEXTO - DEMOGRAFÍA] Renderizando en estado CONSULTADO")
+    } else {
+      message("🔍 [ANÁLISIS TEXTO - DEMOGRAFÍA] Renderizando en estado RESTABLECIDO")
+    }
+    
+    # ========== OBTENER DATOS ==========
     datos <- datos_columnas()
     
     if (is.null(datos) || nrow(datos$datos) == 0) {
@@ -209,11 +253,36 @@ lista_nominal_server_text_analysis <- function(input, output, session, datos_col
     } else {
       HTML("<p><em>Información demográfica detallada no disponible para este corte.</em></p>")
     }
-  })
+    
+  }) %>%
+    # ========== ✅ BINDEVET CRÍTICO ==========
+  bindEvent(
+    estado_app(),
+    input$btn_consultar,
+    ignoreNULL = FALSE,
+    ignoreInit = FALSE
+  )
   
-  # ========== COMPARACIÓN TEMPORAL ==========
+  # ========== ✅ COMPARACIÓN TEMPORAL CON CONTROL POR BOTÓN ==========
   
   output$`text_analysis-comparacion_lista` <- renderUI({
+    
+    # ========== ✅ VALIDACIÓN DE ESTADO ==========
+    estado_actual <- estado_app()
+    
+    if (estado_actual == "inicial") {
+      return(NULL)
+    }
+    
+    # ========== VALIDAR ESTADO CONSULTADO ==========
+    if (estado_actual == "consultado") {
+      req(input$btn_consultar > 0)  # ✅ CRÍTICO: Requiere botón presionado
+      message("🔍 [ANÁLISIS TEXTO - COMPARACIÓN] Renderizando en estado CONSULTADO")
+    } else {
+      message("🔍 [ANÁLISIS TEXTO - COMPARACIÓN] Renderizando en estado RESTABLECIDO")
+    }
+    
+    # ========== OBTENER DATOS ==========
     datos_actual <- datos_columnas()
     
     if (is.null(datos_actual) || nrow(datos_actual$datos) == 0) {
@@ -221,8 +290,6 @@ lista_nominal_server_text_analysis <- function(input, output, session, datos_col
     }
     
     # Por ahora, mostrar un placeholder
-    # En el futuro, se puede implementar una comparación con el periodo anterior
-    
     tipo_periodo <- if (input$tipo_corte == "historico") "mensual" else "semanal"
     
     HTML(paste0(
@@ -231,7 +298,15 @@ lista_nominal_server_text_analysis <- function(input, output, session, datos_col
       "<p>Para realizar análisis comparativos, seleccione otra fecha de corte y ",
       "observe los cambios en el padrón electoral y la lista nominal.</p>"
     ))
-  })
+    
+  }) %>%
+    # ========== ✅ BINDEVET CRÍTICO ==========
+  bindEvent(
+    estado_app(),
+    input$btn_consultar,
+    ignoreNULL = FALSE,
+    ignoreInit = FALSE
+  )
   
   message("✅ Módulo lista_nominal_server_text_analysis inicializado")
 }

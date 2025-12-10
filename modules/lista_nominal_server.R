@@ -1,4 +1,5 @@
 # modules/lista_nominal_server.R
+# Versión: 2.4 - CORRECCIÓN: Filtros persisten al cambiar entre Nacional ↔ Extranjero
 
 # Configurar nombres de meses en español
 meses_es <- c(
@@ -14,10 +15,8 @@ names(meses_es) <- c(
 formatear_fecha_es <- function(fecha, formato = "%d de %B de %Y") {
   if (is.null(fecha) || is.na(fecha)) return("")
   
-  # Formatear en inglés primero
   fecha_str <- format(as.Date(fecha), formato)
   
-  # Reemplazar nombres de meses inglés -> español
   for (mes_en in names(meses_es)) {
     fecha_str <- gsub(mes_en, meses_es[mes_en], fecha_str)
   }
@@ -29,14 +28,12 @@ lista_nominal_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
+    # ========== CONTROL DE ESTADO DE LA APP ==========
+    estado_app <- reactiveVal("restablecido")  # ✅ INICIAR EN "restablecido" para carga automática
+    
     # Cargar submódulos
     source("modules/lista_nominal_server_main.R", local = TRUE)
     source("modules/lista_nominal_server_text_analysis.R", local = TRUE)
-    
-    # Verificar carga de datos_lne
-    if (!exists("cargar_lne", envir = .GlobalEnv)) {
-      source("server/datos_lne.R", local = TRUE)
-    }
     
     # ========== INFORMACIÓN TIPO DE CORTE ==========
     
@@ -60,6 +57,74 @@ lista_nominal_server <- function(id) {
           "</div>"
         ))
       }
+    })
+    
+    # ========== SELECTOR DE DESGLOSE DINÁMICO (SOLO PARA SEMANAL) ==========
+    
+    output$selector_desglose <- renderUI({
+      req(input$tipo_corte)
+      
+      if (input$tipo_corte == "semanal") {
+        selectInput(
+          ns("desglose"),
+          "Desglose:",
+          choices = c("Sexo", "Rango de Edad", "Entidad de Origen"),
+          selected = "Sexo"
+        )
+      } else {
+        return(NULL)
+      }
+    })
+    
+    # ========== INFORMACIÓN DE FECHA SELECCIONADA ==========
+    
+    output$info_fecha <- renderUI({
+      req(input$date)
+      
+      if (input$date == "" || input$date == "Sin datos") {
+        return(NULL)
+      }
+      
+      fecha <- as.Date(input$date)
+      fecha_formateada <- formatear_fecha_es(fecha, "%d de %B de %Y")
+      
+      HTML(paste0(
+        "<div style='background-color: #f0f0f0; padding: 5px; border-radius: 3px; margin-top: 5px;'>",
+        "<small><strong>Fecha seleccionada:</strong><br>",
+        fecha_formateada, "</small>",
+        "</div>"
+      ))
+    })
+    
+    # ========== ENCABEZADO PRINCIPAL ==========
+    
+    output$encabezado_principal <- renderUI({
+      req(input$tipo_corte, input$date)
+      
+      if (input$date == "" || input$date == "Sin datos") {
+        return(h3("Lista Nominal Electoral", style = "color: #666;"))
+      }
+      
+      fecha <- as.Date(input$date)
+      fecha_formateada <- formatear_fecha_es(fecha, "%d de %B de %Y")
+      tipo_texto <- if (input$tipo_corte == "historico") "Datos Históricos" else "Datos Semanales"
+      
+      # Determinar ámbito para el encabezado
+      ambito_texto <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
+        "Extranjero"
+      } else if (!is.null(input$entidad)) {
+        input$entidad
+      } else {
+        "Nacional"
+      }
+      
+      HTML(paste0(
+        "<h3>Lista Nominal Electoral - ", tipo_texto, "</h3>",
+        "<p style='font-size: 14px; color: #666;'>",
+        "Corte: <strong>", fecha_formateada, "</strong> | ",
+        "Ámbito: <strong>", ambito_texto, "</strong>",
+        "</p>"
+      ))
     })
     
     # ========== ACTUALIZAR AÑOS DISPONIBLES ==========
@@ -153,65 +218,6 @@ lista_nominal_server <- function(id) {
       }
     }, priority = 90)
     
-    # ========== INFORMACIÓN DE FECHA SELECCIONADA ==========
-    
-    output$info_fecha <- renderUI({
-      req(input$date)
-      
-      if (input$date == "" || input$date == "Sin datos") {
-        return(NULL)
-      }
-      
-      fecha <- as.Date(input$date)
-      fecha_formateada <- formatear_fecha_es(fecha, "%d de %B de %Y")
-      
-      HTML(paste0(
-        "<div style='background-color: #f0f0f0; padding: 5px; border-radius: 3px; margin-top: 5px;'>",
-        "<small><strong>Fecha seleccionada:</strong><br>",
-        fecha_formateada, "</small>",
-        "</div>"
-      ))
-    })
-    
-    # ========== SELECTOR DE DESGLOSE DINÁMICO (SOLO PARA SEMANAL) ==========
-    
-    output$selector_desglose <- renderUI({
-      req(input$tipo_corte)
-      
-      if (input$tipo_corte == "semanal") {
-        selectInput(
-          ns("desglose"),
-          "Desglose:",
-          choices = c("Sexo", "Rango de Edad", "Entidad de Origen"),
-          selected = "Sexo"
-        )
-      } else {
-        return(NULL)
-      }
-    })
-    
-    # ========== ENCABEZADO PRINCIPAL ==========
-    
-    output$encabezado_principal <- renderUI({
-      req(input$tipo_corte, input$date)
-      
-      if (input$date == "" || input$date == "Sin datos") {
-        return(h3("Lista Nominal Electoral", style = "color: #666;"))
-      }
-      
-      fecha <- as.Date(input$date)
-      fecha_formateada <- formatear_fecha_es(fecha, "%d de %B de %Y")
-      tipo_texto <- if (input$tipo_corte == "historico") "Datos Históricos" else "Datos Semanales"
-      
-      HTML(paste0(
-        "<h3>Lista Nominal Electoral - ", tipo_texto, "</h3>",
-        "<p style='font-size: 14px; color: #666;'>",
-        "Corte: <strong>", fecha_formateada, "</strong> | ",
-        "Ámbito: <strong>", input$entidad, "</strong>",
-        "</p>"
-      ))
-    })
-    
     # ========== FUNCIÓN AUXILIAR: CARGA INICIAL RÁPIDA ==========
     
     cargar_datos_defecto <- function() {
@@ -238,7 +244,8 @@ lista_nominal_server <- function(id) {
           distrito = "Todos",
           municipio = "Todos",
           seccion = "Todas",
-          incluir_extranjero = TRUE
+          incluir_extranjero = TRUE,
+          solo_extranjero = FALSE
         )
       }, error = function(e) {
         message("❌ [CARGA INICIAL] Error: ", e$message)
@@ -255,8 +262,8 @@ lista_nominal_server <- function(id) {
     # ========== REACTIVOS PRINCIPALES ==========
     
     combinacion_valida <- reactive({
-      # CARGA INICIAL: siempre válida
-      if (input$btn_consultar == 0) {
+      # CARGA INICIAL O RESTABLECIDA: siempre válida
+      if (estado_app() %in% c("inicial", "restablecido")) {
         return(TRUE)
       }
       
@@ -293,100 +300,121 @@ lista_nominal_server <- function(id) {
     # ========== REACTIVE OPTIMIZADO: datos_columnas CON BOTÓN ==========
     
     datos_columnas <- reactive({
-      # ========== CARGA INICIAL (SIN BOTÓN PRESIONADO) ==========
-      if (input$btn_consultar == 0) {
-        message("🚀 [DATOS_COLUMNAS] CARGA INICIAL - Sin botón presionado")
+      # ========== CARGA RESTABLECIDA (AUTOMÁTICA AL INICIO) ==========
+      if (estado_app() == "restablecido") {
+        message("🚀 [DATOS_COLUMNAS] CARGA RESTABLECIDA - Mostrando datos iniciales")
         return(cargar_datos_defecto())
       }
       
       # ========== CARGA PERSONALIZADA (BOTÓN PRESIONADO) ==========
-      message("🔍 [DATOS_COLUMNAS] CARGA PERSONALIZADA - Botón presionado: ", input$btn_consultar)
-      
-      # Aislar inputs para evitar reactividad no deseada
-      tipo_corte <- isolate(input$tipo_corte)
-      year <- isolate(input$year)
-      date <- isolate(input$date)
-      entidad <- isolate(input$entidad)
-      distrito <- isolate(input$distrito %||% "Todos")
-      municipio <- isolate(input$municipio %||% "Todos")
-      seccion <- isolate(input$seccion %||% "Todas")
-      desglose <- isolate(input$desglose %||% "Sexo")
-      
-      message("📊 Configuración: tipo=", tipo_corte, ", fecha=", date, ", entidad=", entidad)
-      
-      if (date == "" || date == "Sin datos") {
-        message("❌ Fecha no válida")
-        return(NULL)
+      if (estado_app() == "consultado") {
+        req(input$btn_consultar > 0)  # ✅ CRÍTICO: Verificar que botón fue presionado
+        message("🔍 [DATOS_COLUMNAS] CARGA PERSONALIZADA - Botón presionado: ", input$btn_consultar)
+        
+        # Aislar inputs para evitar reactividad no deseada
+        tipo_corte <- isolate(input$tipo_corte)
+        year <- isolate(input$year)
+        date <- isolate(input$date)
+        entidad <- isolate(input$entidad)
+        distrito <- isolate(input$distrito %||% "Todos")
+        municipio <- isolate(input$municipio %||% "Todos")
+        seccion <- isolate(input$seccion %||% "Todas")
+        desglose <- isolate(input$desglose %||% "Sexo")
+        ambito <- isolate(input$ambito_datos %||% "nacional")
+        
+        message("📊 Configuración: tipo=", tipo_corte, ", fecha=", date, ", ámbito=", ambito, ", entidad=", entidad)
+        
+        if (date == "" || date == "Sin datos") {
+          message("❌ Fecha no válida")
+          return(NULL)
+        }
+        
+        fecha_seleccionada <- tryCatch({
+          as.Date(date)
+        }, error = function(e) {
+          message("❌ Error convirtiendo fecha: ", e$message)
+          return(NULL)
+        })
+        
+        if (is.null(fecha_seleccionada) || is.na(fecha_seleccionada)) {
+          message("❌ Fecha inválida")
+          return(NULL)
+        }
+        
+        # ✅ CORRECCIÓN CRÍTICA: Determinar filtros según ÁMBITO
+        solo_extranjero <- FALSE
+        
+        if (ambito == "extranjero") {
+          # NO cambiar estado_filtro - mantener el estado seleccionado (ej: COLIMA)
+          estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
+          solo_extranjero <- TRUE  # Marcar que queremos SOLO datos de extranjero
+          message("📍 Ámbito EXTRANJERO - Estado: ", estado_filtro, ", solo_extranjero=TRUE")
+        } else {
+          estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
+          message("📍 Ámbito Nacional - Estado: ", estado_filtro)
+        }
+        
+        dimension <- if (tipo_corte == "semanal") {
+          switch(desglose,
+                 "Sexo" = "sexo",
+                 "Rango de Edad" = "edad",
+                 "Entidad de Origen" = "origen",
+                 "completo")
+        } else {
+          "completo"
+        }
+        
+        message("📂 Llamando cargar_lne: tipo=", tipo_corte, ", fecha=", fecha_seleccionada, 
+                ", dimension=", dimension, ", estado=", estado_filtro,
+                ", distrito=", distrito, ", municipio=", municipio, ", seccion=", seccion,
+                ", solo_extranjero=", solo_extranjero)
+        
+        datos_lne <- tryCatch({
+          cargar_lne(
+            tipo_corte = tipo_corte,
+            fecha = fecha_seleccionada,
+            dimension = dimension,
+            estado = estado_filtro,
+            distrito = distrito,
+            municipio = municipio,
+            seccion = seccion,
+            incluir_extranjero = TRUE,
+            solo_extranjero = solo_extranjero  # ✅ NUEVO PARÁMETRO
+          )
+        }, error = function(e) {
+          message("❌ Error en cargar_lne: ", e$message)
+          return(NULL)
+        })
+        
+        if (is.null(datos_lne) || !is.list(datos_lne)) {
+          message("❌ cargar_lne retornó NULL o no es lista")
+          return(NULL)
+        }
+        
+        if (!"datos" %in% names(datos_lne) || nrow(datos_lne$datos) == 0) {
+          message("⚠️ Sin datos tras filtros")
+          return(NULL)
+        }
+        
+        message("✅ Datos LNE cargados: ", nrow(datos_lne$datos), " filas")
+        return(datos_lne)
       }
       
-      fecha_seleccionada <- tryCatch({
-        as.Date(date)
-      }, error = function(e) {
-        message("❌ Error convirtiendo fecha: ", e$message)
-        return(NULL)
-      })
+      # Por defecto, retornar datos iniciales
+      return(cargar_datos_defecto())
       
-      if (is.null(fecha_seleccionada) || is.na(fecha_seleccionada)) {
-        message("❌ Fecha inválida")
-        return(NULL)
-      }
-      
-      estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
-      
-      dimension <- if (tipo_corte == "semanal") {
-        switch(desglose,
-               "Sexo" = "sexo",
-               "Rango de Edad" = "edad",
-               "Entidad de Origen" = "origen",
-               "completo")
-      } else {
-        "completo"
-      }
-      
-      message("📂 Llamando cargar_lne: tipo=", tipo_corte, ", fecha=", fecha_seleccionada, 
-              ", dimension=", dimension, ", estado=", estado_filtro)
-      
-      datos_lne <- tryCatch({
-        cargar_lne(
-          tipo_corte = tipo_corte,
-          fecha = fecha_seleccionada,
-          dimension = dimension,
-          estado = estado_filtro,
-          distrito = distrito,
-          municipio = municipio,
-          seccion = seccion,
-          incluir_extranjero = TRUE
-        )
-      }, error = function(e) {
-        message("❌ Error en cargar_lne: ", e$message)
-        return(NULL)
-      })
-      
-      if (is.null(datos_lne) || !is.list(datos_lne)) {
-        message("❌ cargar_lne retornó NULL o no es lista")
-        return(NULL)
-      }
-      
-      if (!"datos" %in% names(datos_lne) || nrow(datos_lne$datos) == 0) {
-        message("⚠️ Sin datos tras filtros")
-        return(NULL)
-      }
-      
-      message("✅ Datos LNE cargados: ", nrow(datos_lne$datos), " filas")
-      return(datos_lne)
-      
-    }) %>% bindCache(input$btn_consultar, input$tipo_corte, input$date, 
-                     input$entidad, input$distrito, input$municipio, input$seccion)
+    }) %>% bindCache(estado_app(), input$btn_consultar, input$tipo_corte, input$date, 
+                     input$entidad, input$distrito, input$municipio, input$seccion, input$ambito_datos)
     
-    # ========== ACTUALIZAR FILTROS GEOGRÁFICOS (SIN DISPARAR CARGAS) ==========
+    # ========== ACTUALIZAR FILTROS GEOGRÁFICOS - SOLO ACTUALIZAN OPCIONES ==========
     
+    # PASO 1: Actualizar ESTADOS
     observeEvent(datos_columnas(), {
       datos <- datos_columnas()
       
       if (!is.null(datos) && is.list(datos)) {
         estados <- c("Nacional", datos$todos_estados)
         
-        # PRESERVAR selección actual si existe
         current_estado <- isolate(input$entidad)
         selected_estado <- if (!is.null(current_estado) && current_estado %in% estados) {
           current_estado
@@ -402,15 +430,67 @@ lista_nominal_server <- function(id) {
       }
     }, priority = 50)
     
-    # PRESERVAR SELECCIÓN DE DISTRITO
-    observeEvent(input$entidad, {
+    # ✅ CORRECCIÓN PROBLEMA 2: Remover input$ambito_datos de dependencias
+    # PASO 2: Actualizar DISTRITOS
+    observeEvent(list(input$entidad, input$year, input$date), {
+      req(input$year, input$date)
+      
+      # ✅ VERIFICAR ámbito sin incluirlo en dependencias
+      if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
+        # NO resetear, solo mantener actual valor o "Todos"
+        current_distrito <- isolate(input$distrito)
+        if (is.null(current_distrito) || current_distrito == "") {
+          updateSelectInput(session, "distrito", choices = c("Todos"), selected = "Todos")
+        }
+        message("🗺️ Ámbito = Extranjero → Filtros geográficos deshabilitados (valor preservado)")
+        return()
+      }
+      
       req(input$entidad)
       
-      if (input$entidad != "Nacional") {
-        datos <- datos_columnas()
-        
-        if (!is.null(datos) && is.list(datos)) {
-          distritos <- c("Todos", datos$todos_distritos)
+      if (input$entidad == "Nacional") {
+        # NO resetear si ya es "Todos"
+        current_distrito <- isolate(input$distrito)
+        if (current_distrito != "Todos") {
+          updateSelectInput(session, "distrito", choices = c("Todos"), selected = "Todos")
+          message("🗺️ Estado = Nacional → Distrito resetado")
+        }
+        return()
+      }
+      
+      message("🔍 [FILTRADO CASCADA] Cargando distritos para: ", input$entidad)
+      
+      fecha_seleccionada <- tryCatch({
+        as.Date(input$date)
+      }, error = function(e) NULL)
+      
+      if (is.null(fecha_seleccionada)) {
+        message("❌ Fecha inválida para cargar distritos")
+        return()
+      }
+      
+      datos_filtrados <- tryCatch({
+        cargar_lne(
+          tipo_corte = "historico",
+          fecha = fecha_seleccionada,
+          dimension = "completo",
+          estado = input$entidad,
+          distrito = "Todos",
+          municipio = "Todos",
+          seccion = "Todas",
+          incluir_extranjero = TRUE,
+          solo_extranjero = FALSE
+        )
+      }, error = function(e) {
+        message("❌ Error cargando datos para distritos: ", e$message)
+        return(NULL)
+      })
+      
+      if (!is.null(datos_filtrados) && !is.null(datos_filtrados$datos)) {
+        if ("cabecera_distrital" %in% colnames(datos_filtrados$datos)) {
+          distritos_unicos <- sort(unique(datos_filtrados$datos$cabecera_distrital))
+          distritos_unicos <- distritos_unicos[distritos_unicos != "RESIDENTES EXTRANJERO"]
+          distritos <- c("Todos", distritos_unicos)
           
           current_distrito <- isolate(input$distrito)
           selected_distrito <- if (!is.null(current_distrito) && current_distrito %in% distritos) {
@@ -423,71 +503,215 @@ lista_nominal_server <- function(id) {
                             choices = distritos,
                             selected = selected_distrito)
           
-          message("🗺️ Distritos actualizados: ", length(distritos) - 1, " - Seleccionado: ", selected_distrito)
+          message("✅ Distritos de ", input$entidad, ": ", length(distritos) - 1)
+        } else {
+          updateSelectInput(session, "distrito", choices = c("Todos"), selected = "Todos")
         }
+      } else {
+        updateSelectInput(session, "distrito", choices = c("Todos"), selected = "Todos")
       }
     }, priority = 40, ignoreInit = TRUE)
     
-    # PRESERVAR SELECCIÓN DE MUNICIPIO
-    observeEvent(input$distrito, {
-      req(input$distrito)
+    # ✅ CORRECCIÓN PROBLEMA 2: Remover input$ambito_datos de dependencias
+    # PASO 3: Actualizar MUNICIPIOS
+    observeEvent(list(input$distrito, input$entidad, input$year, input$date), {
+      req(input$distrito, input$year, input$date)
       
-      datos <- datos_columnas()
-      
-      if (!is.null(datos) && is.list(datos)) {
-        municipios <- c("Todos", datos$todos_municipios)
-        
+      # ✅ VERIFICAR ámbito sin incluirlo en dependencias
+      if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
+        # NO resetear, solo mantener actual valor o "Todos"
         current_municipio <- isolate(input$municipio)
-        selected_municipio <- if (!is.null(current_municipio) && current_municipio %in% municipios) {
-          current_municipio
-        } else {
-          "Todos"
+        if (is.null(current_municipio) || current_municipio == "") {
+          updateSelectInput(session, "municipio", choices = c("Todos"), selected = "Todos")
         }
-        
-        updateSelectInput(session, "municipio",
-                          choices = municipios,
-                          selected = selected_municipio)
-        
-        message("🗺️ Municipios actualizados: ", length(municipios) - 1, " - Seleccionado: ", selected_municipio)
+        return()
+      }
+      
+      req(input$entidad)
+      
+      if (input$entidad == "Nacional" || input$distrito == "Todos") {
+        # NO resetear si ya es "Todos"
+        current_municipio <- isolate(input$municipio)
+        if (current_municipio != "Todos") {
+          updateSelectInput(session, "municipio", choices = c("Todos"), selected = "Todos")
+          message("🗺️ Distrito = Todos → Municipio resetado")
+        }
+        return()
+      }
+      
+      message("🔍 [FILTRADO CASCADA] Cargando municipios para: ", input$entidad, " - ", input$distrito)
+      
+      fecha_seleccionada <- tryCatch({
+        as.Date(input$date)
+      }, error = function(e) NULL)
+      
+      if (is.null(fecha_seleccionada)) {
+        return()
+      }
+      
+      datos_filtrados <- tryCatch({
+        cargar_lne(
+          tipo_corte = "historico",
+          fecha = fecha_seleccionada,
+          dimension = "completo",
+          estado = input$entidad,
+          distrito = input$distrito,
+          municipio = "Todos",
+          seccion = "Todas",
+          incluir_extranjero = TRUE,
+          solo_extranjero = FALSE
+        )
+      }, error = function(e) {
+        message("❌ Error cargando datos para municipios: ", e$message)
+        return(NULL)
+      })
+      
+      if (!is.null(datos_filtrados) && !is.null(datos_filtrados$datos)) {
+        if ("nombre_municipio" %in% colnames(datos_filtrados$datos)) {
+          municipios_unicos <- sort(unique(datos_filtrados$datos$nombre_municipio))
+          municipios_unicos <- municipios_unicos[municipios_unicos != "RESIDENTES EXTRANJERO"]
+          municipios <- c("Todos", municipios_unicos)
+          
+          current_municipio <- isolate(input$municipio)
+          selected_municipio <- if (!is.null(current_municipio) && current_municipio %in% municipios) {
+            current_municipio
+          } else {
+            "Todos"
+          }
+          
+          updateSelectInput(session, "municipio",
+                            choices = municipios,
+                            selected = selected_municipio)
+          
+          message("✅ Municipios: ", length(municipios) - 1)
+        } else {
+          updateSelectInput(session, "municipio", choices = c("Todos"), selected = "Todos")
+        }
+      } else {
+        updateSelectInput(session, "municipio", choices = c("Todos"), selected = "Todos")
       }
     }, priority = 30, ignoreInit = TRUE)
     
-    # PRESERVAR SELECCIÓN DE SECCIONES
-    observeEvent(input$municipio, {
-      req(input$municipio)
+    # ✅ CORRECCIÓN PROBLEMA 2: Remover input$ambito_datos de dependencias
+    # PASO 4: Actualizar SECCIONES
+    observeEvent(list(input$municipio, input$distrito, input$entidad, input$year, input$date), {
+      req(input$municipio, input$year, input$date)
       
-      datos <- isolate(datos_columnas())
-      
-      if (!is.null(datos) && is.list(datos)) {
-        secciones <- c("Todas", datos$todas_secciones)
-        
+      # ✅ VERIFICAR ámbito sin incluirlo en dependencias
+      if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
+        # NO resetear, solo mantener actual valor o "Todas"
         current_seccion <- isolate(input$seccion)
-        
-        if (!is.null(current_seccion) && length(current_seccion) > 0) {
-          if ("Todas" %in% current_seccion) {
-            selected_seccion <- "Todas"
-          } else {
-            valid_secciones <- current_seccion[current_seccion %in% secciones]
-            selected_seccion <- if (length(valid_secciones) > 0) valid_secciones else "Todas"
-          }
-        } else {
-          selected_seccion <- "Todas"
+        if (is.null(current_seccion) || length(current_seccion) == 0) {
+          updateSelectizeInput(session, "seccion", 
+                               choices = c("Todas"), 
+                               selected = "Todas",
+                               options = list(
+                                 placeholder = "Selecciona una o más secciones",
+                                 plugins = list("remove_button"),
+                                 maxItems = NULL
+                               ))
         }
-        
-        updateSelectizeInput(session, "seccion",
-                             choices = secciones,
-                             selected = selected_seccion,
+        return()
+      }
+      
+      req(input$distrito, input$entidad)
+      
+      if (input$entidad == "Nacional" || input$distrito == "Todos" || input$municipio == "Todos") {
+        # NO resetear si ya es "Todas"
+        current_seccion <- isolate(input$seccion)
+        if (!"Todas" %in% current_seccion) {
+          updateSelectizeInput(session, "seccion", 
+                               choices = c("Todas"), 
+                               selected = "Todas",
+                               options = list(
+                                 placeholder = "Selecciona una o más secciones",
+                                 plugins = list("remove_button"),
+                                 maxItems = NULL
+                               ))
+          message("🗺️ Municipio = Todos → Sección resetada")
+        }
+        return()
+      }
+      
+      message("🔍 [FILTRADO CASCADA] Cargando secciones para: ", input$municipio)
+      
+      fecha_seleccionada <- tryCatch({
+        as.Date(input$date)
+      }, error = function(e) NULL)
+      
+      if (is.null(fecha_seleccionada)) {
+        return()
+      }
+      
+      datos_filtrados <- tryCatch({
+        cargar_lne(
+          tipo_corte = "historico",
+          fecha = fecha_seleccionada,
+          dimension = "completo",
+          estado = input$entidad,
+          distrito = input$distrito,
+          municipio = input$municipio,
+          seccion = "Todas",
+          incluir_extranjero = TRUE,
+          solo_extranjero = FALSE
+        )
+      }, error = function(e) {
+        message("❌ Error cargando datos para secciones: ", e$message)
+        return(NULL)
+      })
+      
+      if (!is.null(datos_filtrados) && !is.null(datos_filtrados$datos)) {
+        if ("seccion" %in% colnames(datos_filtrados$datos)) {
+          secciones_unicas <- sort(unique(as.character(datos_filtrados$datos$seccion)))
+          secciones_unicas <- secciones_unicas[secciones_unicas != "0"]
+          secciones <- c("Todas", secciones_unicas)
+          
+          current_seccion <- isolate(input$seccion)
+          
+          if (!is.null(current_seccion) && length(current_seccion) > 0) {
+            if ("Todas" %in% current_seccion) {
+              selected_seccion <- "Todas"
+            } else {
+              valid_secciones <- current_seccion[current_seccion %in% secciones]
+              selected_seccion <- if (length(valid_secciones) > 0) valid_secciones else "Todas"
+            }
+          } else {
+            selected_seccion <- "Todas"
+          }
+          
+          updateSelectizeInput(session, "seccion",
+                               choices = secciones,
+                               selected = selected_seccion,
+                               options = list(
+                                 placeholder = "Selecciona una o más secciones",
+                                 plugins = list("remove_button"),
+                                 maxItems = NULL
+                               ))
+          
+          message("✅ Secciones: ", length(secciones) - 1)
+        } else {
+          updateSelectizeInput(session, "seccion", 
+                               choices = c("Todas"), 
+                               selected = "Todas",
+                               options = list(
+                                 placeholder = "Selecciona una o más secciones",
+                                 plugins = list("remove_button"),
+                                 maxItems = NULL
+                               ))
+        }
+      } else {
+        updateSelectizeInput(session, "seccion", 
+                             choices = c("Todas"), 
+                             selected = "Todas",
                              options = list(
                                placeholder = "Selecciona una o más secciones",
                                plugins = list("remove_button"),
                                maxItems = NULL
                              ))
-        
-        message("🗺️ Secciones actualizadas: ", length(secciones) - 1, " - Seleccionadas: ", paste(selected_seccion, collapse = ", "))
       }
     }, priority = 20, ignoreInit = TRUE)
     
-    # MANEJAR SELECCIÓN DE "TODAS"
+    # PASO 5: Manejar selección de "Todas" en secciones
     observeEvent(input$seccion, {
       req(input$seccion)
       
@@ -503,25 +727,85 @@ lista_nominal_server <- function(id) {
       }
     }, priority = 10, ignoreInit = TRUE)
     
-    # ========== LLAMAR A SUBMÓDULOS ==========
+    # ========== BOTÓN CONSULTAR ==========
+    observeEvent(input$btn_consultar, {
+      req(input$btn_consultar > 0)
+      
+      message("🔍 [BOTÓN CONSULTAR] Presionado - Cambiando estado a 'consultado'")
+      estado_app("consultado")
+    }, ignoreInit = TRUE)
+    
+    # ========== BOTÓN RESTABLECER CONSULTA ==========
+    observeEvent(input$reset_config, {
+      message("🔄 [RESTABLECER] Botón presionado - Restableciendo configuración...")
+      
+      estado_app("restablecido")
+      message("   ✅ Estado → restablecido")
+      
+      if (exists("LNE_CACHE_GRAFICAS", envir = .GlobalEnv)) {
+        message("🧹 [RESTABLECER] Limpiando caché de gráficas...")
+        assign("LNE_CACHE_GRAFICAS", list(
+          datos_year_actual = NULL,
+          datos_anuales = NULL,
+          timestamp_year = NULL,
+          timestamp_anuales = NULL,
+          año_cacheado = NULL
+        ), envir = .GlobalEnv)
+        message("   ✅ Caché limpiado")
+      }
+      
+      if (!exists("LNE_CATALOG", envir = .GlobalEnv)) {
+        message("⚠️ [RESTABLECER] LNE_CATALOG no existe")
+        return(NULL)
+      }
+      
+      catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
+      
+      updateRadioButtons(session, "tipo_corte", selected = "historico")
+      message("   ✅ tipo_corte → historico")
+      
+      updateRadioButtons(session, "ambito_datos", selected = "nacional")
+      message("   ✅ ambito_datos → nacional")
+      
+      if (length(catalog$historico) > 0) {
+        años_disponibles <- sort(unique(format(catalog$historico, "%Y")), decreasing = TRUE)
+        updateSelectInput(session, "year", selected = años_disponibles[1])
+        message("   ✅ year → ", años_disponibles[1])
+        
+        fechas_year <- catalog$historico[format(catalog$historico, "%Y") == años_disponibles[1]]
+        if (length(fechas_year) > 0) {
+          fechas_year_sorted <- sort(fechas_year, decreasing = TRUE)
+          updateSelectInput(session, "date", selected = as.character(fechas_year_sorted[1]))
+          message("   ✅ date → ", as.character(fechas_year_sorted[1]))
+        }
+      }
+      
+      updateSelectInput(session, "entidad", selected = "Nacional")
+      message("   ✅ entidad → Nacional")
+      
+      message("✅ [RESTABLECER] Configuración restablecida correctamente")
+    })
+    
+    # ========== ✅ LLAMAR A SUBMÓDULOS CON estado_app ==========
     
     if (file.exists("modules/lista_nominal_server_main.R")) {
       source("modules/lista_nominal_server_main.R", local = TRUE)
-      lista_nominal_server_main(input, output, session, datos_columnas, combinacion_valida)
+      lista_nominal_server_main(input, output, session, datos_columnas, combinacion_valida, estado_app)
     } else {
       message("⚠️ No se encontró lista_nominal_server_main.R")
     }
     
-    if (file.exists("modules/lista_nominal_server_graficas.R")) {
-      source("modules/lista_nominal_server_graficas.R", local = TRUE)
-      lista_nominal_server_graficas(input, output, session, datos_columnas, combinacion_valida)
+    if (file.exists("modules/lista_nominal_graficas/graficas_main.R")) {
+      source("modules/lista_nominal_graficas/graficas_main.R", local = TRUE)
+      lista_nominal_server_graficas(input, output, session, datos_columnas, combinacion_valida, estado_app)
+      message("✅ Módulo de gráficas modularizado cargado correctamente")
     } else {
-      message("⚠️ No se encontró lista_nominal_server_graficas.R")
+      message("⚠️ No se encontró módulo de gráficas modularizado en modules/lista_nominal_graficas/graficas_main.R")
     }
     
     if (file.exists("modules/lista_nominal_server_text_analysis.R")) {
       source("modules/lista_nominal_server_text_analysis.R", local = TRUE)
-      lista_nominal_server_text_analysis(input, output, session, datos_columnas)
+      lista_nominal_server_text_analysis(input, output, session, datos_columnas, estado_app)
     } else {
       message("⚠️ No se encontró lista_nominal_server_text_analysis.R")
     }

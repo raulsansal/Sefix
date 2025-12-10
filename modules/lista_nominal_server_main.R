@@ -1,7 +1,8 @@
 # modules/lista_nominal_server_main.R
+# Versión: 2.0 - Control total por botón Consultar para DataTable
 # Coordinador principal que integra los módulos de gráficas y tablas
 
-lista_nominal_server_main <- function(input, output, session, datos_columnas, combinacion_valida) {
+lista_nominal_server_main <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   ns <- session$ns
   
   # ========== CARGAR Y EJECUTAR MÓDULO DE GRÁFICAS ==========
@@ -33,15 +34,46 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     "tasa_inclusion" = "Tasa de Inclusión (%)"
   )
   
-  # ========== RENDERIZAR TABLA DE DATOS ==========
+  # ========== ✅ RENDERIZAR TABLA CON CONTROL POR BOTÓN ==========
   
   output$`main-table_data` <- renderDT({
+    
+    # ========== ✅ CONTROL DE ESTADO - NO RENDERIZAR EN ESTADO INICIAL ==========
+    estado_actual <- estado_app()
+    
+    if (estado_actual == "inicial") {
+      message("⏸️ [DATATABLE] Estado inicial - Mostrando mensaje")
+      return(datatable(
+        data.frame(Mensaje = "Configure su consulta y presione 'Consultar' para cargar datos"),
+        options = list(
+          pageLength = 10, 
+          dom = 't',
+          ordering = FALSE,
+          searching = FALSE
+        ),
+        rownames = FALSE,
+        class = 'cell-border stripe'
+      ))
+    }
+    
+    # ========== VALIDAR ESTADO RESTABLECIDO O CONSULTADO ==========
+    if (estado_actual == "consultado") {
+      req(input$btn_consultar > 0)  # ✅ CRÍTICO: Requiere botón presionado
+      message("🔍 [DATATABLE] Renderizando en estado CONSULTADO - Botón: ", input$btn_consultar)
+    } else {
+      message("🔍 [DATATABLE] Renderizando en estado RESTABLECIDO")
+    }
+    
+    # ========== VALIDAR datos_columnas ==========
     req(combinacion_valida())
+    
     datos <- datos_columnas()
     req(is.list(datos), !is.null(datos$datos))
     
     df <- datos$datos
     req(is.data.frame(df), nrow(df) > 0)
+    
+    message("📊 [DATATABLE] Datos disponibles: ", nrow(df), " filas")
     
     # Definir columnas base
     columnas_base <- c("nombre_entidad", "seccion")
@@ -108,7 +140,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     }
     
     message("🔍 Columnas tabla: ", paste(columnas_seleccionadas, collapse = ", "))
-    message("🔍 Nombres aplicados: ", paste(nombres_columnas, collapse = ", "))
     
     colnames(datos_tabla) <- nombres_columnas
     
@@ -169,7 +200,15 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     
     message("✅ DataTable renderizado correctamente")
     dt
-  })
+    
+  }) %>%
+    # ========== ✅ BINDEVET CRÍTICO: CONTROLA CUÁNDO SE EJECUTA renderDT ==========
+  bindEvent(
+    estado_app(),           # Escucha cambios de estado
+    input$btn_consultar,    # Escucha botón Consultar
+    ignoreNULL = FALSE,     # Permitir valores NULL
+    ignoreInit = FALSE      # Renderizar en la carga inicial
+  )
   
   # ========== DESCARGA CSV ==========
   
