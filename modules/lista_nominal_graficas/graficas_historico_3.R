@@ -1,11 +1,11 @@
 # modules/lista_nominal_graficas/graficas_historico_3.R
 # Gráfica 3: Evolución anual por sexo
-# Versión: 2.0 - Control total por botón Consultar + corrección Extranjero
+# Versión: 2.1 - CORRECCIÓN: bindEvent incluye ambito_datos para re-renderizar al cambiar vista
 
 graficas_historico_3 <- function(input, output, session, datos_anuales_completos, 
                                  anio_actual, texto_alcance, estado_app, mostrar_graficas_anuales) {
   
-  message("📊 Inicializando graficas_historico_3")
+  message("📊 Inicializando graficas_historico_3 v2.1")
   
   # ========== GRÁFICA 3: EVOLUCIÓN ANUAL + DESGLOSE POR SEXO ==========
   
@@ -31,20 +31,14 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
                ))
     }
     
-    # ========== ✅ VALIDAR ESTADO CONSULTADO ==========
-    if (estado_app() == "consultado") {
-      req(input$btn_consultar > 0)  # ✅ CRÍTICO: Requiere botón presionado
-      message("📊 [GRÁFICA 3] Renderizando en estado CONSULTADO - Botón: ", input$btn_consultar)
-    } else {
-      message("📊 [GRÁFICA 3] Renderizando en estado RESTABLECIDO")
-    }
-    
     # ========== CONTROL DE RENDERIZADO ==========
     if (!mostrar_graficas_anuales()) {
       return(NULL)
     }
     
     datos_anuales <- datos_anuales_completos()
+    
+    message("📊 [GRÁFICA 3] Renderizando - Estado: ", estado_app(), " | Ámbito: ", input$ambito_datos)
     
     # ========== VALIDACIÓN ROBUSTA ==========
     if (is.null(datos_anuales) || !is.data.frame(datos_anuales) || nrow(datos_anuales) == 0) {
@@ -163,7 +157,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       # Layout
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Anual por Sexo (2017-", anio_actual(), ") - Nacional"),
+          text = paste0("Evolución Anual por Sexo (2017-", anio_actual(), ") - Padrón y LNE Nacional"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -367,7 +361,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       # ========== LAYOUT FINAL (SIN NOTA FALSA) ==========
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Anual por Sexo (2020-", anio_actual(), ") - Extranjero"),
+          text = paste0("Evolución Anual por Sexo (2020-", anio_actual(), ") - Residentes en el Extranjero"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -404,13 +398,14 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
     }
     
   }) %>%
-    # ========== ✅ BINDEVET CRÍTICO PARA GRÁFICA 3 ==========
+    # ========== ✅ CORRECCIÓN CRÍTICA: Agregar input$ambito_datos para re-renderizar al cambiar vista ==========
   bindEvent(
     estado_app(),
     input$btn_consultar,
+    input$ambito_datos,
     ignoreNULL = FALSE,
     ignoreInit = FALSE
   )
   
-  message("✅ graficas_historico_3 inicializado")
+  message("✅ graficas_historico_3 v2.1 inicializado")
 }

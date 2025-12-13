@@ -1,18 +1,16 @@
 # modules/lista_nominal_graficas/graficas_consultado_4_5.R
 # Gráficas 4 y 5: Evolución mensual del año consultado (con y sin desglose por sexo)
-# Versión: 1.1 - CORRECCIÓN: Eliminado req(btn_consultar) para permitir renderizado en estado inicial
+# Versión: 1.2 - CORRECCIÓN: bindEvent incluye ambito_datos para re-renderizar al cambiar vista
 
 graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta, 
                                     anio_consultado, texto_alcance, mostrar_graficas_consultadas) {
   
-  message("📊 Inicializando graficas_consultado_4_5 v1.1")
+  message("📊 Inicializando graficas_consultado_4_5 v1.2")
   
   # ========== GRÁFICA 4: EVOLUCIÓN MENSUAL DEL AÑO SELECCIONADO ==========
   
   output$grafico_evolucion_year <- renderPlotly({
     req(input$tipo_corte == "historico")
-    # ✅ CORRECCIÓN: Eliminado req(input$btn_consultar > 0)
-    # La lógica de cuándo mostrar ya está en mostrar_graficas_consultadas()
     req(input$ambito_datos)
     
     datos_completos <- datos_year_consulta()
@@ -40,6 +38,8 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
     }
     
     year_datos <- format(datos_completos$fecha[1], "%Y")
+    
+    message("📊 [GRÁFICA 4] Renderizando año ", year_datos, " - Ámbito: ", input$ambito_datos)
     
     if (input$ambito_datos == "nacional") {
       
@@ -80,7 +80,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Mensual ", year_datos, " - Nacional"),
+          text = paste0("Evolución Mensual ", year_datos, " - Padrón y LNE Nacional"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -226,7 +226,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Mensual ", year_datos, " - Extranjero"),
+          text = paste0("Evolución Mensual ", year_datos, " - Residentes en el Extranjero"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -269,14 +269,20 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       message("✅ Gráfico 4: Evolución mensual ", year_datos, " Extranjero renderizado con ", nrow(datos_extranjero), " meses")
       return(p)
     }
-  })
+  }) %>%
+    # ✅ CORRECCIÓN CRÍTICA: Agregar input$ambito_datos para re-renderizar al cambiar vista
+    bindEvent(
+      estado_app(),
+      input$btn_consultar,
+      input$ambito_datos,
+      ignoreNULL = FALSE,
+      ignoreInit = FALSE
+    )
   
   # ========== GRÁFICA 5: EVOLUCIÓN MENSUAL DEL AÑO SELECCIONADO + SEXO ==========
   
   output$grafico_evolucion_year_sexo <- renderPlotly({
     req(input$tipo_corte == "historico")
-    # ✅ CORRECCIÓN: Eliminado req(input$btn_consultar > 0)
-    # La lógica de cuándo mostrar ya está en mostrar_graficas_consultadas()
     req(input$ambito_datos)
     
     # ========== NO MOSTRAR SI NO SE DEBE ==========
@@ -304,6 +310,8 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
     }
     
     year_datos <- format(datos_completos$fecha[1], "%Y")
+    
+    message("📊 [GRÁFICA 5] Renderizando año ", year_datos, " - Ámbito: ", input$ambito_datos)
     
     # ========== GRÁFICA NACIONAL ==========
     if (input$ambito_datos == "nacional") {
@@ -399,7 +407,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Mensual ", year_datos, " por Sexo - Nacional"),
+          text = paste0("Evolución Mensual ", year_datos, " por Sexo - Padrón y LNE Nacional"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -684,7 +692,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Mensual ", year_datos, " por Sexo - Extranjero"),
+          text = paste0("Evolución Mensual ", year_datos, " por Sexo - Residentes en el Extranjero"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -733,7 +741,15 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Extranjero renderizado con ", nrow(datos_extranjero), " meses")
       return(p)
     }
-  })
+  }) %>%
+    # ✅ CORRECCIÓN CRÍTICA: Agregar input$ambito_datos para re-renderizar al cambiar vista
+    bindEvent(
+      estado_app(),
+      input$btn_consultar,
+      input$ambito_datos,
+      ignoreNULL = FALSE,
+      ignoreInit = FALSE
+    )
   
-  message("✅ graficas_consultado_4_5 v1.1 inicializado")
+  message("✅ graficas_consultado_4_5 v1.2 inicializado")
 }

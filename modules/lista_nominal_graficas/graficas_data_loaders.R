@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_data_loaders.R
 # Reactives de carga de datos: year_actual, year_consulta, anuales
-# Versión: 2.1 - CORRECCIÓN: Parámetro solo_extranjero para filtrar correctamente
+# Versión: 2.2 - CORRECCIÓN: Eliminar reactividad prematura de input$year para evitar pestañeo
 
 graficas_data_loaders <- function(input, output, session, anio_actual, anio_consultado, filtros_usuario, estado_app) {
   
-  message("📥 Inicializando graficas_data_loaders")
+  message("📥 Inicializando graficas_data_loaders v2.2")
   
   # Obtener función cache_valido del entorno padre
   cache_valido <- function(timestamp, max_horas = 24) {
@@ -278,11 +278,12 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     bindEvent(estado_app(), input$btn_consultar, input$ambito_datos, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== REACTIVE: DATOS DEL AÑO CONSULTADO (PARA GRÁFICAS 4, 5) ==========
+  # ✅ CORRECCIÓN CRÍTICA: Eliminar req(input$year) para evitar reactividad prematura
   
   datos_year_consulta <- reactive({
     req(input$tipo_corte == "historico")
-    req(input$year)
     
+    # ✅ CRÍTICO: Aislar TODOS los inputs desde el principio para evitar pestañeo
     year <- isolate(input$year)
     entidad <- isolate(input$entidad)
     distrito <- isolate(input$distrito %||% "Todos")
@@ -292,6 +293,13 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     
     message("🔄 [datos_year_consulta] CONSULTA - Año ", year, ", Ámbito: ", ambito)
     
+    # Validar que year no sea NULL
+    if (is.null(year)) {
+      message("⚠️ [datos_year_consulta] year es NULL, usando año actual")
+      year <- anio_actual()
+    }
+    
+    # Si es año actual + nacional + sin filtros → redirigir a datos_year_actual
     if (year == anio_actual() && 
         ambito == "nacional" &&
         entidad == "Nacional" && 
@@ -496,6 +504,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
   }) %>% 
     bindCache(input$btn_consultar, input$tipo_corte, input$year, input$entidad, 
               input$distrito, input$municipio, input$seccion, input$ambito_datos) %>%
+    # ✅ CORRECCIÓN CRÍTICA: Solo se ejecuta cuando se presiona el botón o cambia el ámbito
     bindEvent(estado_app(), input$btn_consultar, input$ambito_datos, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== REACTIVE: DATOS ANUALES (2017-ACTUAL) ==========
@@ -720,7 +729,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
   
   # ========== RETORNAR LISTA DE REACTIVES ==========
   
-  message("✅ graficas_data_loaders inicializado")
+  message("✅ graficas_data_loaders v2.2 inicializado")
   
   return(list(
     datos_year_actual = datos_year_actual,
@@ -728,3 +737,6 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     datos_anuales_completos = datos_anuales_completos
   ))
 }
+  
+  
+  

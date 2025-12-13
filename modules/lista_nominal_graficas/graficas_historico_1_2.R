@@ -1,11 +1,11 @@
 # modules/lista_nominal_graficas/graficas_historico_1_2.R
 # Gráficas históricas 1 y 2: Proyección mensual y Evolución anual
-# Versión: 2.0 - Control total por botón Consultar
+# Versión: 2.1 - CORRECCIÓN: bindEvent incluye ambito_datos para re-renderizar al cambiar vista
 
 graficas_historico_1_2 <- function(input, output, session, datos_year_actual, datos_anuales_completos, 
                                    anio_actual, texto_alcance, estado_app, mostrar_graficas_anuales) {
   
-  message("📊 Inicializando graficas_historico_1_2")
+  message("📊 Inicializando graficas_historico_1_2 v2.1")
   
   # ========== GRÁFICA 1: EVOLUCIÓN MENSUAL AÑO ACTUAL + PROYECCIÓN ==========
   
@@ -31,20 +31,14 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
                ))
     }
     
-    # ========== ✅ VALIDAR ESTADO CONSULTADO ==========
-    if (estado_app() == "consultado") {
-      req(input$btn_consultar > 0)  # ✅ CRÍTICO: Requiere botón presionado
-      message("📊 [GRÁFICA 1] Renderizando en estado CONSULTADO - Botón: ", input$btn_consultar)
-    } else {
-      message("📊 [GRÁFICA 1] Renderizando en estado RESTABLECIDO")
-    }
-    
     # ========== CONTROL DE RENDERIZADO ==========
     if (!mostrar_graficas_anuales()) {
       return(NULL)
     }
     
     datos_completos <- datos_year_actual()
+    
+    message("📊 [GRÁFICA 1] Renderizando - Estado: ", estado_app(), " | Ámbito: ", input$ambito_datos)
     
     # ========== VALIDACIÓN ROBUSTA ==========
     if (is.null(datos_completos) || !is.data.frame(datos_completos) || nrow(datos_completos) == 0) {
@@ -169,7 +163,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       # Layout con eje X corregido
       p <- p %>% layout(
         title = list(
-          text = paste0("Proyección de Padrón y Lista Nominal ", year_datos, " - Nacional"),
+          text = paste0("Proyección ", year_datos, " - Padrón y LNE Nacional"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -378,7 +372,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       # Layout con eje X corregido
       p <- p %>% layout(
         title = list(
-          text = paste0("Proyección de Padrón y Lista Nominal ", year_datos, " - Extranjero"),
+          text = paste0("Proyección ", year_datos, " - Padrón y LNE de Residentes en el Extranjero"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -432,10 +426,11 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     }
     
   }) %>%
-    # ========== ✅ BINDEVET CRÍTICO PARA GRÁFICA 1 ==========
+    # ========== ✅ CORRECCIÓN CRÍTICA: Agregar input$ambito_datos para re-renderizar al cambiar vista ==========
   bindEvent(
     estado_app(),
     input$btn_consultar,
+    input$ambito_datos,
     ignoreNULL = FALSE,
     ignoreInit = FALSE
   )
@@ -464,20 +459,14 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
                ))
     }
     
-    # ========== ✅ VALIDAR ESTADO CONSULTADO ==========
-    if (estado_app() == "consultado") {
-      req(input$btn_consultar > 0)  # ✅ CRÍTICO: Requiere botón presionado
-      message("📊 [GRÁFICA 2] Renderizando en estado CONSULTADO - Botón: ", input$btn_consultar)
-    } else {
-      message("📊 [GRÁFICA 2] Renderizando en estado RESTABLECIDO")
-    }
-    
     # ========== CONTROL DE RENDERIZADO ==========
     if (!mostrar_graficas_anuales()) {
       return(NULL)
     }
     
     datos_anuales <- datos_anuales_completos()
+    
+    message("📊 [GRÁFICA 2] Renderizando - Estado: ", estado_app(), " | Ámbito: ", input$ambito_datos)
     
     # ========== VALIDACIÓN ROBUSTA ==========
     if (is.null(datos_anuales) || !is.data.frame(datos_anuales) || nrow(datos_anuales) == 0) {
@@ -537,7 +526,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       # Layout
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Anual (2017-", anio_actual(), ") - Nacional"),
+          text = paste0("Evolución Anual (2017-", anio_actual(), ") - Padrón y LNE Nacional"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -633,7 +622,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       # Layout
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Anual (2020-", anio_actual(), ") - Extranjero"),
+          text = paste0("Evolución Anual (2020-", anio_actual(), ") - Residentes en el Extranjero"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -670,10 +659,11 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     }
     
   }) %>%
-    # ========== ✅ BINDEVET CRÍTICO PARA GRÁFICA 2 ==========
+    # ========== ✅ CORRECCIÓN CRÍTICA: Agregar input$ambito_datos para re-renderizar al cambiar vista ==========
   bindEvent(
     estado_app(),
     input$btn_consultar,
+    input$ambito_datos,
     ignoreNULL = FALSE,
     ignoreInit = FALSE
   )
@@ -771,5 +761,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     ))
   })
   
-  message("✅ graficas_historico_1_2 inicializado")
+  message("✅ graficas_historico_1_2 v2.1 inicializado")
 }
+
+  
