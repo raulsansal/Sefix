@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_data_loaders.R
 # Reactives de carga de datos: year_actual, year_consulta, anuales
-# Versión: 2.2 - CORRECCIÓN: Eliminar reactividad prematura de input$year para evitar pestañeo
+# Versión: 2.3 - CORRECCIÓN: Eliminado parámetro solo_extranjero (conflicto conceptual)
 
 graficas_data_loaders <- function(input, output, session, anio_actual, anio_consultado, filtros_usuario, estado_app) {
   
-  message("📥 Inicializando graficas_data_loaders v2.2")
+  message("📥 Inicializando graficas_data_loaders v2.3")
   
   # Obtener función cache_valido del entorno padre
   cache_valido <- function(timestamp, max_horas = 24) {
@@ -71,23 +71,14 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     
     lista_datos <- list()
     
-    # ✅ CORRECCIÓN CRÍTICA: Determinar filtros según ÁMBITO
-    solo_extranjero <- FALSE
-    
-    if (filtros$ambito == "extranjero") {
-      # Mantener el estado seleccionado (ej: YUCATAN) y marcar solo_extranjero
-      estado_filtro <- if (filtros$entidad == "Nacional") "Nacional" else filtros$entidad
-      solo_extranjero <- TRUE
-      message("   📍 Ámbito EXTRANJERO - Estado: ", estado_filtro, ", solo_extranjero=TRUE")
-    } else {
-      estado_filtro <- if (filtros$entidad == "Nacional") "Nacional" else filtros$entidad
-      message("   📍 Ámbito Nacional - Estado: ", estado_filtro)
-    }
+    # ✅ CORRECCIÓN v2.3: Los filtros son iguales para ambos ámbitos
+    estado_filtro <- if (filtros$entidad == "Nacional") "Nacional" else filtros$entidad
+    message("   📍 Estado: ", estado_filtro, " | Ámbito: ", filtros$ambito)
     
     for (i in seq_along(fechas_anio_actual)) {
       fecha <- fechas_anio_actual[i]
       
-      # ✅ CAMBIO CRÍTICO: SIEMPRE pasar solo_extranjero
+      # ✅ v2.3: Filtros normales, sin solo_extranjero
       datos_temp <- tryCatch({
         cargar_lne(
           tipo_corte = "historico",
@@ -97,8 +88,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
           distrito = filtros$distrito,
           municipio = filtros$municipio,
           seccion = filtros$seccion,
-          incluir_extranjero = TRUE,
-          solo_extranjero = solo_extranjero  # ✅ NUEVO PARÁMETRO
+          incluir_extranjero = TRUE
         )
       }, error = function(e) {
         message("⚠️ Error cargando fecha ", fecha, ": ", e$message)
@@ -106,7 +96,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
       })
       
       if (!is.null(datos_temp)) {
-        if (estado_filtro == "Nacional" && !solo_extranjero && !is.null(datos_temp$totales)) {
+        if (estado_filtro == "Nacional" && !is.null(datos_temp$totales)) {
           totales_fila <- datos_temp$totales
           
           padron_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional)))
@@ -322,17 +312,9 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
       return(NULL)
     }
     
-    # ✅ CORRECCIÓN CRÍTICA: Determinar filtros según ÁMBITO
-    solo_extranjero <- FALSE
-    
-    if (ambito == "extranjero") {
-      estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
-      solo_extranjero <- TRUE
-      message("📍 Ámbito EXTRANJERO - Estado: ", estado_filtro, ", solo_extranjero=TRUE")
-    } else {
-      estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
-      message("📍 Ámbito Nacional - Estado: ", estado_filtro)
-    }
+    # ✅ CORRECCIÓN v2.3: Los filtros son iguales para ambos ámbitos
+    estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
+    message("📍 Estado: ", estado_filtro, " | Ámbito: ", ambito)
     
     message("📥 Cargando ", length(fechas_year), " fechas del año ", year)
     
@@ -341,7 +323,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     for (i in seq_along(fechas_year)) {
       fecha <- fechas_year[i]
       
-      # ✅ CAMBIO CRÍTICO: SIEMPRE pasar solo_extranjero
+      # ✅ v2.3: Filtros normales, sin solo_extranjero
       datos_temp <- tryCatch({
         cargar_lne(
           tipo_corte = "historico",
@@ -351,8 +333,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
           distrito = distrito,
           municipio = municipio,
           seccion = seccion,
-          incluir_extranjero = TRUE,
-          solo_extranjero = solo_extranjero  # ✅ NUEVO PARÁMETRO
+          incluir_extranjero = TRUE
         )
       }, error = function(e) {
         message("⚠️ Error cargando fecha ", fecha, ": ", e$message)
@@ -360,7 +341,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
       })
       
       if (!is.null(datos_temp)) {
-        if (estado_filtro == "Nacional" && !solo_extranjero && !is.null(datos_temp$totales)) {
+        if (estado_filtro == "Nacional" && !is.null(datos_temp$totales)) {
           totales_fila <- datos_temp$totales
           
           padron_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional)))
@@ -556,17 +537,9 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     
     lista_anuales <- list()
     
-    # ✅ CORRECCIÓN CRÍTICA: Determinar filtros según ÁMBITO
-    solo_extranjero <- FALSE
-    
-    if (filtros$ambito == "extranjero") {
-      estado_filtro <- if (filtros$entidad == "Nacional") "Nacional" else filtros$entidad
-      solo_extranjero <- TRUE
-      message("   📍 Ámbito EXTRANJERO - Estado: ", estado_filtro, ", solo_extranjero=TRUE")
-    } else {
-      estado_filtro <- if (filtros$entidad == "Nacional") "Nacional" else filtros$entidad
-      message("   📍 Ámbito Nacional - Estado: ", estado_filtro)
-    }
+    # ✅ CORRECCIÓN v2.3: Los filtros son iguales para ambos ámbitos
+    estado_filtro <- if (filtros$entidad == "Nacional") "Nacional" else filtros$entidad
+    message("   📍 Estado: ", estado_filtro, " | Ámbito: ", filtros$ambito)
     
     for (año in años) {
       message("🔍 Procesando año: ", año)
@@ -581,7 +554,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
       ultima_fecha <- max(fechas_año)
       message("   📅 Última fecha del año ", año, ": ", as.Date(ultima_fecha, origin = "1970-01-01"))
       
-      # ✅ CAMBIO CRÍTICO: SIEMPRE pasar solo_extranjero
+      # ✅ v2.3: Filtros normales, sin solo_extranjero
       datos_temp <- tryCatch({
         cargar_lne(
           tipo_corte = "historico",
@@ -591,8 +564,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
           distrito = filtros$distrito,
           municipio = filtros$municipio,
           seccion = filtros$seccion,
-          incluir_extranjero = TRUE,
-          solo_extranjero = solo_extranjero  # ✅ NUEVO PARÁMETRO
+          incluir_extranjero = TRUE
         )
       }, error = function(e) {
         message("   ❌ Error en cargar_lne para año ", año, ": ", e$message)
@@ -600,7 +572,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
       })
       
       if (!is.null(datos_temp)) {
-        if (estado_filtro == "Nacional" && !solo_extranjero && !is.null(datos_temp$totales)) {
+        if (estado_filtro == "Nacional" && !is.null(datos_temp$totales)) {
           totales_fila <- datos_temp$totales
           
           message("   ✅ Fila totales obtenida para año ", año)
@@ -729,7 +701,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
   
   # ========== RETORNAR LISTA DE REACTIVES ==========
   
-  message("✅ graficas_data_loaders v2.2 inicializado")
+  message("✅ graficas_data_loaders v2.3 inicializado (eliminado solo_extranjero)")
   
   return(list(
     datos_year_actual = datos_year_actual,
@@ -737,6 +709,3 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     datos_anuales_completos = datos_anuales_completos
   ))
 }
-  
-  
-  

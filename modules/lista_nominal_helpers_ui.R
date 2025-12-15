@@ -1,6 +1,6 @@
 # modules/lista_nominal_helpers_ui.R
 # Funciones auxiliares para obtener opciones de filtros geográficos
-# Versión: 1.0 - Filtros en cascada optimizados
+# Versión: 1.1 - CORRECCIÓN: Eliminado parámetro solo_extranjero
 
 # ========== FUNCIÓN: OBTENER LISTA DE ENTIDADES ==========
 # Retorna lista estática de los 32 estados + Nacional
@@ -28,11 +28,10 @@ get_entidades <- function() {
 # Parámetros:
 #   - entidad: Nombre del estado
 #   - fecha: Fecha de corte (para encontrar el archivo correcto)
-#   - ambito: "nacional" o "extranjero"
 
 get_distritos_por_entidad <- function(entidad, fecha) {
   
-  # Si es Nacional o modo Extranjero, retornar solo "Todos"
+  # Si es Nacional, retornar solo "Todos"
   if (entidad == "Nacional") {
     return(c("Todos"))
   }
@@ -54,6 +53,7 @@ get_distritos_por_entidad <- function(entidad, fecha) {
     return(c("Todos"))
   }
   
+  # ✅ v1.1: Eliminado parámetro solo_extranjero
   # Cargar datos solo del estado seleccionado
   datos_estado <- tryCatch({
     cargar_lne(
@@ -64,8 +64,7 @@ get_distritos_por_entidad <- function(entidad, fecha) {
       distrito = "Todos",
       municipio = "Todos",
       seccion = "Todas",
-      incluir_extranjero = TRUE,
-      solo_extranjero = FALSE
+      incluir_extranjero = TRUE
     )
   }, error = function(e) {
     message("❌ [get_distritos] Error cargando datos: ", e$message)
@@ -99,11 +98,10 @@ get_distritos_por_entidad <- function(entidad, fecha) {
 #   - entidad: Nombre del estado
 #   - distrito: Nombre del distrito
 #   - fecha: Fecha de corte
-#   - ambito: "nacional" o "extranjero"
 
 get_municipios_por_distrito <- function(entidad, distrito, fecha) {
   
-  # Si es Nacional, Todos o modo Extranjero, retornar solo "Todos"
+  # Si es Nacional o Todos, retornar solo "Todos"
   if (entidad == "Nacional" || distrito == "Todos") {
     return(c("Todos"))
   }
@@ -121,6 +119,7 @@ get_municipios_por_distrito <- function(entidad, distrito, fecha) {
     return(c("Todos"))
   }
   
+  # ✅ v1.1: Eliminado parámetro solo_extranjero
   # Cargar datos del distrito seleccionado
   datos_distrito <- tryCatch({
     cargar_lne(
@@ -131,8 +130,7 @@ get_municipios_por_distrito <- function(entidad, distrito, fecha) {
       distrito = distrito,
       municipio = "Todos",
       seccion = "Todas",
-      incluir_extranjero = TRUE,
-      solo_extranjero = FALSE
+      incluir_extranjero = TRUE
     )
   }, error = function(e) {
     message("❌ [get_municipios] Error cargando datos: ", e$message)
@@ -166,11 +164,10 @@ get_municipios_por_distrito <- function(entidad, distrito, fecha) {
 #   - distrito: Nombre del distrito
 #   - municipio: Nombre del municipio
 #   - fecha: Fecha de corte
-#   - ambito: "nacional" o "extranjero"
 
 get_secciones_por_municipio <- function(entidad, distrito, municipio, fecha) {
   
-  # Si es Nacional, Todos o modo Extranjero, retornar solo "Todas"
+  # Si es Nacional, Todos, retornar solo "Todas"
   if (entidad == "Nacional" || distrito == "Todos" || municipio == "Todos") {
     return(c("Todas"))
   }
@@ -188,6 +185,7 @@ get_secciones_por_municipio <- function(entidad, distrito, municipio, fecha) {
     return(c("Todas"))
   }
   
+  # ✅ v1.1: Eliminado parámetro solo_extranjero
   # Cargar datos del municipio seleccionado
   datos_municipio <- tryCatch({
     cargar_lne(
@@ -198,8 +196,7 @@ get_secciones_por_municipio <- function(entidad, distrito, municipio, fecha) {
       distrito = distrito,
       municipio = municipio,
       seccion = "Todas",
-      incluir_extranjero = TRUE,
-      solo_extranjero = FALSE
+      incluir_extranjero = TRUE
     )
   }, error = function(e) {
     message("❌ [get_secciones] Error cargando datos: ", e$message)
@@ -226,4 +223,5 @@ get_secciones_por_municipio <- function(entidad, distrito, municipio, fecha) {
   return(c("Todas"))
 }
 
-message("✅ lista_nominal_helpers_ui.R v1.0 cargado (Funciones para filtros en cascada)")
+message("✅ lista_nominal_helpers_ui.R v1.1 cargado (CORRECCIÓN: Eliminado solo_extranjero)")
+

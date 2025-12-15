@@ -1,6 +1,6 @@
 # modules/lista_nominal_server.R
-# Versión: 2.5 - FILTROS EN CASCADA: Reactivos e independientes de botón "Consultar"
-# CORRECCIÓN: Eliminado pestañeo al cambiar año usando isolate()
+# Versión: 2.6 - CORRECCIÓN: Eliminado parámetro solo_extranjero
+# FILTROS EN CASCADA: Reactivos e independientes de botón "Consultar"
 
 # Configurar nombres de meses en español
 meses_es <- c(
@@ -239,6 +239,7 @@ lista_nominal_server <- function(id) {
       
       message("📅 [CARGA INICIAL] Última fecha: ", ultima_fecha)
       
+      # ✅ v2.6: Eliminado parámetro solo_extranjero
       # Cargar SOLO 1 archivo: último mensual Nacional sin filtros
       datos_lne <- tryCatch({
         cargar_lne(
@@ -249,8 +250,7 @@ lista_nominal_server <- function(id) {
           distrito = "Todos",
           municipio = "Todos",
           seccion = "Todas",
-          incluir_extranjero = TRUE,
-          solo_extranjero = FALSE
+          incluir_extranjero = TRUE
         )
       }, error = function(e) {
         message("❌ [CARGA INICIAL] Error: ", e$message)
@@ -346,17 +346,9 @@ lista_nominal_server <- function(id) {
           return(NULL)
         }
         
-        # ✅ CORRECCIÓN CRÍTICA: Determinar filtros según ÁMBITO
-        solo_extranjero <- FALSE
-        
-        if (ambito == "extranjero") {
-          estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
-          solo_extranjero <- TRUE
-          message("📍 Ámbito EXTRANJERO - Estado: ", estado_filtro, ", solo_extranjero=TRUE")
-        } else {
-          estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
-          message("📍 Ámbito Nacional - Estado: ", estado_filtro)
-        }
+        # ✅ CORRECCIÓN v2.6: Los filtros son iguales para ambos ámbitos
+        estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
+        message("📍 Estado: ", estado_filtro, " | Ámbito: ", ambito)
         
         dimension <- if (tipo_corte == "semanal") {
           switch(desglose,
@@ -370,9 +362,9 @@ lista_nominal_server <- function(id) {
         
         message("📂 Llamando cargar_lne: tipo=", tipo_corte, ", fecha=", fecha_seleccionada, 
                 ", dimension=", dimension, ", estado=", estado_filtro,
-                ", distrito=", distrito, ", municipio=", municipio, ", seccion=", seccion,
-                ", solo_extranjero=", solo_extranjero)
+                ", distrito=", distrito, ", municipio=", municipio, ", seccion=", seccion)
         
+        # ✅ v2.6: Eliminado parámetro solo_extranjero
         datos_lne <- tryCatch({
           cargar_lne(
             tipo_corte = tipo_corte,
@@ -382,8 +374,7 @@ lista_nominal_server <- function(id) {
             distrito = distrito,
             municipio = municipio,
             seccion = seccion,
-            incluir_extranjero = TRUE,
-            solo_extranjero = solo_extranjero
+            incluir_extranjero = TRUE
           )
         }, error = function(e) {
           message("❌ Error en cargar_lne: ", e$message)
@@ -648,6 +639,6 @@ lista_nominal_server <- function(id) {
       message("⚠️ No se encontró lista_nominal_server_text_analysis.R")
     }
     
-    message("✅ Módulo lista_nominal_server v2.5 inicializado (FILTROS EN CASCADA SIN PESTAÑEO)")
+    message("✅ Módulo lista_nominal_server v2.6 inicializado (CORRECCIÓN: Eliminado solo_extranjero)")
   })
 }

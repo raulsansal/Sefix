@@ -1,6 +1,6 @@
 # server/datos_lne.R
 # Sistema de carga de datos de Lista Nominal Electoral (LNE)
-# Versión CORREGIDA: Soporte para filtrado de extranjero por estado
+# Versión: 1.2 - CORRECCIÓN: Bug fix en filtro de sección (conflicto de nombres de variables)
 
 library(data.table)
 library(dplyr)
@@ -167,8 +167,7 @@ encontrar_archivo_lne <- function(tipo_corte, fecha, dimension = "completo") {
 cargar_lne <- function(tipo_corte, fecha, dimension = "completo", 
                        estado = "Nacional", distrito = "Todos", 
                        municipio = "Todos", seccion = "Todas",
-                       incluir_extranjero = TRUE,
-                       solo_extranjero = FALSE) {  # ✅ NUEVO PARÁMETRO
+                       incluir_extranjero = TRUE) {
   
   inicio_total <- Sys.time()
   
@@ -419,65 +418,34 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   # ========== APLICAR FILTROS ==========
   inicio_filtros <- Sys.time()
   
-  # ✅ NUEVA LÓGICA: Filtrado para solo_extranjero
-  if (solo_extranjero) {
-    message("🌍 [FILTRO EXTRANJERO] Filtrando datos de extranjero...")
+  # ✅ CRÍTICO: Renombrar parámetro de sección ANTES de filtrar para evitar conflicto de nombres
+  seccion_filtro <- seccion
+  
+  # Aplicar filtros normales
+  if (estado != "Nacional" && "nombre_entidad" %in% colnames(dt)) {
+    dt <- dt[toupper(nombre_entidad) == toupper(estado)]
+    message("🔍 Filtro estado: ", estado, " → ", nrow(dt), " filas")
+  }
+  
+  if (distrito != "Todos" && "cabecera_distrital" %in% colnames(dt)) {
+    dt <- dt[cabecera_distrital == distrito]
+    message("🔍 Filtro distrito: ", distrito, " → ", nrow(dt), " filas")
+  }
+  
+  if (municipio != "Todos" && "nombre_municipio" %in% colnames(dt)) {
+    dt <- dt[nombre_municipio == municipio]
+    message("🔍 Filtro municipio: ", municipio, " → ", nrow(dt), " filas")
+  }
+  
+  # ✅ CORRECCIÓN CRÍTICA: Usar seccion_filtro y sintaxis correcta de data.table
+  if (!is.null(seccion_filtro) && length(seccion_filtro) > 0 && 
+      !("Todas" %in% seccion_filtro) && "seccion" %in% colnames(dt)) {
     
-    # Paso 1: Filtrar por criterios de extranjero (seccion=0, etc.)
-    condicion_extranjero <- rep(FALSE, nrow(dt))
+    # Convertir a character para comparación segura
+    secciones_char <- as.character(seccion_filtro)
+    dt <- dt[as.character(seccion) %in% secciones_char]
     
-    if ("seccion" %in% colnames(dt)) {
-      condicion_seccion <- (dt$seccion == "0" | dt$seccion == 0)
-      condicion_extranjero <- condicion_extranjero | condicion_seccion
-      message("   🔍 Criterio seccion=0: ", sum(condicion_seccion, na.rm = TRUE), " filas")
-    }
-    
-    if ("cabecera_distrital" %in% colnames(dt)) {
-      condicion_distrito <- grepl("RESIDENTES EXTRANJERO", toupper(dt$cabecera_distrital))
-      condicion_extranjero <- condicion_extranjero | condicion_distrito
-      message("   🔍 Criterio cabecera RESIDENTES EXTRANJERO: ", sum(condicion_distrito, na.rm = TRUE), " filas")
-    }
-    
-    if ("nombre_municipio" %in% colnames(dt)) {
-      condicion_municipio <- grepl("RESIDENTES EXTRANJERO", toupper(dt$nombre_municipio))
-      condicion_extranjero <- condicion_extranjero | condicion_municipio
-      message("   🔍 Criterio municipio RESIDENTES EXTRANJERO: ", sum(condicion_municipio, na.rm = TRUE), " filas")
-    }
-    
-    dt <- dt[condicion_extranjero, ]
-    message("🔍 Filtro EXTRANJERO aplicado → ", nrow(dt), " filas")
-    
-    # Paso 2: Si hay filtro de estado específico, aplicarlo
-    if (estado != "Nacional" && "nombre_entidad" %in% colnames(dt)) {
-      dt <- dt[toupper(nombre_entidad) == toupper(estado)]
-      message("🔍 Filtro estado en EXTRANJERO: ", estado, " → ", nrow(dt), " filas")
-    }
-    
-    # Paso 3: NO aplicar filtros de distrito/municipio/sección específicos
-    message("⏭️ Saltando filtros de distrito/municipio/sección (solo_extranjero=TRUE)")
-    
-  } else {
-    # ========== FILTRADO NORMAL (NO extranjero) ==========
-    
-    if (estado != "Nacional" && "nombre_entidad" %in% colnames(dt)) {
-      dt <- dt[toupper(nombre_entidad) == toupper(estado)]
-      message("🔍 Filtro estado: ", estado, " → ", nrow(dt), " filas")
-    }
-    
-    if (distrito != "Todos" && "cabecera_distrital" %in% colnames(dt)) {
-      dt <- dt[cabecera_distrital == distrito]
-      message("🔍 Filtro distrito: ", distrito, " → ", nrow(dt), " filas")
-    }
-    
-    if (municipio != "Todos" && "nombre_municipio" %in% colnames(dt)) {
-      dt <- dt[nombre_municipio == municipio]
-      message("🔍 Filtro municipio: ", municipio, " → ", nrow(dt), " filas")
-    }
-    
-    if (!is.null(seccion) && length(seccion) > 0 && !("Todas" %in% seccion) && "seccion" %in% colnames(dt)) {
-      dt <- dt[seccion %in% seccion]
-      message("🔍 Filtro secciones: ", length(seccion), " → ", nrow(dt), " filas")
-    }
+    message("🔍 Filtro secciones: ", paste(secciones_char, collapse = ", "), " → ", nrow(dt), " filas")
   }
   
   # ========== FILTRO PARA EXCLUIR EXTRANJERO (SI SE SOLICITA) ==========
@@ -530,4 +498,4 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   return(resultado)
 }
 
-message("✅ datos_lne.R cargado")
+message("✅ datos_lne.R v1.2 cargado (con bug fix de sección)")
