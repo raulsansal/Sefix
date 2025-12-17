@@ -1,11 +1,11 @@
 # modules/lista_nominal_graficas/graficas_consultado_4_5.R
 # Gráficas 4 y 5: Evolución mensual del año consultado (con y sin desglose por sexo)
-# Versión: 1.2 - CORRECCIÓN: bindEvent incluye ambito_datos para re-renderizar al cambiar vista
+# Versión: 1.4 - CORRECCIÓN FINAL: Mensaje para años < 2020, gráficas para años >= 2020
 
 graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta, 
                                     anio_consultado, texto_alcance, mostrar_graficas_consultadas) {
   
-  message("📊 Inicializando graficas_consultado_4_5 v1.2")
+  message("📊 Inicializando graficas_consultado_4_5 v1.4")
   
   # ========== GRÁFICA 4: EVOLUCIÓN MENSUAL DEL AÑO SELECCIONADO ==========
   
@@ -124,17 +124,48 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       return(p)
       
     } else {
+      # ========== GRÁFICA EXTRANJERO ==========
       
+      # ✅ CORRECCIÓN v1.4: Validar por AÑO, no por existencia de columnas
+      year_num <- as.integer(year_datos)
+      
+      if (year_num < 2020) {
+        # ✅ Para años < 2020, mostrar mensaje (datos NO existen)
+        mensaje_texto <- paste0(
+          "<b>Año de consulta: ", year_datos, "</b><br><br>",
+          "Los datos de padrón y lista nominal electoral de residentes en el extranjero ",
+          "sólo están disponibles a partir de 2020."
+        )
+        
+        return(plot_ly() %>%
+                 layout(
+                   xaxis = list(visible = FALSE),
+                   yaxis = list(visible = FALSE),
+                   annotations = list(
+                     list(
+                       text = mensaje_texto,
+                       xref = "paper", yref = "paper",
+                       x = 0.5, y = 0.5,
+                       showarrow = FALSE,
+                       font = list(size = 14, color = "#666")
+                     )
+                   )
+                 ))
+      }
+      
+      # ✅ Para años >= 2020, graficar (incluso si valores = 0 o NA)
+      # Verificar que las columnas existan
       if (!("padron_extranjero" %in% colnames(datos_completos)) ||
           !("lista_extranjero" %in% colnames(datos_completos))) {
+        
         return(plot_ly() %>%
                  layout(
                    xaxis = list(visible = FALSE),
                    yaxis = list(visible = FALSE),
                    annotations = list(
                      list(
-                       text = paste0("Datos de extranjero no disponibles para el año ", year_datos, 
-                                     ".<br>Los datos de extranjero están disponibles desde 2020."),
+                       text = paste0("Desglose por ámbito extranjero no disponible para ", year_datos, ".<br>",
+                                     "Verifique que los datos hayan sido cargados correctamente."),
                        xref = "paper", yref = "paper",
                        x = 0.5, y = 0.5,
                        showarrow = FALSE,
@@ -144,50 +175,16 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
                  ))
       }
       
-      meses_con_datos <- sum(!is.na(datos_completos$padron_extranjero) & 
-                               !is.na(datos_completos$lista_extranjero))
+      # Reemplazar NA con 0 para poder graficar
+      datos_extranjero <- datos_completos
+      datos_extranjero$padron_extranjero[is.na(datos_extranjero$padron_extranjero)] <- 0
+      datos_extranjero$lista_extranjero[is.na(datos_extranjero$lista_extranjero)] <- 0
       
-      message("📊 [DEBUG GRAF4] Meses con datos de extranjero en ", year_datos, ": ", meses_con_datos, " de ", nrow(datos_completos))
-      
-      if (meses_con_datos == 0) {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = paste0("Sin registros de extranjero en el año ", year_datos, 
-                                     ".<br>Los datos de extranjero están disponibles desde 2020."),
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
-      }
-      
-      datos_extranjero <- datos_completos[!is.na(datos_completos$padron_extranjero) & 
-                                            !is.na(datos_completos$lista_extranjero), ]
-      
-      message("📊 [DEBUG GRAF4] Filas después de filtrar NA: ", nrow(datos_extranjero))
-      
-      if (nrow(datos_extranjero) == 0) {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = paste0("Error al procesar datos de extranjero para ", year_datos),
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
-      }
+      message("📊 [GRÁFICA 4] Graficando ", nrow(datos_extranjero), " meses de extranjero (año ", year_datos, ")")
+      message("   Rango padrón: ", min(datos_extranjero$padron_extranjero, na.rm = TRUE), 
+              " - ", max(datos_extranjero$padron_extranjero, na.rm = TRUE))
+      message("   Rango lista: ", min(datos_extranjero$lista_extranjero, na.rm = TRUE), 
+              " - ", max(datos_extranjero$lista_extranjero, na.rm = TRUE))
       
       p <- plot_ly()
       
@@ -266,11 +263,10 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         )
       )
       
-      message("✅ Gráfico 4: Evolución mensual ", year_datos, " Extranjero renderizado con ", nrow(datos_extranjero), " meses")
+      message("✅ Gráfico 4: Evolución mensual ", year_datos, " Extranjero renderizado")
       return(p)
     }
   }) %>%
-    # ✅ CORRECCIÓN CRÍTICA: Agregar input$ambito_datos para re-renderizar al cambiar vista
     bindEvent(
       estado_app(),
       input$btn_consultar,
@@ -459,7 +455,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
       
-      # ========== VALIDAR QUE REALMENTE ES ÁMBITO EXTRANJERO ==========
+      # Verificar que estamos en ámbito extranjero
       if (input$ambito_datos != "extranjero") {
         return(plot_ly() %>%
                  layout(
@@ -477,21 +473,16 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
                  ))
       }
       
-      # Verificar columnas de extranjero
-      if (!("padron_extranjero" %in% colnames(datos_completos)) ||
-          !("lista_extranjero" %in% colnames(datos_completos))) {
-        
-        # Mensaje específico según el año
-        year_num <- as.integer(year_datos)
-        mensaje_texto <- if (year_num < 2020) {
-          paste0("<b>Datos de residentes en el extranjero disponibles desde 2020</b><br><br>",
-                 "Año seleccionado: ", year_datos, "<br>",
-                 "Los datos históricos de ciudadanos residentes en el extranjero ",
-                 "fueron incorporados al padrón electoral a partir del año 2020.")
-        } else {
-          paste0("Desglose por ámbito extranjero no disponible para ", year_datos, ".<br>",
-                 "Verifique que los datos hayan sido cargados correctamente.")
-        }
+      # ✅ CORRECCIÓN v1.4: Validar por AÑO, no por existencia de columnas
+      year_num <- as.integer(year_datos)
+      
+      if (year_num < 2020) {
+        # ✅ Para años < 2020, mostrar mensaje (datos NO existen)
+        mensaje_texto <- paste0(
+          "<b>Año de consulta: ", year_datos, "</b><br><br>",
+          "Los datos de padrón y lista nominal electoral de residentes en el extranjero ",
+          "sólo están disponibles a partir de 2020."
+        )
         
         return(plot_ly() %>%
                  layout(
@@ -509,66 +500,15 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
                  ))
       }
       
-      meses_con_datos <- sum(!is.na(datos_completos$padron_extranjero) & 
-                               !is.na(datos_completos$lista_extranjero))
-      
-      message("📊 [DEBUG GRAF5] Meses con datos de extranjero en ", year_datos, ": ", meses_con_datos)
-      
-      if (meses_con_datos == 0) {
-        year_num <- as.integer(year_datos)
-        mensaje_texto <- if (year_num < 2020) {
-          paste0("<b>Datos de residentes en el extranjero disponibles desde 2020</b><br><br>",
-                 "Año seleccionado: ", year_datos, "<br>",
-                 "Los datos de extranjero están disponibles a partir del año 2020.")
-        } else {
-          paste0("Sin registros de extranjero en el año ", year_datos, ".")
-        }
-        
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = mensaje_texto,
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
-      }
-      
-      datos_extranjero <- datos_completos[!is.na(datos_completos$padron_extranjero) & 
-                                            !is.na(datos_completos$lista_extranjero), ]
-      
-      message("📊 [DEBUG GRAF5] Filas después de filtrar: ", nrow(datos_extranjero))
-      
-      if (nrow(datos_extranjero) == 0) {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = paste0("Error al procesar datos para ", year_datos),
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
-      }
-      
+      # ✅ Para años >= 2020, graficar (incluso si valores = 0 o NA)
+      # Verificar columnas de sexo
       cols_sexo_extranjero <- c("padron_extranjero_hombres", "padron_extranjero_mujeres", 
                                 "lista_extranjero_hombres", "lista_extranjero_mujeres")
       
-      tiene_columnas_sexo <- all(cols_sexo_extranjero %in% colnames(datos_extranjero))
+      tiene_columnas_sexo <- all(cols_sexo_extranjero %in% colnames(datos_completos))
       
       if (!tiene_columnas_sexo) {
-        message("⚠️ [GRAF5] Columnas de sexo NO existen")
+        message("⚠️ [GRAF5] Columnas de sexo NO existen para año ", year_datos)
         return(plot_ly() %>%
                  layout(
                    xaxis = list(visible = FALSE),
@@ -585,45 +525,22 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
                  ))
       }
       
-      # Verificar si tienen datos (no todas NA)
-      tiene_datos_sexo <- any(!is.na(datos_extranjero$padron_extranjero_hombres)) ||
-        any(!is.na(datos_extranjero$padron_extranjero_mujeres)) ||
-        any(!is.na(datos_extranjero$lista_extranjero_hombres)) ||
-        any(!is.na(datos_extranjero$lista_extranjero_mujeres))
+      # Reemplazar NA con 0 para poder graficar
+      datos_extranjero <- datos_completos
+      datos_extranjero$padron_extranjero_hombres[is.na(datos_extranjero$padron_extranjero_hombres)] <- 0
+      datos_extranjero$padron_extranjero_mujeres[is.na(datos_extranjero$padron_extranjero_mujeres)] <- 0
+      datos_extranjero$lista_extranjero_hombres[is.na(datos_extranjero$lista_extranjero_hombres)] <- 0
+      datos_extranjero$lista_extranjero_mujeres[is.na(datos_extranjero$lista_extranjero_mujeres)] <- 0
       
-      if (!tiene_datos_sexo) {
-        message("⚠️ [GRAF5] Columnas de sexo TODAS NA")
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = paste0("Desglose por sexo no disponible para extranjero en ", year_datos),
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
-      }
+      message("📊 [GRÁFICA 5] Graficando ", nrow(datos_extranjero), " meses de extranjero por sexo (año ", year_datos, ")")
       
-      # Si llegamos aquí, SÍ hay datos de sexo
       p <- plot_ly()
       
-      # Obtener últimos valores con manejo seguro
-      vals_padron_h <- datos_extranjero$padron_extranjero_hombres[!is.na(datos_extranjero$padron_extranjero_hombres)]
-      ultimo_padron_h <- if(length(vals_padron_h) > 0) tail(vals_padron_h, 1) else 0
-      
-      vals_padron_m <- datos_extranjero$padron_extranjero_mujeres[!is.na(datos_extranjero$padron_extranjero_mujeres)]
-      ultimo_padron_m <- if(length(vals_padron_m) > 0) tail(vals_padron_m, 1) else 0
-      
-      vals_lista_h <- datos_extranjero$lista_extranjero_hombres[!is.na(datos_extranjero$lista_extranjero_hombres)]
-      ultimo_lista_h <- if(length(vals_lista_h) > 0) tail(vals_lista_h, 1) else 0
-      
-      vals_lista_m <- datos_extranjero$lista_extranjero_mujeres[!is.na(datos_extranjero$lista_extranjero_mujeres)]
-      ultimo_lista_m <- if(length(vals_lista_m) > 0) tail(vals_lista_m, 1) else 0
+      # Obtener últimos valores para ordenar trazas
+      ultimo_padron_h <- tail(datos_extranjero$padron_extranjero_hombres, 1)
+      ultimo_padron_m <- tail(datos_extranjero$padron_extranjero_mujeres, 1)
+      ultimo_lista_h <- tail(datos_extranjero$lista_extranjero_hombres, 1)
+      ultimo_lista_m <- tail(datos_extranjero$lista_extranjero_mujeres, 1)
       
       trazas_info <- data.frame(
         nombre = c("padron_h", "padron_m", "lista_h", "lista_m"),
@@ -738,11 +655,10 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         )
       )
       
-      message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Extranjero renderizado con ", nrow(datos_extranjero), " meses")
+      message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Extranjero renderizado")
       return(p)
     }
   }) %>%
-    # ✅ CORRECCIÓN CRÍTICA: Agregar input$ambito_datos para re-renderizar al cambiar vista
     bindEvent(
       estado_app(),
       input$btn_consultar,
@@ -751,5 +667,5 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_consultado_4_5 v1.2 inicializado")
+  message("✅ graficas_consultado_4_5 v1.4 inicializado (CORRECCIÓN FINAL: Mensaje < 2020, gráficas >= 2020)")
 }
