@@ -1,6 +1,6 @@
 # modules/lista_nominal_helpers_ui.R
 # Funciones auxiliares para obtener opciones de filtros geográficos
-# Versión: 1.1 - CORRECCIÓN: Eliminado parámetro solo_extranjero
+# Versión: 1.2 - CORRECCIÓN: Validación robusta de fechas antes de operaciones
 
 # ========== FUNCIÓN: OBTENER LISTA DE ENTIDADES ==========
 # Retorna lista estática de los 32 estados + Nacional
@@ -23,6 +23,52 @@ get_entidades <- function() {
   return(c("Nacional", entidades_completas))
 }
 
+# ========== FUNCIÓN AUXILIAR: VALIDAR Y CONVERTIR FECHA ==========
+# Asegura que la fecha sea un objeto Date válido
+validar_fecha <- function(fecha, nombre_funcion = "funcion") {
+  
+  # Validar NULL
+  if (is.null(fecha)) {
+    message("⚠️ [", nombre_funcion, "] Fecha es NULL")
+    return(NULL)
+  }
+  
+  # Si ya es Date, validar que no sea NA
+  if (inherits(fecha, "Date")) {
+    if (is.na(fecha)) {
+      message("⚠️ [", nombre_funcion, "] Fecha es NA")
+      return(NULL)
+    }
+    return(fecha)
+  }
+  
+  # Si es character, convertir
+  if (is.character(fecha)) {
+    if (fecha == "" || fecha == "Sin datos") {
+      message("⚠️ [", nombre_funcion, "] Fecha es string vacío o 'Sin datos'")
+      return(NULL)
+    }
+    
+    fecha_convertida <- tryCatch({
+      as.Date(fecha)
+    }, error = function(e) {
+      message("❌ [", nombre_funcion, "] Error convirtiendo fecha character: ", e$message)
+      return(NULL)
+    })
+    
+    if (is.null(fecha_convertida) || is.na(fecha_convertida)) {
+      message("❌ [", nombre_funcion, "] Conversión resultó en NULL o NA")
+      return(NULL)
+    }
+    
+    return(fecha_convertida)
+  }
+  
+  # Tipo no soportado
+  message("❌ [", nombre_funcion, "] Fecha tiene tipo no soportado: ", class(fecha))
+  return(NULL)
+}
+
 # ========== FUNCIÓN: OBTENER DISTRITOS POR ENTIDAD ==========
 # Carga datos mínimos para obtener lista de distritos
 # Parámetros:
@@ -36,29 +82,19 @@ get_distritos_por_entidad <- function(entidad, fecha) {
     return(c("Todos"))
   }
   
-  # Validar fecha
-  if (is.null(fecha) || fecha == "" || fecha == "Sin datos") {
-    message("⚠️ [get_distritos] Fecha inválida")
+  # ✅ v1.2: Validación robusta de fecha
+  fecha_validada <- validar_fecha(fecha, "get_distritos")
+  
+  if (is.null(fecha_validada)) {
+    message("⚠️ [get_distritos] Fecha inválida, retornando 'Todos'")
     return(c("Todos"))
   }
   
-  fecha_date <- tryCatch({
-    as.Date(fecha)
-  }, error = function(e) {
-    message("❌ [get_distritos] Error convirtiendo fecha: ", e$message)
-    return(NULL)
-  })
-  
-  if (is.null(fecha_date) || is.na(fecha_date)) {
-    return(c("Todos"))
-  }
-  
-  # ✅ v1.1: Eliminado parámetro solo_extranjero
   # Cargar datos solo del estado seleccionado
   datos_estado <- tryCatch({
     cargar_lne(
       tipo_corte = "historico",
-      fecha = fecha_date,
+      fecha = fecha_validada,
       dimension = "completo",
       estado = entidad,
       distrito = "Todos",
@@ -106,25 +142,19 @@ get_municipios_por_distrito <- function(entidad, distrito, fecha) {
     return(c("Todos"))
   }
   
-  # Validar fecha
-  if (is.null(fecha) || fecha == "" || fecha == "Sin datos") {
+  # ✅ v1.2: Validación robusta de fecha
+  fecha_validada <- validar_fecha(fecha, "get_municipios")
+  
+  if (is.null(fecha_validada)) {
+    message("⚠️ [get_municipios] Fecha inválida, retornando 'Todos'")
     return(c("Todos"))
   }
   
-  fecha_date <- tryCatch({
-    as.Date(fecha)
-  }, error = function(e) NULL)
-  
-  if (is.null(fecha_date) || is.na(fecha_date)) {
-    return(c("Todos"))
-  }
-  
-  # ✅ v1.1: Eliminado parámetro solo_extranjero
   # Cargar datos del distrito seleccionado
   datos_distrito <- tryCatch({
     cargar_lne(
       tipo_corte = "historico",
-      fecha = fecha_date,
+      fecha = fecha_validada,
       dimension = "completo",
       estado = entidad,
       distrito = distrito,
@@ -172,25 +202,19 @@ get_secciones_por_municipio <- function(entidad, distrito, municipio, fecha) {
     return(c("Todas"))
   }
   
-  # Validar fecha
-  if (is.null(fecha) || fecha == "" || fecha == "Sin datos") {
+  # ✅ v1.2: Validación robusta de fecha
+  fecha_validada <- validar_fecha(fecha, "get_secciones")
+  
+  if (is.null(fecha_validada)) {
+    message("⚠️ [get_secciones] Fecha inválida, retornando 'Todas'")
     return(c("Todas"))
   }
   
-  fecha_date <- tryCatch({
-    as.Date(fecha)
-  }, error = function(e) NULL)
-  
-  if (is.null(fecha_date) || is.na(fecha_date)) {
-    return(c("Todas"))
-  }
-  
-  # ✅ v1.1: Eliminado parámetro solo_extranjero
   # Cargar datos del municipio seleccionado
   datos_municipio <- tryCatch({
     cargar_lne(
       tipo_corte = "historico",
-      fecha = fecha_date,
+      fecha = fecha_validada,
       dimension = "completo",
       estado = entidad,
       distrito = distrito,
@@ -223,5 +247,4 @@ get_secciones_por_municipio <- function(entidad, distrito, municipio, fecha) {
   return(c("Todas"))
 }
 
-message("✅ lista_nominal_helpers_ui.R v1.1 cargado (CORRECCIÓN: Eliminado solo_extranjero)")
-
+message("✅ lista_nominal_helpers_ui.R v1.2 cargado (CORRECCIÓN: Validación robusta de fechas)")
