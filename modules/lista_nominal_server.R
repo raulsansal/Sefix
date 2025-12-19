@@ -1,5 +1,5 @@
 # modules/lista_nominal_server.R
-# Versión: 3.3 - CORREGIDO DEFINITIVO: Validación explícita de input$year en obtener_fecha_para_filtros()
+# Versión: 3.4 - SOLUCIÓN DEFINITIVA: Reimplementación de lógica de fecha sin llamar a reactive
 # FILTROS EN CASCADA: Reactivos e independientes de botón "Consultar"
 
 # Configurar nombres de meses en español
@@ -68,56 +68,75 @@ lista_nominal_server <- function(id) {
     })
     
     # ========== FUNCIÓN AUXILIAR: OBTENER FECHA SEGURA PARA FILTROS ==========
-    # ✅ v3.3: Validación explícita de input$year ANTES de llamar reactive
+    # ✅ v3.4 DEFINITIVO: Reimplementación SIN llamar al reactive
     
     obtener_fecha_para_filtros <- function() {
-      # ✅ CRÍTICO: Verificar si input$year está disponible ANTES de todo
-      year_disponible <- isolate(input$year)
+      # Obtener valores necesarios con isolate
+      tipo_corte_val <- isolate(input$tipo_corte)
+      year_val <- isolate(input$year)
       
-      if (is.null(year_disponible) || year_disponible == "") {
-        # Si NO hay año, usar última fecha del catálogo como fallback
-        if (exists("LNE_CATALOG", envir = .GlobalEnv)) {
-          catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
-          if (length(catalog$historico) > 0) {
-            fecha <- as.Date(max(catalog$historico), origin = "1970-01-01")
-            message("⚠️ [obtener_fecha_para_filtros] No hay año seleccionado, usando última del catálogo: ", fecha)
-            return(fecha)
-          }
-        }
+      # Validar catálogo
+      if (!exists("LNE_CATALOG", envir = .GlobalEnv)) {
+        message("❌ [obtener_fecha_para_filtros] LNE_CATALOG no existe")
         return(NULL)
       }
       
-      # Si HAY año, intentar obtener última fecha disponible
-      fecha <- tryCatch({
-        isolate(ultima_fecha_disponible())
-      }, error = function(e) {
-        message("⚠️ [obtener_fecha_para_filtros] Error en ultima_fecha_disponible: ", e$message)
-        NULL
-      })
+      catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
       
-      # ✅ Validar que el resultado sea un objeto Date válido
-      if (!inherits(fecha, "Date") || is.na(fecha)) {
-        # Fallback: usar última del catálogo
-        if (exists("LNE_CATALOG", envir = .GlobalEnv)) {
-          catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
-          if (length(catalog$historico) > 0) {
-            fecha <- as.Date(max(catalog$historico), origin = "1970-01-01")
-            message("⚠️ [obtener_fecha_para_filtros] Usando fallback del catálogo: ", fecha)
-          } else {
-            fecha <- NULL
-          }
+      # Si NO hay año seleccionado, usar última fecha del catálogo
+      if (is.null(year_val) || is.na(year_val) || year_val == "") {
+        if (length(catalog$historico) > 0) {
+          ultima_fecha_catalogo <- as.Date(max(catalog$historico), origin = "1970-01-01")
+          message("⚠️ [obtener_fecha_para_filtros] No hay año, usando última del catálogo: ", ultima_fecha_catalogo)
+          return(ultima_fecha_catalogo)
         } else {
-          fecha <- NULL
+          message("❌ [obtener_fecha_para_filtros] No hay fechas en catálogo")
+          return(NULL)
         }
       }
       
-      # ✅ Validación final
-      if (is.null(fecha) || !inherits(fecha, "Date")) {
-        message("❌ [obtener_fecha_para_filtros] No se pudo obtener fecha válida")
+      # Si NO hay tipo de corte, asumir histórico
+      if (is.null(tipo_corte_val) || is.na(tipo_corte_val) || tipo_corte_val == "") {
+        tipo_corte_val <- "historico"
+        message("⚠️ [obtener_fecha_para_filtros] No hay tipo_corte, asumiendo 'historico'")
+      }
+      
+      # Obtener fechas del año seleccionado (REIMPLEMENTACIÓN DIRECTA)
+      if (tipo_corte_val == "historico") {
+        fechas_year <- catalog$historico[format(catalog$historico, "%Y") == year_val]
+      } else {
+        fechas_year <- catalog$semanal_comun[format(catalog$semanal_comun, "%Y") == year_val]
+      }
+      
+      # Si no hay fechas para ese año, usar última del catálogo
+      if (length(fechas_year) == 0) {
+        if (length(catalog$historico) > 0) {
+          ultima_fecha_catalogo <- as.Date(max(catalog$historico), origin = "1970-01-01")
+          message("⚠️ [obtener_fecha_para_filtros] No hay fechas para año ", year_val, ", usando última del catálogo: ", ultima_fecha_catalogo)
+          return(ultima_fecha_catalogo)
+        } else {
+          message("❌ [obtener_fecha_para_filtros] No hay fechas disponibles")
+          return(NULL)
+        }
+      }
+      
+      # Obtener la fecha más reciente del año
+      ultima <- max(fechas_year)
+      fecha_final <- as.Date(ultima, origin = "1970-01-01")
+      
+      # Validación final robusta
+      if (!inherits(fecha_final, "Date")) {
+        message("❌ [obtener_fecha_para_filtros] Conversión a Date falló")
         return(NULL)
       }
       
-      return(fecha)
+      if (is.na(fecha_final)) {
+        message("❌ [obtener_fecha_para_filtros] Fecha es NA")
+        return(NULL)
+      }
+      
+      message("✅ [obtener_fecha_para_filtros] Fecha para año ", year_val, ": ", fecha_final)
+      return(fecha_final)
     }
     
     # ========== INFORMACIÓN TIPO DE CORTE ==========
@@ -129,7 +148,7 @@ lista_nominal_server <- function(id) {
         HTML(paste0(
           "<div style='background-color: #e8f4f8; padding: 10px; border-radius: 5px; margin-top: 10px;'>",
           "<small><strong>Datos históricos anuales</strong><br>",
-          "Información agregada por entidad, distrito, municipio y sección.<br>",
+          "Información mensual agregada por entidad, distrito, municipio y sección.<br>",
           "Periodo: 2017 a la última actualización</small>",
           "</div>"
         ))
@@ -160,8 +179,6 @@ lista_nominal_server <- function(id) {
         return(NULL)
       }
     })
-    
-    # ✅ ELIMINADO: output$info_fecha (ya no es necesario)
     
     # ========== ENCABEZADO PRINCIPAL ==========
     
@@ -232,9 +249,6 @@ lista_nominal_server <- function(id) {
         }
       }
     }, priority = 100)
-    
-    # ✅ ELIMINADO: observeEvent(list(input$tipo_corte, input$year), {...}) 
-    # que actualizaba selectInput "date" - Ya no es necesario
     
     # ========== FUNCIÓN AUXILIAR: CARGA INICIAL RÁPIDA ==========
     
@@ -412,14 +426,23 @@ lista_nominal_server <- function(id) {
     # PASO 2: ACTUALIZAR DISTRITOS (cuando cambia Estado)
     observeEvent(input$entidad, {
       req(input$entidad)
-      req(input$year)  # ✅ CRÍTICO v3.2: No ejecutar si no hay año seleccionado
       
-      # ✅ CORREGIDO v3.3: Usar función segura con validación explícita
+      # ✅ v3.4: Obtener fecha con función mejorada
       fecha_actual <- obtener_fecha_para_filtros()
       
-      # Validar que tenemos una fecha
-      if (is.null(fecha_actual) || !inherits(fecha_actual, "Date")) {
-        message("⚠️ [FILTROS CASCADA] No hay fecha disponible para actualizar distritos")
+      # Validación robusta
+      if (is.null(fecha_actual)) {
+        message("⚠️ [FILTROS CASCADA] No hay fecha disponible, abortando actualización de distritos")
+        return()
+      }
+      
+      if (!inherits(fecha_actual, "Date")) {
+        message("❌ [FILTROS CASCADA] Fecha no es objeto Date: ", class(fecha_actual))
+        return()
+      }
+      
+      if (is.na(fecha_actual)) {
+        message("❌ [FILTROS CASCADA] Fecha es NA")
         return()
       }
       
@@ -447,19 +470,29 @@ lista_nominal_server <- function(id) {
     # PASO 3: ACTUALIZAR MUNICIPIOS (cuando cambia Distrito)
     observeEvent(input$distrito, {
       req(input$distrito)
-      req(input$year)  # ✅ CRÍTICO v3.2: No ejecutar si no hay año seleccionado
       
-      # ✅ CORREGIDO v3.3: Usar función segura con validación explícita
       entidad_actual <- isolate(input$entidad)
-      fecha_actual <- obtener_fecha_para_filtros()
       
-      # Validar que hay entidad y fecha
       if (is.null(entidad_actual)) {
         return()
       }
       
-      if (is.null(fecha_actual) || !inherits(fecha_actual, "Date")) {
-        message("⚠️ [FILTROS CASCADA] No hay fecha disponible para actualizar municipios")
+      # ✅ v3.4: Obtener fecha con función mejorada
+      fecha_actual <- obtener_fecha_para_filtros()
+      
+      # Validación robusta
+      if (is.null(fecha_actual)) {
+        message("⚠️ [FILTROS CASCADA] No hay fecha disponible, abortando actualización de municipios")
+        return()
+      }
+      
+      if (!inherits(fecha_actual, "Date")) {
+        message("❌ [FILTROS CASCADA] Fecha no es objeto Date: ", class(fecha_actual))
+        return()
+      }
+      
+      if (is.na(fecha_actual)) {
+        message("❌ [FILTROS CASCADA] Fecha es NA")
         return()
       }
       
@@ -488,20 +521,30 @@ lista_nominal_server <- function(id) {
     # PASO 4: ACTUALIZAR SECCIONES (cuando cambia Municipio)
     observeEvent(input$municipio, {
       req(input$municipio)
-      req(input$year)  # ✅ CRÍTICO v3.2: No ejecutar si no hay año seleccionado
       
-      # ✅ CORREGIDO v3.3: Usar función segura con validación explícita
       entidad_actual <- isolate(input$entidad)
       distrito_actual <- isolate(input$distrito)
-      fecha_actual <- obtener_fecha_para_filtros()
       
-      # Validar que hay entidad, distrito y fecha
       if (is.null(entidad_actual) || is.null(distrito_actual)) {
         return()
       }
       
-      if (is.null(fecha_actual) || !inherits(fecha_actual, "Date")) {
-        message("⚠️ [FILTROS CASCADA] No hay fecha disponible para actualizar secciones")
+      # ✅ v3.4: Obtener fecha con función mejorada
+      fecha_actual <- obtener_fecha_para_filtros()
+      
+      # Validación robusta
+      if (is.null(fecha_actual)) {
+        message("⚠️ [FILTROS CASCADA] No hay fecha disponible, abortando actualización de secciones")
+        return()
+      }
+      
+      if (!inherits(fecha_actual, "Date")) {
+        message("❌ [FILTROS CASCADA] Fecha no es objeto Date: ", class(fecha_actual))
+        return()
+      }
+      
+      if (is.na(fecha_actual)) {
+        message("❌ [FILTROS CASCADA] Fecha es NA")
         return()
       }
       
@@ -599,7 +642,6 @@ lista_nominal_server <- function(id) {
         años_disponibles <- sort(unique(format(catalog$historico, "%Y")), decreasing = TRUE)
         updateSelectInput(session, "year", selected = años_disponibles[1])
         message("   ✅ year → ", años_disponibles[1])
-        # ✅ ELIMINADO: updateSelectInput para "date" - Ya no existe
       }
       
       updateSelectInput(session, "entidad", selected = "Nacional")
@@ -632,6 +674,6 @@ lista_nominal_server <- function(id) {
       message("⚠️ No se encontró lista_nominal_server_text_analysis.R")
     }
     
-    message("✅ Módulo lista_nominal_server v3.3 inicializado (DEFINITIVO: validación explícita input$year)")
+    message("✅ Módulo lista_nominal_server v3.4 inicializado (SOLUCIÓN DEFINITIVA)")
   })
 }

@@ -1,11 +1,11 @@
 # modules/lista_nominal_graficas/graficas_historico_3.R
 # Gráfica 3: Evolución anual por sexo
-# Versión: 2.1 - CORRECCIÓN: bindEvent incluye ambito_datos para re-renderizar al cambiar vista
+# Versión: 2.2 - LIMPIEZA: Eliminados mensajes de "datos no disponibles", solo graficar
 
 graficas_historico_3 <- function(input, output, session, datos_anuales_completos, 
                                  anio_actual, texto_alcance, estado_app, mostrar_graficas_anuales) {
   
-  message("📊 Inicializando graficas_historico_3 v2.1")
+  message("📊 Inicializando graficas_historico_3 v2.2")
   
   # ========== GRÁFICA 3: EVOLUCIÓN ANUAL + DESGLOSE POR SEXO ==========
   
@@ -40,7 +40,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
     
     message("📊 [GRÁFICA 3] Renderizando - Estado: ", estado_app(), " | Ámbito: ", input$ambito_datos)
     
-    # ========== VALIDACIÓN ROBUSTA ==========
+    # ========== ✅ ÚNICO MENSAJE: Sin datos disponibles ==========
     if (is.null(datos_anuales) || !is.data.frame(datos_anuales) || nrow(datos_anuales) == 0) {
       return(plot_ly() %>%
                layout(
@@ -48,7 +48,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
                  yaxis = list(visible = FALSE),
                  annotations = list(
                    list(
-                     text = "No hay datos disponibles",
+                     text = "No hay datos disponibles para esa consulta",
                      xref = "paper", yref = "paper",
                      x = 0.5, y = 0.5,
                      showarrow = FALSE,
@@ -69,7 +69,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
                    yaxis = list(visible = FALSE),
                    annotations = list(
                      list(
-                       text = "Desglose por sexo no disponible",
+                       text = "No hay datos disponibles para esa consulta",
                        xref = "paper", yref = "paper",
                        x = 0.5, y = 0.5,
                        showarrow = FALSE,
@@ -175,7 +175,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         hovermode = 'x unified',
         annotations = list(
           list(
-            text = isolate(texto_alcance()),  # ✅ AISLADO para evitar reactividad
+            text = isolate(texto_alcance()),
             x = 0.5, y = 1.12,
             xref = "paper", yref = "paper",
             xanchor = "center", yanchor = "top",
@@ -199,33 +199,25 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       return(p)
       
     } else {
-      # ========== GRÁFICA EXTRANJERO ✅ CORRECCIÓN CRÍTICA ==========
+      # ========== GRÁFICA EXTRANJERO ==========
       
-      # Filtrar años con datos de extranjero
-      datos_extranjero <- datos_anuales[!is.na(datos_anuales$padron_extranjero) & 
-                                          !is.na(datos_anuales$lista_extranjero), ]
+      # ✅ v2.2: ELIMINADO filtro de años >= 2020
+      # Reemplazar NA con 0 para graficar
+      datos_extranjero <- datos_anuales
       
-      if (nrow(datos_extranjero) == 0) {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = "Datos de extranjero disponibles desde 2020",
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
+      if ("padron_extranjero" %in% colnames(datos_extranjero)) {
+        datos_extranjero$padron_extranjero[is.na(datos_extranjero$padron_extranjero)] <- 0
+      } else {
+        datos_extranjero$padron_extranjero <- 0
       }
       
-      # ========== ✅ CORRECCIÓN CRÍTICA: VERIFICAR EXISTENCIA DE COLUMNAS ==========
-      # Eliminar lógica híbrida que verifica valores NA por fila
-      # Ahora solo verificamos si las COLUMNAS existen
+      if ("lista_extranjero" %in% colnames(datos_extranjero)) {
+        datos_extranjero$lista_extranjero[is.na(datos_extranjero$lista_extranjero)] <- 0
+      } else {
+        datos_extranjero$lista_extranjero <- 0
+      }
       
+      # Verificar si existen columnas de sexo
       cols_sexo_extranjero <- c("padron_extranjero_hombres", "padron_extranjero_mujeres", 
                                 "lista_extranjero_hombres", "lista_extranjero_mujeres")
       
@@ -276,7 +268,12 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         # ========== CASO 2: CON COLUMNAS DE SEXO - MOSTRAR 4 LÍNEAS CON ORDEN DINÁMICO ==========
         message("📊 [GRÁFICA 3] Mostrando desglose por sexo (4 líneas)")
         
-        # ========== ORDENAR TRAZAS DINÁMICAMENTE ==========
+        # Reemplazar NA con 0
+        datos_extranjero$padron_extranjero_hombres[is.na(datos_extranjero$padron_extranjero_hombres)] <- 0
+        datos_extranjero$padron_extranjero_mujeres[is.na(datos_extranjero$padron_extranjero_mujeres)] <- 0
+        datos_extranjero$lista_extranjero_hombres[is.na(datos_extranjero$lista_extranjero_hombres)] <- 0
+        datos_extranjero$lista_extranjero_mujeres[is.na(datos_extranjero$lista_extranjero_mujeres)] <- 0
+        
         # Obtener último valor de cada serie para determinar orden visual
         vals_padron_h <- datos_extranjero$padron_extranjero_hombres[!is.na(datos_extranjero$padron_extranjero_hombres)]
         ultimo_padron_h <- if(length(vals_padron_h) > 0) tail(vals_padron_h, 1) else 0
@@ -358,10 +355,10 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         }
       }
       
-      # ========== LAYOUT FINAL (SIN NOTA FALSA) ==========
+      # Layout final
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Anual por Sexo (2020-", anio_actual(), ") - Residentes en el Extranjero"),
+          text = paste0("Evolución Anual por Sexo (2017-", anio_actual(), ") - Residentes en el Extranjero"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -373,7 +370,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         hovermode = 'x unified',
         annotations = list(
           list(
-            text = isolate(texto_alcance()),  # ✅ AISLADO para evitar reactividad
+            text = isolate(texto_alcance()),
             x = 0.5, y = 1.12,
             xref = "paper", yref = "paper",
             xanchor = "center", yanchor = "top",
@@ -398,14 +395,13 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
     }
     
   }) %>%
-    # ========== ✅ CORRECCIÓN CRÍTICA: Agregar input$ambito_datos para re-renderizar al cambiar vista ==========
-  bindEvent(
-    estado_app(),
-    input$btn_consultar,
-    input$ambito_datos,
-    ignoreNULL = FALSE,
-    ignoreInit = FALSE
-  )
+    bindEvent(
+      estado_app(),
+      input$btn_consultar,
+      input$ambito_datos,
+      ignoreNULL = FALSE,
+      ignoreInit = FALSE
+    )
   
-  message("✅ graficas_historico_3 v2.1 inicializado")
+  message("✅ graficas_historico_3 v2.2 inicializado (LIMPIEZA COMPLETA)")
 }

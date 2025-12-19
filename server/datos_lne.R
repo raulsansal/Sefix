@@ -1,6 +1,6 @@
 # server/datos_lne.R
 # Sistema de carga de datos de Lista Nominal Electoral (LNE)
-# Versión: 1.2 - CORRECCIÓN: Bug fix en filtro de sección (conflicto de nombres de variables)
+# Versión: 1.3 - CORRECCIÓN: Transformación de datos RESIDENTES EXTRANJERO para años < 2020
 
 library(data.table)
 library(dplyr)
@@ -177,6 +177,9 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
     stop("Fecha inválida: ", fecha)
   }
   
+  # ✅ v1.3: Detectar año del archivo
+  año_archivo <- as.integer(format(fecha, "%Y"))
+  
   # Encontrar archivo por fecha
   ruta_archivo <- encontrar_archivo_lne(tipo_corte, fecha, dimension)
   
@@ -294,6 +297,94 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
     col_nuevo <- col_map[col_viejo]
     if (col_viejo %in% colnames(dt)) {
       setnames(dt, col_viejo, col_nuevo)
+    }
+  }
+  
+  # ========== ✅ v1.3: TRANSFORMACIÓN PARA RESIDENTES EXTRANJERO (AÑOS < 2020) ==========
+  
+  if (año_archivo < 2020) {
+    message("🔄 [TRANSFORMACIÓN v1.3] Procesando datos de RESIDENTES EXTRANJERO para año ", año_archivo)
+    
+    # Identificar columnas que necesitamos transformar
+    tiene_cabecera <- "cabecera_distrital" %in% colnames(dt)
+    tiene_municipio <- "nombre_municipio" %in% colnames(dt)
+    
+    if (tiene_cabecera || tiene_municipio) {
+      # Identificar filas de RESIDENTES EXTRANJERO
+      filas_extranjero <- rep(FALSE, nrow(dt))
+      
+      if (tiene_cabecera) {
+        filas_extranjero <- filas_extranjero | grepl("RESIDENTES EXTRANJERO", dt$cabecera_distrital, ignore.case = TRUE)
+      }
+      
+      if (tiene_municipio) {
+        filas_extranjero <- filas_extranjero | grepl("^RESIDENTES EXTRANJERO$", dt$nombre_municipio, ignore.case = TRUE)
+      }
+      
+      num_filas_extranjero <- sum(filas_extranjero)
+      
+      if (num_filas_extranjero > 0) {
+        message("   📍 Encontradas ", num_filas_extranjero, " filas de RESIDENTES EXTRANJERO")
+        
+        # Crear columnas extranjero si no existen
+        if (!"padron_extranjero" %in% colnames(dt)) {
+          dt[, padron_extranjero := NA_real_]
+        }
+        if (!"lista_extranjero" %in% colnames(dt)) {
+          dt[, lista_extranjero := NA_real_]
+        }
+        if (!"padron_extranjero_hombres" %in% colnames(dt)) {
+          dt[, padron_extranjero_hombres := NA_real_]
+        }
+        if (!"padron_extranjero_mujeres" %in% colnames(dt)) {
+          dt[, padron_extranjero_mujeres := NA_real_]
+        }
+        if (!"lista_extranjero_hombres" %in% colnames(dt)) {
+          dt[, lista_extranjero_hombres := NA_real_]
+        }
+        if (!"lista_extranjero_mujeres" %in% colnames(dt)) {
+          dt[, lista_extranjero_mujeres := NA_real_]
+        }
+        
+        # Para filas de RESIDENTES EXTRANJERO: mover datos de nacional → extranjero
+        idx_extranjero <- which(filas_extranjero)
+        
+        # Copiar valores de nacional a extranjero
+        if ("padron_nacional" %in% colnames(dt)) {
+          dt[idx_extranjero, padron_extranjero := padron_nacional]
+          dt[idx_extranjero, padron_nacional := 0]
+        }
+        
+        if ("lista_nacional" %in% colnames(dt)) {
+          dt[idx_extranjero, lista_extranjero := lista_nacional]
+          dt[idx_extranjero, lista_nacional := 0]
+        }
+        
+        if ("padron_nacional_hombres" %in% colnames(dt)) {
+          dt[idx_extranjero, padron_extranjero_hombres := padron_nacional_hombres]
+          dt[idx_extranjero, padron_nacional_hombres := 0]
+        }
+        
+        if ("padron_nacional_mujeres" %in% colnames(dt)) {
+          dt[idx_extranjero, padron_extranjero_mujeres := padron_nacional_mujeres]
+          dt[idx_extranjero, padron_nacional_mujeres := 0]
+        }
+        
+        if ("lista_nacional_hombres" %in% colnames(dt)) {
+          dt[idx_extranjero, lista_extranjero_hombres := lista_nacional_hombres]
+          dt[idx_extranjero, lista_nacional_hombres := 0]
+        }
+        
+        if ("lista_nacional_mujeres" %in% colnames(dt)) {
+          dt[idx_extranjero, lista_extranjero_mujeres := lista_nacional_mujeres]
+          dt[idx_extranjero, lista_nacional_mujeres := 0]
+        }
+        
+        message("   ✅ Transformación completada: datos movidos de columnas nacional → extranjero")
+        message("   ✅ Columnas nacional puestas en 0 para filas de RESIDENTES EXTRANJERO")
+      } else {
+        message("   ℹ️ No se encontraron filas de RESIDENTES EXTRANJERO")
+      }
     }
   }
   
@@ -498,4 +589,4 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   return(resultado)
 }
 
-message("✅ datos_lne.R v1.2 cargado (con bug fix de sección)")
+message("✅ datos_lne.R v1.3 cargado (transformación RESIDENTES EXTRANJERO para años < 2020)")

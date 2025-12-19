@@ -1,11 +1,11 @@
 # modules/lista_nominal_graficas/graficas_historico_1_2.R
 # Gráficas históricas 1 y 2: Proyección mensual y Evolución anual
-# Versión: 2.1 - CORRECCIÓN: bindEvent incluye ambito_datos para re-renderizar al cambiar vista
+# Versión: 2.2 - LIMPIEZA: Eliminados mensajes de "datos no disponibles", solo graficar
 
 graficas_historico_1_2 <- function(input, output, session, datos_year_actual, datos_anuales_completos, 
                                    anio_actual, texto_alcance, estado_app, mostrar_graficas_anuales) {
   
-  message("📊 Inicializando graficas_historico_1_2 v2.1")
+  message("📊 Inicializando graficas_historico_1_2 v2.2")
   
   # ========== GRÁFICA 1: EVOLUCIÓN MENSUAL AÑO ACTUAL + PROYECCIÓN ==========
   
@@ -40,7 +40,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     
     message("📊 [GRÁFICA 1] Renderizando - Estado: ", estado_app(), " | Ámbito: ", input$ambito_datos)
     
-    # ========== VALIDACIÓN ROBUSTA ==========
+    # ========== ✅ ÚNICO MENSAJE: Sin datos disponibles ==========
     if (is.null(datos_completos) || !is.data.frame(datos_completos) || nrow(datos_completos) == 0) {
       return(plot_ly() %>%
                layout(
@@ -48,7 +48,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
                  yaxis = list(visible = FALSE),
                  annotations = list(
                    list(
-                     text = "No hay datos disponibles",
+                     text = "No hay datos disponibles para esa consulta",
                      xref = "paper", yref = "paper",
                      x = 0.5, y = 0.5,
                      showarrow = FALSE,
@@ -192,7 +192,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         hovermode = 'x unified',
         annotations = list(
           list(
-            text = isolate(texto_alcance()),  # ✅ AISLADO para evitar reactividad
+            text = isolate(texto_alcance()),
             x = 0.5, y = 1.12,
             xref = "paper", yref = "paper",
             xanchor = "center", yanchor = "top",
@@ -218,63 +218,21 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
       
-      # ========== VERIFICAR SI EXISTEN COLUMNAS DE EXTRANJERO ==========
-      if (!("padron_extranjero" %in% colnames(datos_completos)) ||
-          !("lista_extranjero" %in% colnames(datos_completos))) {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = "Datos de extranjero no disponibles para este año",
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
+      # ✅ v2.2: ELIMINADAS todas las validaciones de columnas/datos
+      # Ahora simplemente graficamos con lo que haya (incluso si son 0 o NA)
+      
+      # Reemplazar NA con 0 para graficar
+      datos_extranjero <- datos_completos
+      if ("padron_extranjero" %in% colnames(datos_extranjero)) {
+        datos_extranjero$padron_extranjero[is.na(datos_extranjero$padron_extranjero)] <- 0
+      } else {
+        datos_extranjero$padron_extranjero <- 0
       }
       
-      # ========== VERIFICAR SI AL MENOS UN MES TIENE DATOS ==========
-      if (all(is.na(datos_completos$padron_extranjero)) || 
-          all(is.na(datos_completos$lista_extranjero))) {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = "No hay registros con datos de extranjero para este año",
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
-      }
-      
-      # Filtrar solo datos con extranjero
-      datos_extranjero <- datos_completos[!is.na(datos_completos$padron_extranjero) & 
-                                            !is.na(datos_completos$lista_extranjero), ]
-      
-      if (nrow(datos_extranjero) == 0) {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = "Error al procesar datos de extranjero",
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
+      if ("lista_extranjero" %in% colnames(datos_extranjero)) {
+        datos_extranjero$lista_extranjero[is.na(datos_extranjero$lista_extranjero)] <- 0
+      } else {
+        datos_extranjero$lista_extranjero <- 0
       }
       
       # Proyectar usando columnas extranjero
@@ -401,7 +359,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         hovermode = 'x unified',
         annotations = list(
           list(
-            text = isolate(texto_alcance()),  # ✅ AISLADO para evitar reactividad
+            text = isolate(texto_alcance()),
             x = 0.5, y = 1.12,
             xref = "paper", yref = "paper",
             xanchor = "center", yanchor = "top",
@@ -426,14 +384,13 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     }
     
   }) %>%
-    # ========== ✅ CORRECCIÓN CRÍTICA: Agregar input$ambito_datos para re-renderizar al cambiar vista ==========
-  bindEvent(
-    estado_app(),
-    input$btn_consultar,
-    input$ambito_datos,
-    ignoreNULL = FALSE,
-    ignoreInit = FALSE
-  )
+    bindEvent(
+      estado_app(),
+      input$btn_consultar,
+      input$ambito_datos,
+      ignoreNULL = FALSE,
+      ignoreInit = FALSE
+    )
   
   # ========== GRÁFICA 2: EVOLUCIÓN ANUAL ==========
   
@@ -468,7 +425,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     
     message("📊 [GRÁFICA 2] Renderizando - Estado: ", estado_app(), " | Ámbito: ", input$ambito_datos)
     
-    # ========== VALIDACIÓN ROBUSTA ==========
+    # ========== ✅ ÚNICO MENSAJE: Sin datos disponibles ==========
     if (is.null(datos_anuales) || !is.data.frame(datos_anuales) || nrow(datos_anuales) == 0) {
       return(plot_ly() %>%
                layout(
@@ -476,7 +433,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
                  yaxis = list(visible = FALSE),
                  annotations = list(
                    list(
-                     text = "No hay datos disponibles",
+                     text = "No hay datos disponibles para esa consulta",
                      xref = "paper", yref = "paper",
                      x = 0.5, y = 0.5,
                      showarrow = FALSE,
@@ -538,7 +495,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         hovermode = 'x unified',
         annotations = list(
           list(
-            text = isolate(texto_alcance()),  # ✅ AISLADO para evitar reactividad
+            text = isolate(texto_alcance()),
             x = 0.5, y = 1.12,
             xref = "paper", yref = "paper",
             xanchor = "center", yanchor = "top",
@@ -564,25 +521,21 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
       
-      # Filtrar solo años con datos de extranjero (2020 en adelante)
-      datos_extranjero <- datos_anuales[!is.na(datos_anuales$padron_extranjero) & 
-                                          !is.na(datos_anuales$lista_extranjero), ]
+      # ✅ v2.2: ELIMINADO filtro de años >= 2020
+      # Ahora graficamos TODOS los años con lo que haya (incluso 0 o NA)
       
-      if (nrow(datos_extranjero) == 0) {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = "Datos de extranjero disponibles desde 2020",
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
+      # Reemplazar NA con 0 para graficar
+      datos_extranjero <- datos_anuales
+      if ("padron_extranjero" %in% colnames(datos_extranjero)) {
+        datos_extranjero$padron_extranjero[is.na(datos_extranjero$padron_extranjero)] <- 0
+      } else {
+        datos_extranjero$padron_extranjero <- 0
+      }
+      
+      if ("lista_extranjero" %in% colnames(datos_extranjero)) {
+        datos_extranjero$lista_extranjero[is.na(datos_extranjero$lista_extranjero)] <- 0
+      } else {
+        datos_extranjero$lista_extranjero <- 0
       }
       
       p <- plot_ly()
@@ -622,7 +575,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       # Layout
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Anual (2020-", anio_actual(), ") - Residentes en el Extranjero"),
+          text = paste0("Evolución Anual (2017-", anio_actual(), ") - Residentes en el Extranjero"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -634,7 +587,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         hovermode = 'x unified',
         annotations = list(
           list(
-            text = isolate(texto_alcance()),  # ✅ AISLADO para evitar reactividad
+            text = isolate(texto_alcance()),
             x = 0.5, y = 1.12,
             xref = "paper", yref = "paper",
             xanchor = "center", yanchor = "top",
@@ -659,14 +612,13 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     }
     
   }) %>%
-    # ========== ✅ CORRECCIÓN CRÍTICA: Agregar input$ambito_datos para re-renderizar al cambiar vista ==========
-  bindEvent(
-    estado_app(),
-    input$btn_consultar,
-    input$ambito_datos,
-    ignoreNULL = FALSE,
-    ignoreInit = FALSE
-  )
+    bindEvent(
+      estado_app(),
+      input$btn_consultar,
+      input$ambito_datos,
+      ignoreNULL = FALSE,
+      ignoreInit = FALSE
+    )
   
   # ========== MODAL: INFORMACIÓN METODOLOGÍA GRÁFICA 1 ==========
   
@@ -761,7 +713,5 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     ))
   })
   
-  message("✅ graficas_historico_1_2 v2.1 inicializado")
+  message("✅ graficas_historico_1_2 v2.2 inicializado (LIMPIEZA COMPLETA)")
 }
-
-  

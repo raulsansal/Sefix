@@ -1,11 +1,11 @@
 # modules/lista_nominal_graficas/graficas_consultado_4_5.R
 # Gráficas 4 y 5: Evolución mensual del año consultado (con y sin desglose por sexo)
-# Versión: 1.4 - CORRECCIÓN FINAL: Mensaje para años < 2020, gráficas para años >= 2020
+# Versión: 1.5 - CORRECCIÓN: Eliminado chequeo de año < 2020, gráficas uniformes para todos los años
 
 graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta, 
                                     anio_consultado, texto_alcance, mostrar_graficas_consultadas) {
   
-  message("📊 Inicializando graficas_consultado_4_5 v1.4")
+  message("📊 Inicializando graficas_consultado_4_5 v1.5")
   
   # ========== GRÁFICA 4: EVOLUCIÓN MENSUAL DEL AÑO SELECCIONADO ==========
   
@@ -126,34 +126,9 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
       
-      # ✅ CORRECCIÓN v1.4: Validar por AÑO, no por existencia de columnas
-      year_num <- as.integer(year_datos)
+      # ✅ v1.5: ELIMINADO chequeo de año < 2020
+      # Ahora graficamos para TODOS los años (2017-2025)
       
-      if (year_num < 2020) {
-        # ✅ Para años < 2020, mostrar mensaje (datos NO existen)
-        mensaje_texto <- paste0(
-          "<b>Año de consulta: ", year_datos, "</b><br><br>",
-          "Los datos de padrón y lista nominal electoral de residentes en el extranjero ",
-          "sólo están disponibles a partir de 2020."
-        )
-        
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = mensaje_texto,
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
-      }
-      
-      # ✅ Para años >= 2020, graficar (incluso si valores = 0 o NA)
       # Verificar que las columnas existan
       if (!("padron_extranjero" %in% colnames(datos_completos)) ||
           !("lista_extranjero" %in% colnames(datos_completos))) {
@@ -473,34 +448,9 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
                  ))
       }
       
-      # ✅ CORRECCIÓN v1.4: Validar por AÑO, no por existencia de columnas
-      year_num <- as.integer(year_datos)
+      # ✅ v1.5: ELIMINADO chequeo de año < 2020
+      # Ahora graficamos para TODOS los años (2017-2025)
       
-      if (year_num < 2020) {
-        # ✅ Para años < 2020, mostrar mensaje (datos NO existen)
-        mensaje_texto <- paste0(
-          "<b>Año de consulta: ", year_datos, "</b><br><br>",
-          "Los datos de padrón y lista nominal electoral de residentes en el extranjero ",
-          "sólo están disponibles a partir de 2020."
-        )
-        
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = mensaje_texto,
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
-      }
-      
-      # ✅ Para años >= 2020, graficar (incluso si valores = 0 o NA)
       # Verificar columnas de sexo
       cols_sexo_extranjero <- c("padron_extranjero_hombres", "padron_extranjero_mujeres", 
                                 "lista_extranjero_hombres", "lista_extranjero_mujeres")
@@ -667,5 +617,6 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_consultado_4_5 v1.4 inicializado (CORRECCIÓN FINAL: Mensaje < 2020, gráficas >= 2020)")
+  message("✅ graficas_consultado_4_5 v1.5 inicializado (Gráficas uniformes para todos los años 2017-2025)")
 }
+
