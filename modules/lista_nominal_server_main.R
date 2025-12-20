@@ -1,11 +1,11 @@
 # modules/lista_nominal_server_main.R
-# Versión: 3.4 - SIMPLIFICADO: Solo Ámbito y Alcance en caption (SIN fuente)
+# Versión: 3.5 - CORRECCIÓN: Columnas dinámicas según ámbito (nacional/extranjero)
 # Coordinador principal que integra los módulos de gráficas y tablas
 
 lista_nominal_server_main <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   ns <- session$ns
   
-  message("📊 Inicializando lista_nominal_server_main v3.4")
+  message("📊 Inicializando lista_nominal_server_main v3.5")
   
   # ========== CARGAR HELPERS PARA TEXTO DE ALCANCE ==========
   source("modules/lista_nominal_graficas/graficas_helpers.R", local = TRUE)
@@ -56,6 +56,7 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
   # ========== DICCIONARIO DE ETIQUETAS PARA TABLA ==========
   
   etiquetas_mapeo_tabla <- list(
+    "año" = "Año",
     "clave_entidad" = "Clave Entidad",
     "nombre_entidad" = "Entidad",
     "clave_distrito" = "Clave Distrito",
@@ -63,16 +64,29 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     "clave_municipio" = "Clave Municipio",
     "nombre_municipio" = "Municipio",
     "seccion" = "Sección",
-    "padron_electoral" = "Padrón Electoral",
-    "lista_nominal" = "Lista Nominal",
-    "padron_hombres" = "Padrón Hombres",
-    "padron_mujeres" = "Padrón Mujeres",
-    "lista_hombres" = "Lista Hombres",
-    "lista_mujeres" = "Lista Mujeres",
-    "tasa_inclusion" = "Tasa de Inclusión (%)"
+    
+    # Nacional
+    "padron_nacional" = "Padrón Nacional",
+    "padron_nacional_hombres" = "Padrón H",
+    "padron_nacional_mujeres" = "Padrón M",
+    "padron_nacional_no_binario" = "Padrón NB",
+    "lista_nacional" = "Lista Nacional",
+    "lista_nacional_hombres" = "Lista H",
+    "lista_nacional_mujeres" = "Lista M",
+    "lista_nacional_no_binario" = "Lista NB",
+    
+    # Extranjero
+    "padron_extranjero" = "Padrón Extranjero",
+    "padron_extranjero_hombres" = "Padrón H",
+    "padron_extranjero_mujeres" = "Padrón M",
+    "padron_extranjero_no_binario" = "Padrón NB",
+    "lista_extranjero" = "Lista Extranjero",
+    "lista_extranjero_hombres" = "Lista H",
+    "lista_extranjero_mujeres" = "Lista M",
+    "lista_extranjero_no_binario" = "Lista NB"
   )
   
-  # ========== RENDERIZAR TABLA CON ENCABEZADO SIMPLE ==========
+  # ========== RENDERIZAR TABLA CON COLUMNAS DINÁMICAS ==========
   
   output$`main-table_data` <- renderDT({
     
@@ -112,62 +126,127 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     req(is.data.frame(df), nrow(df) > 0)
     
     message("📊 [DATATABLE] Datos disponibles: ", nrow(df), " filas")
+    message("📊 [DATATABLE] Columnas disponibles en CSV: ", paste(colnames(df), collapse = ", "))
     
-    # Definir columnas base
-    columnas_base <- c("nombre_entidad", "seccion")
+    # ========== AGREGAR COLUMNA AÑO ==========
+    df$año <- input$year
+    
+    # ========== DETERMINAR ÁMBITO ==========
+    ambito <- input$ambito_datos %||% "nacional"
+    message("📊 [DATATABLE] Ámbito seleccionado: ", ambito)
+    
+    # ========== DEFINIR COLUMNAS BASE (SIEMPRE PRESENTES) ==========
+    columnas_base <- c("año", "nombre_entidad")
     
     if ("cabecera_distrital" %in% colnames(df)) {
-      columnas_base <- c(columnas_base[1], "cabecera_distrital", columnas_base[-1])
+      columnas_base <- c(columnas_base, "cabecera_distrital")
     }
     if ("nombre_municipio" %in% colnames(df)) {
       columnas_base <- c(columnas_base, "nombre_municipio")
     }
-    
-    # Columnas principales
-    columnas_principales <- c("padron_electoral", "lista_nominal", "tasa_inclusion")
-    
-    # Obtener desglose actual
-    desglose_actual <- input$desglose %||% "Sexo"
-    
-    # Determinar columnas de desglose
-    columnas_desglose <- c()
-    
-    if (desglose_actual == "Sexo") {
-      cols_sexo <- c("padron_hombres", "padron_mujeres", "lista_hombres", "lista_mujeres")
-      columnas_desglose <- cols_sexo[cols_sexo %in% colnames(df)]
-    } else if (desglose_actual == "Rango de Edad") {
-      cols_edad <- grep("^(padron|lista)_\\d+", colnames(df), value = TRUE, ignore.case = TRUE)
-      columnas_desglose <- cols_edad
-    } else if (desglose_actual == "Entidad de Origen") {
-      cols_origen <- grep("^(pad|ln)_[A-Z]", colnames(df), value = TRUE, ignore.case = TRUE)
-      columnas_desglose <- cols_origen
+    if ("seccion" %in% colnames(df)) {
+      columnas_base <- c(columnas_base, "seccion")
     }
     
-    # Combinar todas las columnas
-    columnas_seleccionadas <- c(columnas_base, columnas_principales, columnas_desglose)
-    columnas_seleccionadas <- columnas_seleccionadas[columnas_seleccionadas %in% colnames(df)]
+    # ========== DEFINIR COLUMNAS DE DATOS SEGÚN ÁMBITO ==========
+    columnas_datos <- c()
+    
+    if (ambito == "nacional") {
+      # Vista Nacional
+      message("📊 [DATATABLE] Construyendo columnas para vista NACIONAL")
+      
+      # Padrón Nacional (total primero)
+      if ("padron_nacional" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "padron_nacional")
+      }
+      
+      # Padrón Nacional por sexo (si existen)
+      if ("padron_nacional_hombres" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "padron_nacional_hombres")
+      }
+      if ("padron_nacional_mujeres" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "padron_nacional_mujeres")
+      }
+      if ("padron_nacional_no_binario" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "padron_nacional_no_binario")
+      }
+      
+      # Lista Nacional (total primero)
+      if ("lista_nacional" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "lista_nacional")
+      }
+      
+      # Lista Nacional por sexo (si existen)
+      if ("lista_nacional_hombres" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "lista_nacional_hombres")
+      }
+      if ("lista_nacional_mujeres" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "lista_nacional_mujeres")
+      }
+      if ("lista_nacional_no_binario" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "lista_nacional_no_binario")
+      }
+      
+    } else {
+      # Vista Extranjero
+      message("📊 [DATATABLE] Construyendo columnas para vista EXTRANJERO")
+      
+      # Padrón Extranjero (total primero)
+      if ("padron_extranjero" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "padron_extranjero")
+      }
+      
+      # Padrón Extranjero por sexo (si existen)
+      if ("padron_extranjero_hombres" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "padron_extranjero_hombres")
+      }
+      if ("padron_extranjero_mujeres" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "padron_extranjero_mujeres")
+      }
+      if ("padron_extranjero_no_binario" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "padron_extranjero_no_binario")
+      }
+      
+      # Lista Extranjero (total primero)
+      if ("lista_extranjero" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "lista_extranjero")
+      }
+      
+      # Lista Extranjero por sexo (si existen)
+      if ("lista_extranjero_hombres" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "lista_extranjero_hombres")
+      }
+      if ("lista_extranjero_mujeres" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "lista_extranjero_mujeres")
+      }
+      if ("lista_extranjero_no_binario" %in% colnames(df)) {
+        columnas_datos <- c(columnas_datos, "lista_extranjero_no_binario")
+      }
+    }
+    
+    # ========== COMBINAR COLUMNAS ==========
+    columnas_seleccionadas <- c(columnas_base, columnas_datos)
+    
+    message("📊 [DATATABLE] Columnas seleccionadas para mostrar: ", paste(columnas_seleccionadas, collapse = ", "))
     
     if (length(columnas_seleccionadas) == 0) {
       message("⚠️ No hay columnas válidas para mostrar en la tabla")
       return(datatable(
-        data.frame(Mensaje = "No hay datos disponibles"),
+        data.frame(Mensaje = "No hay datos disponibles para esta configuración"),
         options = list(pageLength = 10)
       ))
     }
     
-    # Seleccionar datos
+    # ========== SELECCIONAR DATOS ==========
     datos_tabla <- df[, columnas_seleccionadas, drop = FALSE]
     
-    # Aplicar nombres legibles a las columnas
+    # ========== APLICAR NOMBRES LEGIBLES ==========
     nombres_columnas <- sapply(columnas_seleccionadas, function(col) {
       if (col %in% names(etiquetas_mapeo_tabla)) {
         etiquetas_mapeo_tabla[[col]]
       } else {
+        # Fallback: capitalizar
         nombre_limpio <- gsub("_", " ", col)
-        nombre_limpio <- gsub("padron", "Padrón", nombre_limpio, ignore.case = TRUE)
-        nombre_limpio <- gsub("lista", "Lista", nombre_limpio, ignore.case = TRUE)
-        nombre_limpio <- gsub("hombres", "H", nombre_limpio, ignore.case = TRUE)
-        nombre_limpio <- gsub("mujeres", "M", nombre_limpio, ignore.case = TRUE)
         nombre_limpio <- tools::toTitleCase(nombre_limpio)
         nombre_limpio
       }
@@ -175,29 +254,13 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     
     colnames(datos_tabla) <- nombres_columnas
     
-    # Formatear tasa de inclusión
-    if ("Tasa de Inclusión (%)" %in% colnames(datos_tabla)) {
-      tasa_numeric <- suppressWarnings(as.numeric(datos_tabla[["Tasa de Inclusión (%)"]]))
-      if (!all(is.na(tasa_numeric))) {
-        datos_tabla[["Tasa de Inclusión (%)"]] <- sprintf("%.2f%%", tasa_numeric)
-      } else {
-        datos_tabla[["Tasa de Inclusión (%)"]] <- "NA%"
-      }
-    }
+    message("📊 [DATATABLE] Nombres de columnas en tabla: ", paste(nombres_columnas, collapse = ", "))
     
-    # Identificar columnas numéricas para formateo con comas
-    columnas_con_comas <- c(
-      "Padrón Electoral", "Lista Nominal", 
-      "Padrón Hombres", "Padrón Mujeres", 
-      "Lista Hombres", "Lista Mujeres"
-    )
-    
-    cols_numericas_adicionales <- grep("Padrón|Lista|PAD|LN", colnames(datos_tabla), value = TRUE)
-    columnas_con_comas <- unique(c(columnas_con_comas, cols_numericas_adicionales))
-    columnas_con_comas <- columnas_con_comas[columnas_con_comas %in% colnames(datos_tabla)]
+    # ========== IDENTIFICAR COLUMNAS NUMÉRICAS PARA FORMATEO ==========
+    columnas_con_comas <- nombres_columnas[grepl("Padrón|Lista", nombres_columnas)]
     
     # Obtener índices de columnas (base 0 para JavaScript)
-    indices_con_comas <- which(colnames(datos_tabla) %in% columnas_con_comas) - 1
+    indices_con_comas <- which(nombres_columnas %in% columnas_con_comas) - 1
     indices_con_comas <- indices_con_comas[!is.na(indices_con_comas) & indices_con_comas >= 0]
     
     # Configurar columnDefs para formateo
@@ -216,14 +279,14 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     # ========== OBTENER TEXTO DE ALCANCE ==========
     alcance_texto <- texto_alcance()
     
-    # Determinar ámbito
-    ambito_display <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
+    # Determinar ámbito para display
+    ambito_display <- if (ambito == "extranjero") {
       "Extranjero"
     } else {
       "Nacional"
     }
     
-    # ========== CREAR CAPTION SIMPLE: SOLO ÁMBITO Y ALCANCE ==========
+    # ========== CREAR CAPTION ==========
     caption_html <- htmltools::tags$caption(
       style = "caption-side: top; text-align: center; margin-bottom: 10px;",
       htmltools::tags$div(
@@ -236,7 +299,7 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       )
     )
     
-    # Crear DataTable
+    # ========== CREAR DATATABLE ==========
     dt <- datatable(
       datos_tabla,
       caption = caption_html,
@@ -251,7 +314,7 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       class = 'cell-border stripe'
     )
     
-    message("✅ DataTable renderizado con encabezado simple")
+    message("✅ DataTable renderizado correctamente con ", ncol(datos_tabla), " columnas")
     dt
     
   }) %>%
@@ -290,44 +353,58 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       return(nombre_archivo)
     },
     content = function(file) {
+      # ✅ Descargar exactamente las mismas columnas que muestra la tabla
       datos <- datos_columnas()
       req(is.list(datos), !is.null(datos$datos))
       
       df <- datos$datos
       req(is.data.frame(df), nrow(df) > 0)
       
-      message("📥 [DESCARGA CSV] Preparando ", nrow(df), " filas para descarga")
+      # Agregar año
+      df$año <- input$year
       
-      columnas_base <- c("nombre_entidad", "seccion")
+      # Determinar ámbito
+      ambito <- input$ambito_datos %||% "nacional"
+      
+      # Construir columnas (MISMA LÓGICA QUE LA TABLA)
+      columnas_base <- c("año", "nombre_entidad")
       
       if ("cabecera_distrital" %in% colnames(df)) {
-        columnas_base <- c(columnas_base[1], "cabecera_distrital", columnas_base[-1])
+        columnas_base <- c(columnas_base, "cabecera_distrital")
       }
       if ("nombre_municipio" %in% colnames(df)) {
         columnas_base <- c(columnas_base, "nombre_municipio")
       }
-      
-      columnas_principales <- c("padron_electoral", "lista_nominal", "tasa_inclusion")
-      
-      desglose_actual <- input$desglose %||% "Sexo"
-      columnas_desglose <- c()
-      
-      if (desglose_actual == "Sexo") {
-        cols_sexo <- c("padron_hombres", "padron_mujeres", "lista_hombres", "lista_mujeres")
-        columnas_desglose <- cols_sexo[cols_sexo %in% colnames(df)]
-      } else if (desglose_actual == "Rango de Edad") {
-        cols_edad <- grep("^(padron|lista)_\\d+", colnames(df), value = TRUE, ignore.case = TRUE)
-        columnas_desglose <- cols_edad
-      } else if (desglose_actual == "Entidad de Origen") {
-        cols_origen <- grep("^(pad|ln)_[A-Z]", colnames(df), value = TRUE, ignore.case = TRUE)
-        columnas_desglose <- cols_origen
+      if ("seccion" %in% colnames(df)) {
+        columnas_base <- c(columnas_base, "seccion")
       }
       
-      columnas_seleccionadas <- c(columnas_base, columnas_principales, columnas_desglose)
-      columnas_seleccionadas <- columnas_seleccionadas[columnas_seleccionadas %in% colnames(df)]
+      columnas_datos <- c()
       
+      if (ambito == "nacional") {
+        if ("padron_nacional" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional")
+        if ("padron_nacional_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_hombres")
+        if ("padron_nacional_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_mujeres")
+        if ("padron_nacional_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_no_binario")
+        if ("lista_nacional" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional")
+        if ("lista_nacional_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_hombres")
+        if ("lista_nacional_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_mujeres")
+        if ("lista_nacional_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_no_binario")
+      } else {
+        if ("padron_extranjero" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero")
+        if ("padron_extranjero_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_hombres")
+        if ("padron_extranjero_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_mujeres")
+        if ("padron_extranjero_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_no_binario")
+        if ("lista_extranjero" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero")
+        if ("lista_extranjero_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_hombres")
+        if ("lista_extranjero_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_mujeres")
+        if ("lista_extranjero_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_no_binario")
+      }
+      
+      columnas_seleccionadas <- c(columnas_base, columnas_datos)
       datos_tabla <- df[, columnas_seleccionadas, drop = FALSE]
       
+      # Aplicar nombres legibles
       nombres_columnas <- sapply(columnas_seleccionadas, function(col) {
         if (col %in% names(etiquetas_mapeo_tabla)) {
           etiquetas_mapeo_tabla[[col]]
@@ -340,12 +417,12 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       
       colnames(datos_tabla) <- nombres_columnas
       
+      message("📥 [DESCARGA CSV] Preparando ", nrow(datos_tabla), " filas para descarga")
+      message("📥 [DESCARGA CSV] Columnas exportadas: ", paste(colnames(datos_tabla), collapse = ", "))
+      
+      # Escribir encabezados
       alcance_info <- texto_alcance()
-      ambito_display <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
-        "Extranjero"
-      } else {
-        "Nacional"
-      }
+      ambito_display <- if (ambito == "extranjero") "Extranjero" else "Nacional"
       
       writeLines(c(
         paste0("# Ámbito: ", ambito_display),
@@ -354,6 +431,7 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
         ""
       ), file)
       
+      # Escribir datos
       write.table(datos_tabla, file, 
                   append = TRUE,
                   sep = ",", 
@@ -397,6 +475,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     message("✅ Configuración de Lista Nominal restablecida correctamente")
   })
   
-  message("✅ Módulo lista_nominal_server_main v3.4 inicializado (SIMPLIFICADO)")
+  message("✅ Módulo lista_nominal_server_main v3.5 inicializado (COLUMNAS DINÁMICAS)")
 }
 
