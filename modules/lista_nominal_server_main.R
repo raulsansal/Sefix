@@ -1,9 +1,15 @@
 # modules/lista_nominal_server_main.R
-# Versión: 2.0 - Control total por botón Consultar para DataTable
+# Versión: 3.4 - SIMPLIFICADO: Solo Ámbito y Alcance en caption (SIN fuente)
 # Coordinador principal que integra los módulos de gráficas y tablas
 
 lista_nominal_server_main <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   ns <- session$ns
+  
+  message("📊 Inicializando lista_nominal_server_main v3.4")
+  
+  # ========== CARGAR HELPERS PARA TEXTO DE ALCANCE ==========
+  source("modules/lista_nominal_graficas/graficas_helpers.R", local = TRUE)
+  message("✅ Helpers cargados para generar texto de alcance")
   
   # ========== CARGAR Y EJECUTAR MÓDULO DE GRÁFICAS ==========
   
@@ -14,6 +20,38 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
   } else {
     message("⚠️ No se encontró lista_nominal_server_graficas.R")
   }
+  
+  # ========== REACTIVE: TEXTO DE ALCANCE PARA DATATABLE ==========
+  
+  texto_alcance <- reactive({
+    texto <- generar_texto_alcance(input)
+    return(texto)
+  })
+  
+  # ========== REACTIVE: OBTENER ÚLTIMA FECHA DISPONIBLE ==========
+  
+  ultima_fecha_disponible <- reactive({
+    req(input$tipo_corte, input$year)
+    
+    if (!exists("LNE_CATALOG", envir = .GlobalEnv)) {
+      return(NULL)
+    }
+    
+    catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
+    
+    if (input$tipo_corte == "historico") {
+      fechas_year <- catalog$historico[format(catalog$historico, "%Y") == input$year]
+    } else {
+      fechas_year <- catalog$semanal_comun[format(catalog$semanal_comun, "%Y") == input$year]
+    }
+    
+    if (length(fechas_year) == 0) {
+      return(NULL)
+    }
+    
+    ultima <- max(fechas_year)
+    return(as.Date(ultima, origin = "1970-01-01"))
+  })
   
   # ========== DICCIONARIO DE ETIQUETAS PARA TABLA ==========
   
@@ -34,11 +72,11 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     "tasa_inclusion" = "Tasa de Inclusión (%)"
   )
   
-  # ========== ✅ RENDERIZAR TABLA CON CONTROL POR BOTÓN ==========
+  # ========== RENDERIZAR TABLA CON ENCABEZADO SIMPLE ==========
   
   output$`main-table_data` <- renderDT({
     
-    # ========== ✅ CONTROL DE ESTADO - NO RENDERIZAR EN ESTADO INICIAL ==========
+    # ========== CONTROL DE ESTADO ==========
     estado_actual <- estado_app()
     
     if (estado_actual == "inicial") {
@@ -58,7 +96,7 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     
     # ========== VALIDAR ESTADO RESTABLECIDO O CONSULTADO ==========
     if (estado_actual == "consultado") {
-      req(input$btn_consultar > 0)  # ✅ CRÍTICO: Requiere botón presionado
+      req(input$btn_consultar > 0)
       message("🔍 [DATATABLE] Renderizando en estado CONSULTADO - Botón: ", input$btn_consultar)
     } else {
       message("🔍 [DATATABLE] Renderizando en estado RESTABLECIDO")
@@ -135,12 +173,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       }
     })
     
-    if (length(nombres_columnas) != length(columnas_seleccionadas)) {
-      message("⚠️ Error: Longitud de nombres no coincide")
-    }
-    
-    message("🔍 Columnas tabla: ", paste(columnas_seleccionadas, collapse = ", "))
-    
     colnames(datos_tabla) <- nombres_columnas
     
     # Formatear tasa de inclusión
@@ -181,13 +213,33 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       )
     ) else NULL
     
+    # ========== OBTENER TEXTO DE ALCANCE ==========
+    alcance_texto <- texto_alcance()
+    
+    # Determinar ámbito
+    ambito_display <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
+      "Extranjero"
+    } else {
+      "Nacional"
+    }
+    
+    # ========== CREAR CAPTION SIMPLE: SOLO ÁMBITO Y ALCANCE ==========
+    caption_html <- htmltools::tags$caption(
+      style = "caption-side: top; text-align: center; margin-bottom: 10px;",
+      htmltools::tags$div(
+        style = "font-size: 14px; color: #555555; font-weight: bold; margin-bottom: 5px;",
+        paste0("Ámbito: ", ambito_display)
+      ),
+      htmltools::tags$div(
+        style = "font-size: 13px; color: #555555;",
+        alcance_texto
+      )
+    )
+    
     # Crear DataTable
     dt <- datatable(
       datos_tabla,
-      caption = htmltools::tags$caption(
-        style = "caption-side: bottom; text-align: left; font-size: 10px; color: #666666; font-family: Arial, sans-serif;",
-        "Fuente: INE. Padrón Electoral y Lista Nominal de Electores."
-      ),
+      caption = caption_html,
       options = list(
         pageLength = 10,
         lengthMenu = list(c(10, 25, 50, 100, -1), c("10", "25", "50", "100", "Todos")),
@@ -195,29 +247,47 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
         columnDefs = column_defs,
         scrollX = TRUE
       ),
-      escape = FALSE
+      rownames = FALSE,
+      class = 'cell-border stripe'
     )
     
-    message("✅ DataTable renderizado correctamente")
+    message("✅ DataTable renderizado con encabezado simple")
     dt
     
   }) %>%
-    # ========== ✅ BINDEVET CRÍTICO: CONTROLA CUÁNDO SE EJECUTA renderDT ==========
-  bindEvent(
-    estado_app(),           # Escucha cambios de estado
-    input$btn_consultar,    # Escucha botón Consultar
-    ignoreNULL = FALSE,     # Permitir valores NULL
-    ignoreInit = FALSE      # Renderizar en la carga inicial
-  )
+    bindEvent(
+      estado_app(),
+      input$btn_consultar,
+      input$ambito_datos,
+      ignoreNULL = FALSE,
+      ignoreInit = FALSE
+    )
   
   # ========== DESCARGA CSV ==========
   
   output$download_csv <- downloadHandler(
     filename = function() {
       tipo <- if (input$tipo_corte == "historico") "historico" else "semanal"
-      fecha_str <- format(as.Date(input$date), "%Y%m%d")
-      entidad_str <- gsub(" ", "_", input$entidad)
-      paste0("lista_nominal_", tipo, "_", fecha_str, "_", entidad_str, ".csv")
+      
+      fecha <- ultima_fecha_disponible()
+      fecha_str <- if (!is.null(fecha)) {
+        format(fecha, "%Y%m%d")
+      } else {
+        format(Sys.Date(), "%Y%m%d")
+      }
+      
+      entidad_str <- gsub(" ", "_", input$entidad %||% "Nacional")
+      
+      ambito_str <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
+        "Extranjero"
+      } else {
+        "Nacional"
+      }
+      
+      nombre_archivo <- paste0("lista_nominal_", tipo, "_", fecha_str, "_", ambito_str, "_", entidad_str, ".csv")
+      message("📥 [DESCARGA CSV] Nombre archivo: ", nombre_archivo)
+      
+      return(nombre_archivo)
     },
     content = function(file) {
       datos <- datos_columnas()
@@ -226,7 +296,8 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       df <- datos$datos
       req(is.data.frame(df), nrow(df) > 0)
       
-      # Definir columnas para exportación (igual que la tabla)
+      message("📥 [DESCARGA CSV] Preparando ", nrow(df), " filas para descarga")
+      
       columnas_base <- c("nombre_entidad", "seccion")
       
       if ("cabecera_distrital" %in% colnames(df)) {
@@ -257,7 +328,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       
       datos_tabla <- df[, columnas_seleccionadas, drop = FALSE]
       
-      # Aplicar nombres legibles
       nombres_columnas <- sapply(columnas_seleccionadas, function(col) {
         if (col %in% names(etiquetas_mapeo_tabla)) {
           etiquetas_mapeo_tabla[[col]]
@@ -270,12 +340,29 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       
       colnames(datos_tabla) <- nombres_columnas
       
-      message("🔍 Filas exportadas: ", nrow(datos_tabla))
+      alcance_info <- texto_alcance()
+      ambito_display <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
+        "Extranjero"
+      } else {
+        "Nacional"
+      }
       
-      # Escribir CSV
-      write.csv(datos_tabla, file, row.names = FALSE, fileEncoding = "UTF-8", quote = TRUE)
-      write("Fuente: INE. Padrón Electoral y Lista Nominal de Electores.", 
-            file, append = TRUE)
+      writeLines(c(
+        paste0("# Ámbito: ", ambito_display),
+        paste0("# ", alcance_info),
+        "# Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+        ""
+      ), file)
+      
+      write.table(datos_tabla, file, 
+                  append = TRUE,
+                  sep = ",", 
+                  row.names = FALSE, 
+                  fileEncoding = "UTF-8", 
+                  quote = TRUE,
+                  na = "")
+      
+      message("✅ [DESCARGA CSV] Archivo generado exitosamente")
     }
   )
   
@@ -297,6 +384,7 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     }
     
     updateRadioButtons(session, "tipo_corte", selected = "historico")
+    updateRadioButtons(session, "ambito_datos", selected = "nacional")
     updateSelectInput(session, "entidad", selected = "Nacional")
     updateSelectInput(session, "distrito", selected = "Todos")
     updateSelectInput(session, "municipio", selected = "Todos")
@@ -309,5 +397,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     message("✅ Configuración de Lista Nominal restablecida correctamente")
   })
   
-  message("✅ Módulo lista_nominal_server_main inicializado correctamente")
+  message("✅ Módulo lista_nominal_server_main v3.4 inicializado (SIMPLIFICADO)")
 }
+
