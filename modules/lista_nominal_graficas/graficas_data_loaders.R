@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_data_loaders.R
 # Reactives de carga de datos: year_actual, year_consulta, anuales
-# Versión: 2.3 - CORRECCIÓN: Eliminado parámetro solo_extranjero (conflicto conceptual)
+# Versión: 2.4 - CORRECCIÓN CRÍTICA: Eliminar input$ambito_datos de bindEvent
 
 graficas_data_loaders <- function(input, output, session, anio_actual, anio_consultado, filtros_usuario, estado_app) {
   
-  message("📥 Inicializando graficas_data_loaders v2.3")
+  message("📥 Inicializando graficas_data_loaders v2.4")
   
   # Obtener función cache_valido del entorno padre
   cache_valido <- function(timestamp, max_horas = 24) {
@@ -265,10 +265,10 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     
     return(datos_completos)
   }) %>%
-    bindEvent(estado_app(), input$btn_consultar, input$ambito_datos, ignoreNULL = FALSE, ignoreInit = FALSE)
+    # ✅ CORRECCIÓN CRÍTICA v2.4: Eliminar input$ambito_datos
+    bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== REACTIVE: DATOS DEL AÑO CONSULTADO (PARA GRÁFICAS 4, 5) ==========
-  # ✅ CORRECCIÓN CRÍTICA: Eliminar req(input$year) para evitar reactividad prematura
   
   datos_year_consulta <- reactive({
     req(input$tipo_corte == "historico")
@@ -485,8 +485,8 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
   }) %>% 
     bindCache(input$btn_consultar, input$tipo_corte, input$year, input$entidad, 
               input$distrito, input$municipio, input$seccion, input$ambito_datos) %>%
-    # ✅ CORRECCIÓN CRÍTICA: Solo se ejecuta cuando se presiona el botón o cambia el ámbito
-    bindEvent(estado_app(), input$btn_consultar, input$ambito_datos, ignoreNULL = FALSE, ignoreInit = FALSE)
+    # ✅ CORRECCIÓN CRÍTICA v2.4: Eliminar input$ambito_datos
+    bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== REACTIVE: DATOS ANUALES (2017-ACTUAL) ==========
   
@@ -697,11 +697,12 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     return(datos_completos)
   }) %>% 
     bindCache(input$btn_consultar, input$tipo_corte, input$ambito_datos) %>%
-    bindEvent(input$btn_consultar, estado_app(), input$ambito_datos, ignoreNULL = FALSE, ignoreInit = FALSE)
+    # ✅ CORRECCIÓN CRÍTICA v2.4: Eliminar input$ambito_datos
+    bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== RETORNAR LISTA DE REACTIVES ==========
   
-  message("✅ graficas_data_loaders v2.3 inicializado (eliminado solo_extranjero)")
+  message("✅ graficas_data_loaders v2.4 inicializado")
   
   return(list(
     datos_year_actual = datos_year_actual,

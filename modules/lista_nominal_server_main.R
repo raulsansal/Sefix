@@ -1,11 +1,11 @@
 # modules/lista_nominal_server_main.R
-# Versión: 3.5 - CORRECCIÓN: Columnas dinámicas según ámbito (nacional/extranjero)
+# Versión: 3.6 - CORRECCIÓN CRÍTICA: Eliminar input$ambito_datos de bindEvent
 # Coordinador principal que integra los módulos de gráficas y tablas
 
 lista_nominal_server_main <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   ns <- session$ns
   
-  message("📊 Inicializando lista_nominal_server_main v3.5")
+  message("📊 Inicializando lista_nominal_server_main v3.6")
   
   # ========== CARGAR HELPERS PARA TEXTO DE ALCANCE ==========
   source("modules/lista_nominal_graficas/graficas_helpers.R", local = TRUE)
@@ -129,10 +129,10 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     message("📊 [DATATABLE] Columnas disponibles en CSV: ", paste(colnames(df), collapse = ", "))
     
     # ========== AGREGAR COLUMNA AÑO ==========
-    df$año <- input$year
+    df$año <- isolate(input$year)
     
     # ========== DETERMINAR ÁMBITO ==========
-    ambito <- input$ambito_datos %||% "nacional"
+    ambito <- isolate(input$ambito_datos %||% "nacional")
     message("📊 [DATATABLE] Ámbito seleccionado: ", ambito)
     
     # ========== DEFINIR COLUMNAS BASE (SIEMPRE PRESENTES) ==========
@@ -318,10 +318,10 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     dt
     
   }) %>%
+    # ✅ CORRECCIÓN CRÍTICA v3.6: Eliminar input$ambito_datos
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      input$ambito_datos,
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
@@ -475,6 +475,5 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     message("✅ Configuración de Lista Nominal restablecida correctamente")
   })
   
-  message("✅ Módulo lista_nominal_server_main v3.5 inicializado (COLUMNAS DINÁMICAS)")
+  message("✅ Módulo lista_nominal_server_main v3.6 inicializado")
 }
-

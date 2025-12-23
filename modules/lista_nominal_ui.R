@@ -78,7 +78,7 @@ lista_nominal_ui <- function(id) {
         # ========== FIN BOTÓN CONSULTAR ==========
         
         actionButton(ns("reset_config"), "Restablecer consulta", class = "btn-primary", style = "width: 100%; margin-bottom: 10px;"),
-        downloadButton(ns("download_csv"), "Descargar CSV", class = "btn-primary")
+        downloadButton(ns("download_csv"), "Descargar CSV", class = "btn-primary", style = "width:100%")
       ),
       
       mainPanel(

@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_main.R
 # Función principal que orquesta todos los módulos de gráficas
-# Versión: 1.0 - Modularizada
+# Versión: 1.1 - Compatible con graficas_core v2.4
 
 lista_nominal_server_graficas <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   
-  message("🚀 Iniciando módulo lista_nominal_server_graficas (modularizado)")
+  message("🚀 Iniciando módulo lista_nominal_server_graficas v1.1 (modularizado)")
   
   # ========== CARGAR SUBMÓDULOS ==========
   
@@ -77,5 +77,5 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     core_reactives$mostrar_graficas_consultadas
   )
   
-  message("✅ Módulo lista_nominal_server_graficas inicializado correctamente (modularizado)")
+  message("✅ Módulo lista_nominal_server_graficas v1.1 inicializado correctamente (compatible con core v2.4)")
 }

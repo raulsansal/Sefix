@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_core.R
 # Reactives base: caché, filtros, año, estado
-# Versión: 2.2 - CORRECCIÓN: Gráficas 1,2,3 se muestran en Nacional Y Extranjero en estado inicial
+# Versión: 2.4 - CORRECCIÓN CRÍTICA: anio_consultado solo se actualiza con botón Consultar
 
 graficas_core <- function(input, output, session, estado_app) {
   
-  message("📦 Inicializando graficas_core v2.2")
+  message("📦 Inicializando graficas_core v2.4")
   
   # ========== SISTEMA DE CACHÉ GLOBAL ==========
   
@@ -48,22 +48,40 @@ graficas_core <- function(input, output, session, estado_app) {
     return(año_sistema)
   })
   
-  # ========== REACTIVE: DETERMINAR AÑO CONSULTADO ==========
+  # ========== REACTIVE: AÑO CONSULTADO - SOLO SE ACTUALIZA CON BOTÓN ==========
+  # ✅ v2.4 CORRECCIÓN CRÍTICA: Usar isolate() para evitar reactividad a input$year
   
   anio_consultado <- reactive({
-    if (estado_app() == "consultado" && !is.null(input$year)) {
-      año_consultado <- as.integer(input$year)
-      message("📊 [anio_consultado] Año consultado: ", año_consultado)
-      return(año_consultado)
+    estado_actual <- estado_app()
+    
+    # Estado RESTABLECIDO: usar año actual
+    if (estado_actual == "restablecido") {
+      año_actual_val <- anio_actual()
+      message("📊 [anio_consultado] Estado RESTABLECIDO → Año actual: ", año_actual_val)
+      return(año_actual_val)
     }
     
+    # Estado CONSULTADO: capturar año seleccionado CON ISOLATE
+    if (estado_actual == "consultado") {
+      año_seleccionado <- isolate(input$year)
+      
+      if (!is.null(año_seleccionado)) {
+        año_consultado_val <- as.integer(año_seleccionado)
+        message("📊 [anio_consultado] Estado CONSULTADO → Año capturado: ", año_consultado_val)
+        return(año_consultado_val)
+      }
+    }
+    
+    # Fallback: año actual
     año_actual_val <- anio_actual()
-    message("📊 [anio_consultado] Usando año actual: ", año_actual_val)
+    message("📊 [anio_consultado] Fallback → Año actual: ", año_actual_val)
     return(año_actual_val)
-  })
+    
+  }) %>%
+    # ✅ CRÍTICO: Solo se ejecuta cuando cambia estado_app o se presiona botón
+    bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== REACTIVE: CONTROLAR CUÁNDO MOSTRAR GRÁFICAS ANUALES (1, 2, 3) ==========
-  # ✅ CORRECCIÓN CRÍTICA: Mostrar en Nacional Y Extranjero cuando año consultado == año actual
   
   mostrar_graficas_anuales <- reactive({
     estado_actual <- estado_app()
@@ -73,17 +91,12 @@ graficas_core <- function(input, output, session, estado_app) {
     
     message("🔍 [mostrar_graficas_anuales] Estado: ", estado_actual, " | Año consultado: ", anio_consult, " | Año actual: ", anio_actual_val, " | Ámbito: ", ambito)
     
-    # ✅ NUEVA LÓGICA: Mostrar gráficas 1, 2, 3 cuando año consultado == año actual
-    # Esto aplica tanto para Nacional como Extranjero
-    
     if (estado_actual == "restablecido") {
-      # En estado inicial, siempre mostrar gráficas 1, 2, 3 (independiente del ámbito)
       message("✅ [mostrar_graficas_anuales] Estado RESTABLECIDO → Mostrar gráficas 1, 2, 3")
       return(TRUE)
     }
     
     if (estado_actual == "consultado") {
-      # Después de consultar, mostrar 1, 2, 3 solo si año consultado == año actual
       mostrar <- (anio_consult == anio_actual_val)
       message(ifelse(mostrar, "✅", "❌"), " [mostrar_graficas_anuales] Estado CONSULTADO → ", 
               ifelse(mostrar, "Mostrar gráficas 1, 2, 3", "NO mostrar gráficas 1, 2, 3"))
@@ -93,11 +106,9 @@ graficas_core <- function(input, output, session, estado_app) {
     message("❌ [mostrar_graficas_anuales] Estado no reconocido → NO mostrar")
     return(FALSE)
   }) %>%
-    bindEvent(estado_app(), input$btn_consultar, input$year, input$ambito_datos, 
-              ignoreNULL = FALSE, ignoreInit = FALSE)
+    bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== REACTIVE: CONTROLAR CUÁNDO MOSTRAR GRÁFICAS 4, 5 ==========
-  # ✅ CORRECCIÓN CRÍTICA: Solo mostrar cuando estado == "consultado" Y año ≠ año actual
   
   mostrar_graficas_consultadas <- reactive({
     estado_actual <- estado_app()
@@ -107,10 +118,6 @@ graficas_core <- function(input, output, session, estado_app) {
     
     message("🔍 [mostrar_graficas_consultadas] Estado: ", estado_actual, " | Año consultado: ", anio_consult, " | Año actual: ", anio_actual_val, " | Ámbito: ", ambito)
     
-    # ✅ NUEVA LÓGICA: Mostrar gráficas 4, 5 SOLO cuando:
-    # 1. Estado == "consultado" (botón presionado)
-    # 2. Año consultado ≠ año actual
-    
     if (estado_actual == "consultado") {
       mostrar <- (anio_consult != anio_actual_val)
       message(ifelse(mostrar, "✅", "❌"), " [mostrar_graficas_consultadas] Estado CONSULTADO → ", 
@@ -118,12 +125,10 @@ graficas_core <- function(input, output, session, estado_app) {
       return(mostrar)
     }
     
-    # En estado inicial, NUNCA mostrar gráficas 4, 5
     message("❌ [mostrar_graficas_consultadas] Estado ", estado_actual, " → NO mostrar gráficas 4, 5")
     return(FALSE)
   }) %>%
-    bindEvent(estado_app(), input$btn_consultar, input$year, input$ambito_datos, 
-              ignoreNULL = FALSE, ignoreInit = FALSE)
+    bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== REACTIVE: FILTROS ACTUALES DEL USUARIO ==========
   
@@ -148,14 +153,13 @@ graficas_core <- function(input, output, session, estado_app) {
   # ========== REACTIVE: TEXTO DE ALCANCE ==========
   
   texto_alcance <- reactive({
-    # Llamar a función helper que maneja toda la lógica
     texto <- generar_texto_alcance(input)
     return(texto)
   })
   
   # ========== RETORNAR LISTA DE REACTIVES Y FUNCIONES ==========
   
-  message("✅ graficas_core v2.2 inicializado")
+  message("✅ graficas_core v2.4 inicializado")
   
   return(list(
     anio_actual = anio_actual,
