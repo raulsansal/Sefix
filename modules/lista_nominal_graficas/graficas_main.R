@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_main.R
 # Función principal que orquesta todos los módulos de gráficas
-# Versión: 1.1 - Compatible con graficas_core v2.4
+# Versión: 1.3 - CORRECCIÓN: Pasar ambito_reactivo a submódulos para permitir cambio de vista
 
 lista_nominal_server_graficas <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   
-  message("🚀 Iniciando módulo lista_nominal_server_graficas v1.1 (modularizado)")
+  message("🚀 Iniciando módulo lista_nominal_server_graficas v1.3 (modularizado)")
   
   # ========== CARGAR SUBMÓDULOS ==========
   
@@ -28,40 +28,44 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
   
   # 4. GRÁFICAS 1 Y 2 (Histórico - Proyección + Evolución Anual)
   source("modules/lista_nominal_graficas/graficas_historico_1_2.R", local = TRUE)
-  graficas_historico_1_2(
+  graficas_historico_1_2_module <- graficas_historico_1_2(
     input, output, session,
     data_reactives$datos_year_actual,
     data_reactives$datos_anuales_completos,
     core_reactives$anio_actual,
     core_reactives$texto_alcance,
     estado_app,
-    core_reactives$mostrar_graficas_anuales
+    core_reactives$mostrar_graficas_anuales,
+    core_reactives$ambito_reactivo  # ✅ v1.3: NUEVO parámetro
   )
   
-  # 5. GRÁFICA 3 (Histórico - Evolución Anual por Sexo) ✅ CORREGIDA
+  # 5. GRÁFICA 3 (Histórico - Evolución Anual por Sexo)
   source("modules/lista_nominal_graficas/graficas_historico_3.R", local = TRUE)
-  graficas_historico_3(
+  graficas_historico_3_module <- graficas_historico_3(
     input, output, session,
     data_reactives$datos_anuales_completos,
     core_reactives$anio_actual,
     core_reactives$texto_alcance,
     estado_app,
-    core_reactives$mostrar_graficas_anuales
+    core_reactives$mostrar_graficas_anuales,
+    core_reactives$ambito_reactivo  # ✅ v1.3: NUEVO parámetro
   )
   
   # 6. GRÁFICAS 4 Y 5 (Consultado - Evolución Mensual)
   source("modules/lista_nominal_graficas/graficas_consultado_4_5.R", local = TRUE)
-  graficas_consultado_4_5(
+  graficas_consultado_4_5_module <- graficas_consultado_4_5(
     input, output, session,
     data_reactives$datos_year_consulta,
     core_reactives$anio_consultado,
     core_reactives$texto_alcance,
-    core_reactives$mostrar_graficas_consultadas
+    estado_app,
+    core_reactives$mostrar_graficas_consultadas,
+    core_reactives$ambito_reactivo  # ✅ v1.3: NUEVO parámetro
   )
   
   # 7. GRÁFICAS SEMANALES (Barras + Tasa Inclusión)
   source("modules/lista_nominal_graficas/graficas_semanal.R", local = TRUE)
-  graficas_semanal(
+  graficas_semanal_module <- graficas_semanal(
     input, output, session,
     datos_columnas,
     combinacion_valida,
@@ -70,12 +74,15 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
   
   # 8. RENDERIZADO DINÁMICO DE UI
   source("modules/lista_nominal_graficas/graficas_ui_render.R", local = TRUE)
-  graficas_ui_render(
+  graficas_ui_render_module <- graficas_ui_render(
     input, output, session,
     estado_app,
     core_reactives$mostrar_graficas_anuales,
-    core_reactives$mostrar_graficas_consultadas
+    core_reactives$mostrar_graficas_consultadas,
+    core_reactives$ambito_reactivo  # ✅ v1.3: NUEVO parámetro
   )
   
-  message("✅ Módulo lista_nominal_server_graficas v1.1 inicializado correctamente (compatible con core v2.4)")
+  message("✅ Módulo lista_nominal_server_graficas v1.3 inicializado correctamente")
+  message("   ✅ NUEVO: ambito_reactivo pasado a submódulos para cambio de vista automático")
 }
+

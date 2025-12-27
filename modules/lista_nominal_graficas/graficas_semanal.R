@@ -1,12 +1,12 @@
 # modules/lista_nominal_graficas/graficas_semanal.R
-# Gráficas para datos semanales: Barras y Tasa de inclusión
-# Versión: 1.0 - Modularizada
+# Gráficas semanales: Barras por desglose + Tasa de inclusión
+# Versión: 1.1 - CORRECCIÓN: Usar ambito_reactivo para cambio de vista automático
 
-graficas_semanal <- function(input, output, session, datos_columnas, combinacion_valida, texto_alcance) {
+graficas_semanal <- function(input, output, session, datos_columnas, combinacion_valida, texto_alcance, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_semanal")
+  message("📊 Inicializando graficas_semanal v1.1")
   
-  # ========== CONTENEDOR UI PARA GRÁFICO PRINCIPAL ==========
+  # ========== RENDERIZADO DE CONTENEDOR DE GRÁFICO PRINCIPAL ==========
   
   output$`main-plot_container` <- renderUI({
     plotlyOutput(session$ns("main-grafico_barras"), width = "100%", height = "450px")
@@ -16,10 +16,15 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
   
   output$`main-grafico_barras` <- renderPlotly({
     req(input$tipo_corte == "semanal")
-    req(input$ambito_datos)
+    
+    # ✅ v1.1: Usar ambito_reactivo en lugar de input$ambito_datos
+    ambito_actual <- ambito_reactivo()
+    
     req(combinacion_valida())
     
     datos <- datos_columnas()
+    
+    message("📊 [GRÁFICA SEMANAL BARRAS] Renderizando - Ámbito: ", ambito_actual)
     
     if (is.null(datos) || is.null(datos$datos) || nrow(datos$datos) == 0) {
       p <- plot_ly() %>%
@@ -43,9 +48,10 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
     df <- datos$datos
     desglose_actual <- isolate(input$desglose) %||% "Sexo"
     
-    message("📊 Renderizando gráfico semanal: ", desglose_actual, " - Ámbito: ", input$ambito_datos)
+    message("   Desglose: ", desglose_actual)
     
-    if (input$ambito_datos == "nacional") {
+    # ========== DETERMINAR COLUMNAS SEGÚN ÁMBITO ==========
+    if (ambito_actual == "nacional") {
       col_padron <- "padron_nacional"
       col_lista <- "lista_nacional"
       titulo_base <- "Nacional"
@@ -75,31 +81,28 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
     # ========== DESGLOSE POR SEXO ==========
     if (desglose_actual == "Sexo") {
       
-      if (input$ambito_datos == "nacional") {
+      if (ambito_actual == "nacional") {
         cols_sexo <- c("padron_nacional_hombres", "padron_nacional_mujeres", 
                        "lista_nacional_hombres", "lista_nacional_mujeres")
       } else {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = "Desglose por sexo no disponible para ámbito Extranjero",
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
+        # ✅ v1.1: Para extranjero, verificar si existen columnas de sexo
+        cols_sexo <- c("padron_extranjero_hombres", "padron_extranjero_mujeres", 
+                       "lista_extranjero_hombres", "lista_extranjero_mujeres")
       }
       
       if (all(cols_sexo %in% colnames(df))) {
-        padron_h <- sum(df$padron_nacional_hombres, na.rm = TRUE)
-        padron_m <- sum(df$padron_nacional_mujeres, na.rm = TRUE)
-        lista_h <- sum(df$lista_nacional_hombres, na.rm = TRUE)
-        lista_m <- sum(df$lista_nacional_mujeres, na.rm = TRUE)
+        
+        if (ambito_actual == "nacional") {
+          padron_h <- sum(df$padron_nacional_hombres, na.rm = TRUE)
+          padron_m <- sum(df$padron_nacional_mujeres, na.rm = TRUE)
+          lista_h <- sum(df$lista_nacional_hombres, na.rm = TRUE)
+          lista_m <- sum(df$lista_nacional_mujeres, na.rm = TRUE)
+        } else {
+          padron_h <- sum(df$padron_extranjero_hombres, na.rm = TRUE)
+          padron_m <- sum(df$padron_extranjero_mujeres, na.rm = TRUE)
+          lista_h <- sum(df$lista_extranjero_hombres, na.rm = TRUE)
+          lista_m <- sum(df$lista_extranjero_mujeres, na.rm = TRUE)
+        }
         
         datos_grafico <- data.frame(
           Categoria = rep(c("Hombres", "Mujeres"), 2),
@@ -108,13 +111,20 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
           stringsAsFactors = FALSE
         )
         
+        # Colores según ámbito
+        colores <- if (ambito_actual == "nacional") {
+          c("#44559B", "#C0311A")
+        } else {
+          c("#EAC43E", "#B3D491")
+        }
+        
         p <- plot_ly(
           data = datos_grafico,
           x = ~Categoria,
           y = ~Cantidad,
           color = ~Tipo,
           type = 'bar',
-          colors = c("#44559B", "#C0311A"),
+          colors = colores,
           text = ~paste0(format(Cantidad, big.mark = ","), " electores"),
           hovertemplate = '<b>%{x}</b><br>%{text}<extra></extra>'
         ) %>%
@@ -131,7 +141,7 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
             legend = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.15),
             annotations = list(
               list(
-                text = texto_alcance(),
+                text = isolate(texto_alcance()),
                 x = 0.5, y = 1.12,
                 xref = "paper", yref = "paper",
                 xanchor = "center", yanchor = "top",
@@ -152,6 +162,7 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
           )
         
       } else {
+        # Si no hay columnas de sexo, mostrar totales
         total_padron <- sum(df[[col_padron]], na.rm = TRUE)
         total_lista <- sum(df[[col_lista]], na.rm = TRUE)
         
@@ -161,7 +172,7 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
           stringsAsFactors = FALSE
         )
         
-        colores <- if (input$ambito_datos == "nacional") {
+        colores <- if (ambito_actual == "nacional") {
           c("#003E66", "#AE0E35")
         } else {
           c("#EAC43E", "#B3D491")
@@ -187,7 +198,7 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
             margin = list(t = 120, b = 140, l = 90, r = 50),
             annotations = list(
               list(
-                text = texto_alcance(),
+                text = isolate(texto_alcance()),
                 x = 0.5, y = 1.12,
                 xref = "paper", yref = "paper",
                 xanchor = "center", yanchor = "top",
@@ -208,9 +219,12 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
           )
       }
       
-      # ========== DESGLOSE POR RANGO DE EDAD ==========
+      message("✅ Gráfico semanal por sexo renderizado - ", titulo_base)
+      return(p)
+      
     } else if (desglose_actual == "Rango de Edad") {
       
+      # ========== DESGLOSE POR EDAD ==========
       cols_edad_lista <- grep("^lista_(\\d+|\\d+_\\d+)", colnames(df), value = TRUE, ignore.case = TRUE)
       
       if (length(cols_edad_lista) > 0) {
@@ -249,7 +263,7 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
         )
         datos_grafico <- datos_grafico[order(datos_grafico$Grupo), ]
         
-        color_edad <- if (input$ambito_datos == "nacional") "#C0311A" else "#B3D491"
+        color_edad <- if (ambito_actual == "nacional") "#C0311A" else "#B3D491"
         
         p <- plot_ly(
           data = datos_grafico,
@@ -274,7 +288,7 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
             margin = list(t = 120, b = 140, l = 90, r = 50),
             annotations = list(
               list(
-                text = texto_alcance(),
+                text = isolate(texto_alcance()),
                 x = 0.5, y = 1.12,
                 xref = "paper", yref = "paper",
                 xanchor = "center", yanchor = "top",
@@ -311,9 +325,12 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
           )
       }
       
-      # ========== DESGLOSE POR ENTIDAD DE ORIGEN ==========
+      message("✅ Gráfico semanal por edad renderizado - ", titulo_base)
+      return(p)
+      
     } else if (desglose_actual == "Entidad de Origen") {
       
+      # ========== DESGLOSE POR ENTIDAD DE ORIGEN ==========
       if ("nombre_entidad" %in% colnames(df) && col_lista %in% colnames(df)) {
         
         datos_grafico <- df %>%
@@ -327,7 +344,7 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
         
         datos_grafico <- as.data.frame(datos_grafico)
         
-        color_entidad <- if (input$ambito_datos == "nacional") "#44559B" else "#EAC43E"
+        color_entidad <- if (ambito_actual == "nacional") "#44559B" else "#EAC43E"
         
         p <- plot_ly(
           data = datos_grafico,
@@ -354,7 +371,7 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
             margin = list(t = 120, b = 140, l = 180, r = 50),
             annotations = list(
               list(
-                text = texto_alcance(),
+                text = isolate(texto_alcance()),
                 x = 0.5, y = 1.12,
                 xref = "paper", yref = "paper",
                 xanchor = "center", yanchor = "top",
@@ -391,6 +408,9 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
           )
       }
       
+      message("✅ Gráfico semanal por entidad de origen renderizado - ", titulo_base)
+      return(p)
+      
     } else {
       p <- plot_ly() %>%
         layout(
@@ -406,20 +426,32 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
             )
           )
         )
+      
+      return(p)
     }
-    
-    message("✅ Gráfico semanal renderizado: ", desglose_actual, " - ", titulo_base)
-    return(p)
-  })
+  }) %>%
+    # ✅ v1.1: Agregar ambito_reactivo para cambio de vista automático
+    bindEvent(
+      input$btn_consultar,
+      ambito_reactivo(),  # ✅ AGREGADO para cambio de vista
+      input$desglose,
+      ignoreNULL = FALSE,
+      ignoreInit = FALSE
+    )
   
   # ========== GRÁFICO DE TASA DE INCLUSIÓN (SOLO SEMANALES) ==========
   
   output$`main-tasa_inclusion_plot` <- renderPlotly({
     req(input$tipo_corte == "semanal")
-    req(input$ambito_datos)
+    
+    # ✅ v1.1: Usar ambito_reactivo en lugar de input$ambito_datos
+    ambito_actual <- ambito_reactivo()
+    
     req(combinacion_valida())
     
     datos <- datos_columnas()
+    
+    message("📊 [GRÁFICA SEMANAL TASA] Renderizando - Ámbito: ", ambito_actual)
     
     if (is.null(datos) || is.null(datos$datos) || nrow(datos$datos) == 0) {
       return(NULL)
@@ -427,7 +459,7 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
     
     df <- datos$datos
     
-    if (input$ambito_datos == "nacional") {
+    if (ambito_actual == "nacional") {
       col_padron <- "padron_nacional"
       col_lista <- "lista_nacional"
       titulo_ambito <- "Nacional"
@@ -515,7 +547,7 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
             font = list(size = 16, color = "black", family = "Arial, sans-serif")
           ),
           list(
-            text = texto_alcance(),
+            text = isolate(texto_alcance()),
             x = 0.5,
             xref = "paper",
             y = 1.05,
@@ -541,7 +573,15 @@ graficas_semanal <- function(input, output, session, datos_columnas, combinacion
     
     message("✅ Gráfico de tasa de inclusión renderizado - ", titulo_ambito)
     return(p)
-  })
+  }) %>%
+    # ✅ v1.1: Agregar ambito_reactivo para cambio de vista automático
+    bindEvent(
+      input$btn_consultar,
+      ambito_reactivo(),  # ✅ AGREGADO para cambio de vista
+      ignoreNULL = FALSE,
+      ignoreInit = FALSE
+    )
   
-  message("✅ graficas_semanal inicializado")
+  message("✅ graficas_semanal v1.1 inicializado")
+  message("   ✅ CORRECCIÓN: ambito_reactivo usado para cambio de vista automático")
 }

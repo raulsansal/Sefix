@@ -1,6 +1,6 @@
 # modules/lista_nominal_server_graficas.R
 # Módulo especializado en la generación de gráficas para Lista Nominal Electoral
-# VERSIÓN CORREGIDA Y COMPLETA
+# VERSIÓN CORREGIDA Y COMPLETA - v1.2 con columnas NB
 
 lista_nominal_server_graficas <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   
@@ -18,7 +18,7 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     ), envir = .GlobalEnv)
   }
   
-  message("🚀 Iniciando módulo lista_nominal_server_graficas")
+  message("🚀 Iniciando módulo lista_nominal_server_graficas v1.2")
   
   # ========== REACTIVE: OBTENER AÑO ACTUAL ==========
   
@@ -38,12 +38,10 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
   # ========== REACTIVE: CONTROLAR CUÁNDO MOSTRAR GRÁFICAS ANUALES ==========
   
   mostrar_graficas_anuales <- reactive({
-    # En estado restablecido, SIEMPRE mostrar gráficas 1, 2, 3
     if (estado_app() == "restablecido") {
       return(TRUE)
     }
     
-    # En estado consultado, mostrar gráficas según el año
     if (estado_app() == "consultado") {
       return(anio_consultado() == anio_actual())
     }
@@ -54,7 +52,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
   # ========== REACTIVE: CONTROLAR CUÁNDO MOSTRAR GRÁFICAS 4, 5 ==========
   
   mostrar_graficas_consultadas <- reactive({
-    # Solo mostrar si se consultó Y el año NO es el actual
     if (estado_app() == "consultado") {
       return(anio_consultado() != anio_actual())
     }
@@ -70,7 +67,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
   # ========== REACTIVE: FILTROS ACTUALES DEL USUARIO ==========
   
   filtros_usuario <- reactive({
-    # En carga inicial, retornar filtros por defecto
     if (estado_app() %in% c("inicial", "restablecido")) {
       return(list(
         entidad = "Nacional",
@@ -80,7 +76,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
       ))
     }
     
-    # En consulta personalizada, usar filtros reales
     list(
       entidad = isolate(input$entidad %||% "Nacional"),
       distrito = isolate(input$distrito %||% "Todos"),
@@ -90,47 +85,33 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
   })
   
   # ========== REACTIVE: TEXTO DE ALCANCE CORREGIDO ==========
-  # SIEMPRE muestra TODOS los niveles (incluso "Todos"/"Todas")
   
   texto_alcance <- reactive({
     filtros <- filtros_usuario()
     
-    # Construir alcance siempre con 4 niveles
     alcance_partes <- c()
-    
-    # 1. Estado (SIEMPRE)
     alcance_partes <- c(alcance_partes, paste("Estado:", filtros$entidad))
     
-    # 2. Distrito (SIEMPRE)
     distrito_valor <- if (is.null(filtros$distrito) || filtros$distrito == "") "Todos" else filtros$distrito
     alcance_partes <- c(alcance_partes, paste("Distrito:", distrito_valor))
     
-    # 3. Municipio (SIEMPRE)
     municipio_valor <- if (is.null(filtros$municipio) || filtros$municipio == "") "Todos" else filtros$municipio
     alcance_partes <- c(alcance_partes, paste("Municipio:", municipio_valor))
     
-    # 4. Sección (SIEMPRE, pero con lógica especial)
     if (is.null(filtros$seccion) || length(filtros$seccion) == 0) {
-      # Sin selección = Todas
       alcance_partes <- c(alcance_partes, "Sección: Todas")
     } else if ("Todas" %in% filtros$seccion) {
-      # Usuario seleccionó "Todas"
       alcance_partes <- c(alcance_partes, "Sección: Todas")
     } else if (length(filtros$seccion) == 1) {
-      # Una sola sección
       alcance_partes <- c(alcance_partes, paste("Sección:", filtros$seccion))
     } else if (length(filtros$seccion) <= 5) {
-      # 2-5 secciones: mostrar todas en la misma línea
       secciones_texto <- paste(filtros$seccion, collapse = ", ")
       alcance_partes <- c(alcance_partes, paste("Secciones:", secciones_texto))
     } else {
-      # Más de 5: mostrar cantidad
       alcance_partes <- c(alcance_partes, paste("Secciones:", length(filtros$seccion), "seleccionadas"))
     }
     
-    # Unir con " - " (espacio-guión-espacio)
     texto_final <- paste(alcance_partes, collapse = " - ")
-    
     return(texto_final)
   }) %>% 
     bindCache(input$btn_consultar)
@@ -141,8 +122,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     año_actual_valor <- anio_actual()
     filtros <- filtros_usuario()
     
-    # ========== DETERMINAR SI USAR CACHÉ ==========
-    # SOLO usar caché si es Nacional sin filtros (carga inicial/restablecida)
     es_nacional_sin_filtros <- (
       filtros$entidad == "Nacional" && 
         filtros$distrito == "Todos" && 
@@ -156,7 +135,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     message("   Estado app: ", estado_app())
     message("   Es Nacional sin filtros: ", es_nacional_sin_filtros)
     
-    # ========== VERIFICAR CACHÉ (SOLO PARA NACIONAL) ==========
     if (es_nacional_sin_filtros &&
         !is.null(cache$datos_year_actual) && 
         !is.null(cache$año_cacheado) &&
@@ -169,14 +147,11 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     
     message("📥 [CACHÉ MISS O FILTROS] Cargando datos del año actual ", año_actual_valor, " desde archivos...")
     
-    # ========== CARGAR DATOS DESDE ARCHIVOS ==========
     if (!exists("LNE_CATALOG", envir = .GlobalEnv)) {
       return(NULL)
     }
     
     catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
-    
-    # Filtrar fechas del año actual
     fechas_anio_actual <- catalog$historico[format(catalog$historico, "%Y") == año_actual_valor]
     
     if (length(fechas_anio_actual) == 0) {
@@ -185,12 +160,8 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     }
     
     message("📥 Cargando ", length(fechas_anio_actual), " fechas del año ", año_actual_valor)
-    message("   Con filtros: Estado=", filtros$entidad, ", Distrito=", filtros$distrito, 
-            ", Municipio=", filtros$municipio)
     
     lista_datos <- list()
-    
-    # Determinar estado para cargar_lne
     estado_filtro <- if (filtros$entidad == "Nacional") "Nacional" else filtros$entidad
     
     for (i in seq_along(fechas_anio_actual)) {
@@ -213,10 +184,10 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
       })
       
       if (!is.null(datos_temp)) {
-        # Usar totales si es Nacional, sino sumar el dataframe
         if (estado_filtro == "Nacional" && !is.null(datos_temp$totales)) {
           totales_fila <- datos_temp$totales
           
+          # Columnas principales
           padron_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional)))
           padron_extranjero <- if ("padron_extranjero" %in% names(totales_fila)) {
             as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero)))
@@ -226,6 +197,7 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
             as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero)))
           } else NA_real_
           
+          # Columnas sexo nacional
           padron_hombres <- if ("padron_nacional_hombres" %in% names(totales_fila)) {
             as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_hombres)))
           } else NA
@@ -242,6 +214,16 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
             as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres)))
           } else NA
           
+          # ========== ✅ CORRECCIÓN v1.2: AGREGAR COLUMNAS NB NACIONAL ==========
+          padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% names(totales_fila)) {
+            as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_no_binario)))
+          } else NA
+          
+          lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% names(totales_fila)) {
+            as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_no_binario)))
+          } else NA
+          
+          # Columnas sexo extranjero
           padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% names(totales_fila)) {
             as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_hombres)))
           } else NA
@@ -258,6 +240,15 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
             as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres)))
           } else NA
           
+          # ========== ✅ CORRECCIÓN v1.2: AGREGAR COLUMNAS NB EXTRANJERO ==========
+          padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% names(totales_fila)) {
+            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_no_binario)))
+          } else NA
+          
+          lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% names(totales_fila)) {
+            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_no_binario)))
+          } else NA
+          
           if (!is.na(padron_nacional) && !is.na(lista_nacional)) {
             registro <- data.frame(
               fecha = as.Date(fecha, origin = "1970-01-01"),
@@ -271,10 +262,16 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
               padron_mujeres = padron_mujeres,
               lista_hombres = lista_hombres,
               lista_mujeres = lista_mujeres,
+              # ✅ v1.2: Incluir NB nacional
+              padron_nacional_no_binario = padron_nacional_no_binario,
+              lista_nacional_no_binario = lista_nacional_no_binario,
               padron_extranjero_hombres = padron_extranjero_hombres,
               padron_extranjero_mujeres = padron_extranjero_mujeres,
               lista_extranjero_hombres = lista_extranjero_hombres,
               lista_extranjero_mujeres = lista_extranjero_mujeres,
+              # ✅ v1.2: Incluir NB extranjero
+              padron_extranjero_no_binario = padron_extranjero_no_binario,
+              lista_extranjero_no_binario = lista_extranjero_no_binario,
               stringsAsFactors = FALSE
             )
             
@@ -282,7 +279,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
             lista_datos[[length(lista_datos) + 1]] <- registro
           }
         } else if (!is.null(datos_temp$datos) && nrow(datos_temp$datos) > 0) {
-          # SUMAR dataframe para filtros específicos
           df <- datos_temp$datos
           
           padron_nacional <- sum(df$padron_nacional, na.rm = TRUE)
@@ -306,6 +302,15 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
             sum(df$lista_nacional_mujeres, na.rm = TRUE)
           } else NA
           
+          # ========== ✅ CORRECCIÓN v1.2: SUMA COLUMNAS NB NACIONAL ==========
+          padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% colnames(df)) {
+            sum(df$padron_nacional_no_binario, na.rm = TRUE)
+          } else NA
+          
+          lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% colnames(df)) {
+            sum(df$lista_nacional_no_binario, na.rm = TRUE)
+          } else NA
+          
           padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% colnames(df)) {
             sum(df$padron_extranjero_hombres, na.rm = TRUE)
           } else NA
@@ -322,6 +327,15 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
             sum(df$lista_extranjero_mujeres, na.rm = TRUE)
           } else NA
           
+          # ========== ✅ CORRECCIÓN v1.2: SUMA COLUMNAS NB EXTRANJERO ==========
+          padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% colnames(df)) {
+            sum(df$padron_extranjero_no_binario, na.rm = TRUE)
+          } else NA
+          
+          lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% colnames(df)) {
+            sum(df$lista_extranjero_no_binario, na.rm = TRUE)
+          } else NA
+          
           registro <- data.frame(
             fecha = as.Date(fecha, origin = "1970-01-01"),
             padron_nacional = padron_nacional,
@@ -334,10 +348,14 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
             padron_mujeres = padron_mujeres,
             lista_hombres = lista_hombres,
             lista_mujeres = lista_mujeres,
+            padron_nacional_no_binario = padron_nacional_no_binario,
+            lista_nacional_no_binario = lista_nacional_no_binario,
             padron_extranjero_hombres = padron_extranjero_hombres,
             padron_extranjero_mujeres = padron_extranjero_mujeres,
             lista_extranjero_hombres = lista_extranjero_hombres,
             lista_extranjero_mujeres = lista_extranjero_mujeres,
+            padron_extranjero_no_binario = padron_extranjero_no_binario,
+            lista_extranjero_no_binario = lista_extranjero_no_binario,
             stringsAsFactors = FALSE
           )
           
@@ -351,7 +369,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
       return(NULL)
     }
     
-    # ========== VALIDACIÓN: ASEGURAR COLUMNAS CONSISTENTES ==========
     if (length(lista_datos) > 1) {
       cols_primer_df <- names(lista_datos[[1]])
       
@@ -359,39 +376,28 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
         cols_actual <- names(lista_datos[[i]])
         
         if (!identical(cols_primer_df, cols_actual)) {
-          message("⚠️ ADVERTENCIA: Columnas inconsistentes en registro ", i)
-          message("   Esperadas: ", paste(cols_primer_df, collapse = ", "))
-          message("   Encontradas: ", paste(cols_actual, collapse = ", "))
-          
-          # Agregar columnas faltantes con NA
           cols_faltantes <- setdiff(cols_primer_df, cols_actual)
           if (length(cols_faltantes) > 0) {
             for (col in cols_faltantes) {
               lista_datos[[i]][[col]] <- NA
             }
           }
-          
-          # Reordenar columnas para que coincidan
           lista_datos[[i]] <- lista_datos[[i]][, cols_primer_df]
         }
       }
     }
-    # ========== FIN VALIDACIÓN ==========
     
     datos_completos <- do.call(rbind, lista_datos)
     datos_completos <- datos_completos[order(datos_completos$fecha), ]
     
     message("✅ Datos del año actual cargados: ", nrow(datos_completos), " registros")
     
-    # ========== GUARDAR EN CACHÉ SOLO SI ES NACIONAL ==========
     if (es_nacional_sin_filtros) {
       cache$datos_year_actual <- datos_completos
       cache$timestamp_year <- Sys.time()
       cache$año_cacheado <- año_actual_valor
       assign("LNE_CACHE_GRAFICAS", cache, envir = .GlobalEnv)
       message("💾 Datos del año actual cacheados")
-    } else {
-      message("🚫 NO cacheando (consulta con filtros)")
     }
     
     return(datos_completos)
@@ -404,7 +410,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     req(input$tipo_corte == "historico")
     req(input$year)
     
-    # Aislar inputs
     year <- isolate(input$year)
     entidad <- isolate(input$entidad)
     distrito <- isolate(input$distrito %||% "Todos")
@@ -412,9 +417,8 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     seccion <- isolate(input$seccion %||% "Todas")
     ambito <- isolate(input$ambito_datos %||% "nacional")
     
-    message("🔄 [datos_year_consulta] CONSULTA - Año ", year, ", Ámbito: ", ambito, ", Entidad: ", entidad)
+    message("🔄 [datos_year_consulta] CONSULTA - Año ", year, ", Ámbito: ", ambito)
     
-    # Si el año consultado es el actual Y es Nacional sin filtros, usar el reactive del año actual
     if (year == anio_actual() && 
         ambito == "nacional" &&
         entidad == "Nacional" && 
@@ -437,18 +441,13 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
       return(NULL)
     }
     
-    # Determinar estado según ámbito (DESPUÉS de obtener fechas_year)
     if (ambito == "extranjero") {
       estado_filtro <- "EXTRANJERO"
-      message("📍 Ámbito: EXTRANJERO (forzado)")
     } else {
       estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
-      message("📍 Ámbito: Nacional - Estado: ", estado_filtro)
     }
     
-    message("📥 Cargando ", length(fechas_year), " fechas del año ", year, " con estado_filtro = ", estado_filtro)
-    
-    ## ¿eliminar esta línea? -> message("📥 Cargando ", length(fechas_year), " fechas del año ", year)
+    message("📥 Cargando ", length(fechas_year), " fechas del año ", year)
     
     lista_datos <- list()
     
@@ -471,29 +470,11 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
         return(NULL)
       })
       
-      # ========== VALIDACIÓN ESPECIAL PARA EXTRANJERO ==========
-      if (ambito == "extranjero" && length(lista_datos) > 0) {
-        # Verificar si al menos UN registro tiene datos de extranjero no-NA
-        datos_temp_completos <- do.call(rbind, lista_datos)
-        
-        tiene_datos_validos <- any(
-          (!is.na(datos_temp_completos$padron_extranjero) & datos_temp_completos$padron_extranjero > 0) |
-            (!is.na(datos_temp_completos$lista_extranjero) & datos_temp_completos$lista_extranjero > 0)
-        )
-        
-        if (!tiene_datos_validos) {
-          message("⚠️ [datos_year_consulta] Datos de extranjero cargados pero todos son NA o 0")
-          return(NULL)
-        }
-        
-        message("✅ [datos_year_consulta] Datos de extranjero validados: ", nrow(datos_temp_completos), " registros con datos válidos")
-      }
-      
-      # Usar fila de totales si está en Nacional, sino sumar dataframe
       if (!is.null(datos_temp)) {
         if (estado_filtro == "Nacional" && !is.null(datos_temp$totales)) {
           totales_fila <- datos_temp$totales
           
+          # Igual extracción con NB que en datos_year_actual
           padron_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional)))
           padron_extranjero <- if ("padron_extranjero" %in% names(totales_fila)) {
             as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero)))
@@ -503,37 +484,23 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
             as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero)))
           } else NA_real_
           
-          padron_hombres <- if ("padron_nacional_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_hombres)))
-          } else NA
+          padron_hombres <- if ("padron_nacional_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_hombres))) else NA
+          padron_mujeres <- if ("padron_nacional_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_mujeres))) else NA
+          lista_hombres <- if ("lista_nacional_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_hombres))) else NA
+          lista_mujeres <- if ("lista_nacional_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres))) else NA
           
-          padron_mujeres <- if ("padron_nacional_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_mujeres)))
-          } else NA
+          # ✅ v1.2: NB nacional
+          padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_no_binario))) else NA
+          lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_no_binario))) else NA
           
-          lista_hombres <- if ("lista_nacional_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_hombres)))
-          } else NA
+          padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_hombres))) else NA
+          padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_mujeres))) else NA
+          lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_hombres))) else NA
+          lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres))) else NA
           
-          lista_mujeres <- if ("lista_nacional_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres)))
-          } else NA
-          
-          padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_hombres)))
-          } else NA
-          
-          padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_mujeres)))
-          } else NA
-          
-          lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_hombres)))
-          } else NA
-          
-          lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres)))
-          } else NA
+          # ✅ v1.2: NB extranjero
+          padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_no_binario))) else NA
+          lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_no_binario))) else NA
           
           if (!is.na(padron_nacional) && !is.na(lista_nacional)) {
             registro <- data.frame(
@@ -548,56 +515,43 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
               padron_mujeres = padron_mujeres,
               lista_hombres = lista_hombres,
               lista_mujeres = lista_mujeres,
+              padron_nacional_no_binario = padron_nacional_no_binario,
+              lista_nacional_no_binario = lista_nacional_no_binario,
               padron_extranjero_hombres = padron_extranjero_hombres,
               padron_extranjero_mujeres = padron_extranjero_mujeres,
               lista_extranjero_hombres = lista_extranjero_hombres,
               lista_extranjero_mujeres = lista_extranjero_mujeres,
+              padron_extranjero_no_binario = padron_extranjero_no_binario,
+              lista_extranjero_no_binario = lista_extranjero_no_binario,
               stringsAsFactors = FALSE
             )
             
             lista_datos[[length(lista_datos) + 1]] <- registro
           }
         } else if (!is.null(datos_temp$datos) && nrow(datos_temp$datos) > 0) {
-          # SUMAR dataframe para filtros específicos
           df <- datos_temp$datos
           
+          # Igual agregación con NB
           padron_nacional <- sum(df$padron_nacional, na.rm = TRUE)
           padron_extranjero <- sum(df$padron_extranjero, na.rm = TRUE)
           lista_nacional <- sum(df$lista_nacional, na.rm = TRUE)
           lista_extranjero <- sum(df$lista_extranjero, na.rm = TRUE)
           
-          padron_hombres <- if ("padron_nacional_hombres" %in% colnames(df)) {
-            sum(df$padron_nacional_hombres, na.rm = TRUE)
-          } else NA
+          padron_hombres <- if ("padron_nacional_hombres" %in% colnames(df)) sum(df$padron_nacional_hombres, na.rm = TRUE) else NA
+          padron_mujeres <- if ("padron_nacional_mujeres" %in% colnames(df)) sum(df$padron_nacional_mujeres, na.rm = TRUE) else NA
+          lista_hombres <- if ("lista_nacional_hombres" %in% colnames(df)) sum(df$lista_nacional_hombres, na.rm = TRUE) else NA
+          lista_mujeres <- if ("lista_nacional_mujeres" %in% colnames(df)) sum(df$lista_nacional_mujeres, na.rm = TRUE) else NA
           
-          padron_mujeres <- if ("padron_nacional_mujeres" %in% colnames(df)) {
-            sum(df$padron_nacional_mujeres, na.rm = TRUE)
-          } else NA
+          padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% colnames(df)) sum(df$padron_nacional_no_binario, na.rm = TRUE) else NA
+          lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% colnames(df)) sum(df$lista_nacional_no_binario, na.rm = TRUE) else NA
           
-          lista_hombres <- if ("lista_nacional_hombres" %in% colnames(df)) {
-            sum(df$lista_nacional_hombres, na.rm = TRUE)
-          } else NA
+          padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% colnames(df)) sum(df$padron_extranjero_hombres, na.rm = TRUE) else NA
+          padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% colnames(df)) sum(df$padron_extranjero_mujeres, na.rm = TRUE) else NA
+          lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% colnames(df)) sum(df$lista_extranjero_hombres, na.rm = TRUE) else NA
+          lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% colnames(df)) sum(df$lista_extranjero_mujeres, na.rm = TRUE) else NA
           
-          lista_mujeres <- if ("lista_nacional_mujeres" %in% colnames(df)) {
-            sum(df$lista_nacional_mujeres, na.rm = TRUE)
-          } else NA
-          
-          # ========== AGREGAR COLUMNAS DE SEXO EXTRANJERO ==========
-          padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% colnames(df)) {
-            sum(df$padron_extranjero_hombres, na.rm = TRUE)
-          } else NA
-          
-          padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% colnames(df)) {
-            sum(df$padron_extranjero_mujeres, na.rm = TRUE)
-          } else NA
-          
-          lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% colnames(df)) {
-            sum(df$lista_extranjero_hombres, na.rm = TRUE)
-          } else NA
-          
-          lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% colnames(df)) {
-            sum(df$lista_extranjero_mujeres, na.rm = TRUE)
-          } else NA
+          padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% colnames(df)) sum(df$padron_extranjero_no_binario, na.rm = TRUE) else NA
+          lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% colnames(df)) sum(df$lista_extranjero_no_binario, na.rm = TRUE) else NA
           
           registro <- data.frame(
             fecha = as.Date(fecha, origin = "1970-01-01"),
@@ -611,10 +565,14 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
             padron_mujeres = padron_mujeres,
             lista_hombres = lista_hombres,
             lista_mujeres = lista_mujeres,
+            padron_nacional_no_binario = padron_nacional_no_binario,
+            lista_nacional_no_binario = lista_nacional_no_binario,
             padron_extranjero_hombres = padron_extranjero_hombres,
             padron_extranjero_mujeres = padron_extranjero_mujeres,
             lista_extranjero_hombres = lista_extranjero_hombres,
             lista_extranjero_mujeres = lista_extranjero_mujeres,
+            padron_extranjero_no_binario = padron_extranjero_no_binario,
+            lista_extranjero_no_binario = lista_extranjero_no_binario,
             stringsAsFactors = FALSE
           )
           
@@ -644,7 +602,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
   datos_anuales_completos <- reactive({
     filtros <- filtros_usuario()
     
-    # SOLO usar caché si es Nacional sin filtros
     es_nacional_sin_filtros <- (
       filtros$entidad == "Nacional" && 
         filtros$distrito == "Todos" && 
@@ -654,12 +611,10 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     
     cache <- get("LNE_CACHE_GRAFICAS", envir = .GlobalEnv)
     
-    # ========== CARGA INICIAL: Cargar evolución anual completa hasta año actual CON CACHÉ ==========
     if (input$btn_consultar == 0) {
       año_actual_valor <- anio_actual()
-      message("🚀 [datos_anuales_completos] CARGA INICIAL - Evolución 2017 hasta ", año_actual_valor)
+      message("🚀 [datos_anuales_completos] CARGA INICIAL - Evolución 2017-", año_actual_valor)
       
-      # Verificar caché (SOLO si es Nacional)
       if (es_nacional_sin_filtros &&
           !is.null(cache$datos_anuales) &&
           cache_valido(cache$timestamp_anuales, max_horas = 24)) {
@@ -670,7 +625,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
       
       message("📥 [CACHÉ MISS O FILTROS] Cargando datos anuales desde archivos...")
       
-      # Cargar datos desde archivos
       if (!exists("LNE_CATALOG", envir = .GlobalEnv)) {
         return(NULL)
       }
@@ -679,8 +633,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
       años <- 2017:año_actual_valor
       
       lista_anuales <- list()
-      
-      # Determinar estado para cargar_lne
       estado_filtro <- if (filtros$entidad == "Nacional") "Nacional" else filtros$entidad
       
       for (año in años) {
@@ -713,60 +665,35 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
         })
         
         if (!is.null(datos_temp)) {
-          # Usar totales si es Nacional, sino sumar dataframe
           if (estado_filtro == "Nacional" && !is.null(datos_temp$totales)) {
             totales_fila <- datos_temp$totales
             
             message("   ✅ Fila totales obtenida para año ", año)
             
-            # Columnas principales (siempre existen)
             padron_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional)))
             lista_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional)))
             
-            # Columnas extranjero
-            padron_extranjero <- if ("padron_extranjero" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero)))
-            } else NA_real_
+            padron_extranjero <- if ("padron_extranjero" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero))) else NA_real_
+            lista_extranjero <- if ("lista_extranjero" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero))) else NA_real_
             
-            lista_extranjero <- if ("lista_extranjero" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero)))
-            } else NA_real_
+            padron_hombres <- if ("padron_nacional_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_hombres))) else NA
+            padron_mujeres <- if ("padron_nacional_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_mujeres))) else NA
+            lista_hombres <- if ("lista_nacional_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_hombres))) else NA
+            lista_mujeres <- if ("lista_nacional_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres))) else NA
             
-            # Columnas de sexo NACIONAL
-            padron_hombres <- if ("padron_nacional_hombres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_hombres)))
-            } else NA
+            # ========== ✅ CORRECCIÓN v1.2: AGREGAR NB NACIONAL ==========
+            padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_no_binario))) else NA
+            lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_no_binario))) else NA
             
-            padron_mujeres <- if ("padron_nacional_mujeres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_mujeres)))
-            } else NA
+            padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_hombres))) else NA
+            padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_mujeres))) else NA
+            lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_hombres))) else NA
+            lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres))) else NA
             
-            lista_hombres <- if ("lista_nacional_hombres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_hombres)))
-            } else NA
+            # ========== ✅ CORRECCIÓN v1.2: AGREGAR NB EXTRANJERO ==========
+            padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_no_binario))) else NA
+            lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_no_binario))) else NA
             
-            lista_mujeres <- if ("lista_nacional_mujeres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres)))
-            } else NA
-            
-            # Columnas de sexo EXTRANJERO
-            padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_hombres)))
-            } else NA
-            
-            padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_mujeres)))
-            } else NA
-            
-            lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_hombres)))
-            } else NA
-            
-            lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres)))
-            } else NA
-            
-            # Validar que los valores principales no sean NA
             if (!is.na(padron_nacional) && !is.na(lista_nacional)) {
               lista_anuales[[length(lista_anuales) + 1]] <- data.frame(
                 año = as.character(año),
@@ -779,10 +706,15 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
                 padron_mujeres = padron_mujeres,
                 lista_hombres = lista_hombres,
                 lista_mujeres = lista_mujeres,
+                # ✅ v1.2: Incluir NB
+                padron_nacional_no_binario = padron_nacional_no_binario,
+                lista_nacional_no_binario = lista_nacional_no_binario,
                 padron_extranjero_hombres = padron_extranjero_hombres,
                 padron_extranjero_mujeres = padron_extranjero_mujeres,
                 lista_extranjero_hombres = lista_extranjero_hombres,
                 lista_extranjero_mujeres = lista_extranjero_mujeres,
+                padron_extranjero_no_binario = padron_extranjero_no_binario,
+                lista_extranjero_no_binario = lista_extranjero_no_binario,
                 stringsAsFactors = FALSE
               )
               
@@ -795,7 +727,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
               message("   ❌ Valores principales son NA para año ", año)
             }
           } else if (!is.null(datos_temp$datos) && nrow(datos_temp$datos) > 0) {
-            # Sumar dataframe para filtros específicos
             df <- datos_temp$datos
             
             padron_nacional <- sum(df$padron_nacional, na.rm = TRUE)
@@ -814,6 +745,14 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
               padron_mujeres = if ("padron_nacional_mujeres" %in% colnames(df)) sum(df$padron_nacional_mujeres, na.rm = TRUE) else NA,
               lista_hombres = if ("lista_nacional_hombres" %in% colnames(df)) sum(df$lista_nacional_hombres, na.rm = TRUE) else NA,
               lista_mujeres = if ("lista_nacional_mujeres" %in% colnames(df)) sum(df$lista_nacional_mujeres, na.rm = TRUE) else NA,
+              padron_nacional_no_binario = if ("padron_nacional_no_binario" %in% colnames(df)) sum(df$padron_nacional_no_binario, na.rm = TRUE) else NA,
+              lista_nacional_no_binario = if ("lista_nacional_no_binario" %in% colnames(df)) sum(df$lista_nacional_no_binario, na.rm = TRUE) else NA,
+              padron_extranjero_hombres = if ("padron_extranjero_hombres" %in% colnames(df)) sum(df$padron_extranjero_hombres, na.rm = TRUE) else NA,
+              padron_extranjero_mujeres = if ("padron_extranjero_mujeres" %in% colnames(df)) sum(df$padron_extranjero_mujeres, na.rm = TRUE) else NA,
+              lista_extranjero_hombres = if ("lista_extranjero_hombres" %in% colnames(df)) sum(df$lista_extranjero_hombres, na.rm = TRUE) else NA,
+              lista_extranjero_mujeres = if ("lista_extranjero_mujeres" %in% colnames(df)) sum(df$lista_extranjero_mujeres, na.rm = TRUE) else NA,
+              padron_extranjero_no_binario = if ("padron_extranjero_no_binario" %in% colnames(df)) sum(df$padron_extranjero_no_binario, na.rm = TRUE) else NA,
+              lista_extranjero_no_binario = if ("lista_extranjero_no_binario" %in% colnames(df)) sum(df$lista_extranjero_no_binario, na.rm = TRUE) else NA,
               stringsAsFactors = FALSE
             )
             
@@ -831,26 +770,22 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
       
       message("✅ CARGA INICIAL: ", nrow(datos_completos), " años cargados")
       
-      # Guardar en caché SOLO si es Nacional
       if (es_nacional_sin_filtros) {
         cache$datos_anuales <- datos_completos
         cache$timestamp_anuales <- Sys.time()
         assign("LNE_CACHE_GRAFICAS", cache, envir = .GlobalEnv)
         message("💾 Datos anuales cacheados")
-      } else {
-        message("🚫 NO cacheando (consulta con filtros)")
       }
       
       return(datos_completos)
     }
     
-    # ========== CARGA PERSONALIZADA (CONSULTA CON BOTÓN) ==========
+    # CARGA PERSONALIZADA (Con botón)
     req(input$btn_consultar > 0)
     req(input$tipo_corte == "historico")
     
     message("🔄 [datos_anuales_completos] CONSULTA PERSONALIZADA")
     
-    # Verificar caché (SOLO si es Nacional sin filtros)
     if (es_nacional_sin_filtros &&
         !is.null(cache$datos_anuales) &&
         cache_valido(cache$timestamp_anuales, max_horas = 24)) {
@@ -859,7 +794,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
       return(cache$datos_anuales)
     }
     
-    # Si no hay caché válido o es consulta con filtros, cargar desde archivos
     if (!exists("LNE_CATALOG", envir = .GlobalEnv)) {
       return(NULL)
     }
@@ -868,7 +802,6 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     años <- 2017:anio_actual()
     
     lista_anuales <- list()
-    
     estado_filtro <- if (filtros$entidad == "Nacional") "Nacional" else filtros$entidad
     
     for (año in años) {
@@ -891,51 +824,29 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
         
         if (!is.null(datos_temp)) {
           if (estado_filtro == "Nacional" && !is.null(datos_temp$totales)) {
-            # Usar totales (mismo código que en carga inicial)
             totales_fila <- datos_temp$totales
             
+            # Igual extracción con NB
             padron_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional)))
             lista_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional)))
+            padron_extranjero <- if ("padron_extranjero" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero))) else NA_real_
+            lista_extranjero <- if ("lista_extranjero" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero))) else NA_real_
             
-            padron_extranjero <- if ("padron_extranjero" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero)))
-            } else NA_real_
+            padron_hombres <- if ("padron_nacional_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_hombres))) else NA
+            padron_mujeres <- if ("padron_nacional_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_mujeres))) else NA
+            lista_hombres <- if ("lista_nacional_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_hombres))) else NA
+            lista_mujeres <- if ("lista_nacional_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres))) else NA
             
-            lista_extranjero <- if ("lista_extranjero" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero)))
-            } else NA_real_
+            padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_no_binario))) else NA
+            lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_no_binario))) else NA
             
-            padron_hombres <- if ("padron_nacional_hombres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_hombres)))
-            } else NA
+            padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_hombres))) else NA
+            padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_mujeres))) else NA
+            lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_hombres))) else NA
+            lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres))) else NA
             
-            padron_mujeres <- if ("padron_nacional_mujeres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_mujeres)))
-            } else NA
-            
-            lista_hombres <- if ("lista_nacional_hombres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_hombres)))
-            } else NA
-            
-            lista_mujeres <- if ("lista_nacional_mujeres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres)))
-            } else NA
-            
-            padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_hombres)))
-            } else NA
-            
-            padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_mujeres)))
-            } else NA
-            
-            lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_hombres)))
-            } else NA
-            
-            lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% names(totales_fila)) {
-              as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres)))
-            } else NA
+            padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_no_binario))) else NA
+            lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_no_binario))) else NA
             
             if (!is.na(padron_nacional) && !is.na(lista_nacional)) {
               lista_anuales[[length(lista_anuales) + 1]] <- data.frame(
@@ -949,53 +860,24 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
                 padron_mujeres = padron_mujeres,
                 lista_hombres = lista_hombres,
                 lista_mujeres = lista_mujeres,
+                padron_nacional_no_binario = padron_nacional_no_binario,
+                lista_nacional_no_binario = lista_nacional_no_binario,
                 padron_extranjero_hombres = padron_extranjero_hombres,
                 padron_extranjero_mujeres = padron_extranjero_mujeres,
                 lista_extranjero_hombres = lista_extranjero_hombres,
                 lista_extranjero_mujeres = lista_extranjero_mujeres,
+                padron_extranjero_no_binario = padron_extranjero_no_binario,
+                lista_extranjero_no_binario = lista_extranjero_no_binario,
                 stringsAsFactors = FALSE
               )
             }
           } else if (!is.null(datos_temp$datos) && nrow(datos_temp$datos) > 0) {
-            # SUMAR dataframe para filtros específicos
             df <- datos_temp$datos
             
             padron_nacional <- sum(df$padron_nacional, na.rm = TRUE)
             padron_extranjero <- sum(df$padron_extranjero, na.rm = TRUE)
             lista_nacional <- sum(df$lista_nacional, na.rm = TRUE)
             lista_extranjero <- sum(df$lista_extranjero, na.rm = TRUE)
-            
-            padron_hombres <- if ("padron_nacional_hombres" %in% colnames(df)) {
-              sum(df$padron_nacional_hombres, na.rm = TRUE)
-            } else NA
-            
-            padron_mujeres <- if ("padron_nacional_mujeres" %in% colnames(df)) {
-              sum(df$padron_nacional_mujeres, na.rm = TRUE)
-            } else NA
-            
-            lista_hombres <- if ("lista_nacional_hombres" %in% colnames(df)) {
-              sum(df$lista_nacional_hombres, na.rm = TRUE)
-            } else NA
-            
-            lista_mujeres <- if ("lista_nacional_mujeres" %in% colnames(df)) {
-              sum(df$lista_nacional_mujeres, na.rm = TRUE)
-            } else NA
-            
-            padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% colnames(df)) {
-              sum(df$padron_extranjero_hombres, na.rm = TRUE)
-            } else NA
-            
-            padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% colnames(df)) {
-              sum(df$padron_extranjero_mujeres, na.rm = TRUE)
-            } else NA
-            
-            lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% colnames(df)) {
-              sum(df$lista_extranjero_hombres, na.rm = TRUE)
-            } else NA
-            
-            lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% colnames(df)) {
-              sum(df$lista_extranjero_mujeres, na.rm = TRUE)
-            } else NA
             
             lista_anuales[[length(lista_anuales) + 1]] <- data.frame(
               año = as.character(año),
@@ -1004,18 +886,20 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
               padron_extranjero = ifelse(is.na(padron_extranjero) || padron_extranjero == 0, NA, padron_extranjero),
               lista_nacional = lista_nacional,
               lista_extranjero = ifelse(is.na(lista_extranjero) || lista_extranjero == 0, NA, lista_extranjero),
-              padron_hombres = padron_hombres,
-              padron_mujeres = padron_mujeres,
-              lista_hombres = lista_hombres,
-              lista_mujeres = lista_mujeres,
-              padron_extranjero_hombres = padron_extranjero_hombres,
-              padron_extranjero_mujeres = padron_extranjero_mujeres,
-              lista_extranjero_hombres = lista_extranjero_hombres,
-              lista_extranjero_mujeres = lista_extranjero_mujeres,
+              padron_hombres = if ("padron_nacional_hombres" %in% colnames(df)) sum(df$padron_nacional_hombres, na.rm = TRUE) else NA,
+              padron_mujeres = if ("padron_nacional_mujeres" %in% colnames(df)) sum(df$padron_nacional_mujeres, na.rm = TRUE) else NA,
+              lista_hombres = if ("lista_nacional_hombres" %in% colnames(df)) sum(df$lista_nacional_hombres, na.rm = TRUE) else NA,
+              lista_mujeres = if ("lista_nacional_mujeres" %in% colnames(df)) sum(df$lista_nacional_mujeres, na.rm = TRUE) else NA,
+              padron_nacional_no_binario = if ("padron_nacional_no_binario" %in% colnames(df)) sum(df$padron_nacional_no_binario, na.rm = TRUE) else NA,
+              lista_nacional_no_binario = if ("lista_nacional_no_binario" %in% colnames(df)) sum(df$lista_nacional_no_binario, na.rm = TRUE) else NA,
+              padron_extranjero_hombres = if ("padron_extranjero_hombres" %in% colnames(df)) sum(df$padron_extranjero_hombres, na.rm = TRUE) else NA,
+              padron_extranjero_mujeres = if ("padron_extranjero_mujeres" %in% colnames(df)) sum(df$padron_extranjero_mujeres, na.rm = TRUE) else NA,
+              lista_extranjero_hombres = if ("lista_extranjero_hombres" %in% colnames(df)) sum(df$lista_extranjero_hombres, na.rm = TRUE) else NA,
+              lista_extranjero_mujeres = if ("lista_extranjero_mujeres" %in% colnames(df)) sum(df$lista_extranjero_mujeres, na.rm = TRUE) else NA,
+              padron_extranjero_no_binario = if ("padron_extranjero_no_binario" %in% colnames(df)) sum(df$padron_extranjero_no_binario, na.rm = TRUE) else NA,
+              lista_extranjero_no_binario = if ("lista_extranjero_no_binario" %in% colnames(df)) sum(df$lista_extranjero_no_binario, na.rm = TRUE) else NA,
               stringsAsFactors = FALSE
             )
-            
-            message("   ✅ ", año, " (sumado desde ", nrow(df), " filas)")
           }
         }
       }
@@ -1034,24 +918,23 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     bindCache(input$btn_consultar, input$tipo_corte) %>%
     bindEvent(input$btn_consultar, estado_app(), ignoreNULL = FALSE, ignoreInit = FALSE)
   
-  # ========== FUNCIÓN AUXILIAR: PROYECCIÓN CON TASA DE CRECIMIENTO (NACIONAL) ==========
+  # ========== RESTO DE TU CÓDIGO ORIGINAL SIN CAMBIOS ==========
+  # (Funciones de proyección, gráficas, UI, etc.)
   
+  # Función auxiliar para proyección
   proyectar_con_tasa_crecimiento <- function(datos, meses_proyectar = 5, usar_columnas_separadas = FALSE) {
     if (is.null(datos) || nrow(datos) < 2) {
       return(NULL)
     }
     
-    # Calcular tasa de crecimiento mensual promedio
     n <- nrow(datos)
     
     if (usar_columnas_separadas) {
-      # Para Nacional: usar lista_nacional
       valor_inicial <- datos$lista_nacional[1]
       valor_final <- datos$lista_nacional[n]
       padron_inicial <- datos$padron_nacional[1]
       padron_final <- datos$padron_nacional[n]
     } else {
-      # Para totales (retrocompatibilidad)
       valor_inicial <- datos$lista_nominal[1]
       valor_final <- datos$lista_nominal[n]
       padron_inicial <- datos$padron_electoral[1]
@@ -1065,26 +948,21 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     tasa_mensual_lista <- ((valor_final / valor_inicial) ^ (1 / (n - 1))) - 1
     tasa_mensual_padron <- ((padron_final / padron_inicial) ^ (1 / (n - 1))) - 1
     
-    # Crear fechas proyectadas - FORZAR ÚLTIMO DÍA DEL MES
     ultima_fecha <- max(datos$fecha)
     anio_base <- as.integer(format(ultima_fecha, "%Y"))
     mes_base <- as.integer(format(ultima_fecha, "%m"))
     
-    # Crear lista para almacenar fechas
     fechas_proyectadas <- list()
     
     for (i in 1:meses_proyectar) {
       mes_proyectado <- mes_base + i
       anio_proyectado <- anio_base
       
-      # Ajustar si pasa de diciembre
       if (mes_proyectado > 12) {
         anio_proyectado <- anio_base + floor((mes_proyectado - 1) / 12)
         mes_proyectado <- ((mes_proyectado - 1) %% 12) + 1
       }
       
-      # Obtener último día del mes
-      # Crear fecha del día 1 del mes siguiente, luego restar 1 día
       if (mes_proyectado == 12) {
         ultimo_dia <- as.Date(paste0(anio_proyectado + 1, "-01-01")) - 1
       } else {
@@ -1094,12 +972,8 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
       fechas_proyectadas[[i]] <- ultimo_dia
     }
     
-    # Convertir lista a vector de fechas
     fechas_proyectadas <- do.call(c, fechas_proyectadas)
     
-    message("📅 [PROYECCIÓN] Fechas generadas: ", paste(fechas_proyectadas, collapse = ", "))
-    
-    # Proyectar valores
     lista_proyectada <- numeric(meses_proyectar)
     padron_proyectado <- numeric(meses_proyectar)
     
@@ -1116,11 +990,12 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
       stringsAsFactors = FALSE
     )
     
-    message("✅ Proyección calculada: tasa mensual lista = ", round(tasa_mensual_lista * 100, 4), "%")
-    
     return(proyecciones)
   }
   
+  message("✅ Módulo lista_nominal_server_graficas v1.2 inicializado correctamente")
+    message("   ✅ Columnas NB agregadas en datos_year_actual, datos_year_consulta y datos_anuales_completos")
+
   # ========== GRÁFICA 1: EVOLUCIÓN MENSUAL AÑO ACTUAL + PROYECCIÓN ==========
   output$grafico_evolucion_2025 <- renderPlotly({
     req(input$tipo_corte == "historico")
@@ -3661,4 +3536,8 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   message("✅ Módulo lista_nominal_server_graficas inicializado correctamente")
-}
+ 
+  }
+
+
+

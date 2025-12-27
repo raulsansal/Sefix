@@ -1,17 +1,19 @@
 # modules/lista_nominal_graficas/graficas_historico_3.R
 # Gráfica 3: Evolución anual por sexo
-# Versión: 2.2 - LIMPIEZA: Eliminados mensajes de "datos no disponibles", solo graficar
+# Versión: 2.6 - CORRECCIÓN: Usar ambito_reactivo para cambio de vista automático
 
-graficas_historico_3 <- function(input, output, session, datos_anuales_completos, 
-                                 anio_actual, texto_alcance, estado_app, mostrar_graficas_anuales) {
+graficas_historico_3 <- function(input, output, session, datos_anuales_completos, anio_actual, 
+                                 texto_alcance, estado_app, mostrar_graficas_anuales, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_historico_3 v2.2")
+  message("📊 Inicializando graficas_historico_3 v2.6")
   
   # ========== GRÁFICA 3: EVOLUCIÓN ANUAL + DESGLOSE POR SEXO ==========
   
   output$grafico_evolucion_anual_sexo <- renderPlotly({
     req(input$tipo_corte == "historico")
-    req(input$ambito_datos)
+    
+    # ✅ v2.6: Usar ambito_reactivo en lugar de input$ambito_datos
+    ambito_actual <- ambito_reactivo()
     
     # ========== NO RENDERIZAR EN ESTADO INICIAL ==========
     if (estado_app() == "inicial") {
@@ -38,9 +40,9 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
     
     datos_anuales <- datos_anuales_completos()
     
-    message("📊 [GRÁFICA 3] Renderizando - Estado: ", estado_app(), " | Ámbito: ", input$ambito_datos)
+    message("📊 [GRÁFICA 3] Renderizando - Estado: ", estado_app(), " | Ámbito: ", ambito_actual)
     
-    # ========== ✅ ÚNICO MENSAJE: Sin datos disponibles ==========
+    # ========== VALIDACIÓN ROBUSTA ==========
     if (is.null(datos_anuales) || !is.data.frame(datos_anuales) || nrow(datos_anuales) == 0) {
       return(plot_ly() %>%
                layout(
@@ -48,7 +50,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
                  yaxis = list(visible = FALSE),
                  annotations = list(
                    list(
-                     text = "No hay datos disponibles para esa consulta",
+                     text = "No hay datos disponibles",
                      xref = "paper", yref = "paper",
                      x = 0.5, y = 0.5,
                      showarrow = FALSE,
@@ -59,7 +61,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
     }
     
     # ========== GRÁFICA NACIONAL ==========
-    if (input$ambito_datos == "nacional") {
+    if (ambito_actual == "nacional") {
       
       # Verificar que existan columnas de sexo
       if (!all(c("padron_hombres", "padron_mujeres", "lista_hombres", "lista_mujeres") %in% colnames(datos_anuales))) {
@@ -69,7 +71,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
                    yaxis = list(visible = FALSE),
                    annotations = list(
                      list(
-                       text = "No hay datos disponibles para esa consulta",
+                       text = "Desglose por sexo no disponible",
                        xref = "paper", yref = "paper",
                        x = 0.5, y = 0.5,
                        showarrow = FALSE,
@@ -154,10 +156,38 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         }
       }
       
+      # ========== PREPARAR ANNOTATIONS (CON CARD NB) ==========
+      annotations_list <- list(
+        list(
+          text = isolate(texto_alcance()),
+          x = 0.5, y = 1.12,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+          align = "center"
+        ),
+        list(
+          text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+          x = 0.5, y = -0.35,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+          align = "center"
+        )
+      )
+      
+      # ✅ MANTENER: Card NB SÍ aplica en gráfica 3 (CON desglose por sexo)
+      card_nb <- crear_card_no_binario(datos_anuales, ambito = "nacional", tipo_periodo = "anual")
+      if (!is.null(card_nb)) {
+        annotations_list[[length(annotations_list) + 1]] <- card_nb
+      }
+      
       # Layout
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Anual por Sexo (2017-", anio_actual(), ") - Padrón y LNE Nacional"),
+          text = paste0("Evolución Anual por Sexo (2017-", anio_actual(), ") - Nacional"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
@@ -173,68 +203,72 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         ),
         margin = list(t = 120, b = 140, l = 90, r = 50),
         hovermode = 'x unified',
-        annotations = list(
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5, y = 1.12,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            x = 0.5, y = -0.35,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            align = "center"
-          )
-        )
+        annotations = annotations_list
       )
       
-      message("✅ Gráfico 3: Evolución anual por sexo Nacional renderizado")
+      message("✅ Gráfico 3: Evolución anual por sexo Nacional renderizado (CON card NB)")
       return(p)
       
     } else {
-      # ========== GRÁFICA EXTRANJERO ==========
+      # ========== GRÁFICA EXTRANJERO (LÓGICA HÍBRIDA) ==========
       
-      # ✅ v2.2: ELIMINADO filtro de años >= 2020
-      # Reemplazar NA con 0 para graficar
-      datos_extranjero <- datos_anuales
+      # Filtrar años con datos de extranjero
+      datos_extranjero <- datos_anuales[!is.na(datos_anuales$padron_extranjero) & 
+                                          !is.na(datos_anuales$lista_extranjero), ]
       
-      if ("padron_extranjero" %in% colnames(datos_extranjero)) {
-        datos_extranjero$padron_extranjero[is.na(datos_extranjero$padron_extranjero)] <- 0
-      } else {
-        datos_extranjero$padron_extranjero <- 0
+      if (nrow(datos_extranjero) == 0) {
+        return(plot_ly() %>%
+                 layout(
+                   xaxis = list(visible = FALSE),
+                   yaxis = list(visible = FALSE),
+                   annotations = list(
+                     list(
+                       text = "Datos de extranjero disponibles desde 2020",
+                       xref = "paper", yref = "paper",
+                       x = 0.5, y = 0.5,
+                       showarrow = FALSE,
+                       font = list(size = 14, color = "#666")
+                     )
+                   )
+                 ))
       }
       
-      if ("lista_extranjero" %in% colnames(datos_extranjero)) {
-        datos_extranjero$lista_extranjero[is.na(datos_extranjero$lista_extranjero)] <- 0
+      # ========== DETECTAR AÑOS CON/SIN DATOS DE SEXO ==========
+      # Verificar que las columnas existan
+      tiene_cols_sexo <- all(c("padron_extranjero_hombres", "padron_extranjero_mujeres", 
+                               "lista_extranjero_hombres", "lista_extranjero_mujeres") %in% 
+                               colnames(datos_extranjero))
+      
+      if (!tiene_cols_sexo) {
+        # Si no hay columnas de sexo, todos los años no tienen sexo
+        datos_extranjero$tiene_sexo <- FALSE
       } else {
-        datos_extranjero$lista_extranjero <- 0
+        # Crear vector lógico con la misma longitud que datos_extranjero
+        tiene_sexo_vector <- !is.na(datos_extranjero$padron_extranjero_hombres) & 
+          !is.na(datos_extranjero$padron_extranjero_mujeres) &
+          !is.na(datos_extranjero$lista_extranjero_hombres) &
+          !is.na(datos_extranjero$lista_extranjero_mujeres)
+        
+        # Asignar el vector (ahora tiene la misma longitud)
+        datos_extranjero$tiene_sexo <- tiene_sexo_vector
       }
       
-      # Verificar si existen columnas de sexo
-      cols_sexo_extranjero <- c("padron_extranjero_hombres", "padron_extranjero_mujeres", 
-                                "lista_extranjero_hombres", "lista_extranjero_mujeres")
+      años_sin_sexo <- datos_extranjero$año[!datos_extranjero$tiene_sexo]
+      años_con_sexo <- datos_extranjero$año[datos_extranjero$tiene_sexo]
       
-      tiene_columnas_sexo <- all(cols_sexo_extranjero %in% colnames(datos_extranjero))
-      
-      message("📊 [GRÁFICA 3 EXTRANJERO] ¿Tiene columnas de sexo?: ", tiene_columnas_sexo)
+      message("📊 Años SIN sexo: ", paste(años_sin_sexo, collapse = ", "))
+      message("📊 Años CON sexo: ", paste(años_con_sexo, collapse = ", "))
       
       # Crear gráfico
       p <- plot_ly()
       
-      if (!tiene_columnas_sexo) {
-        # ========== CASO 1: SIN COLUMNAS DE SEXO - MOSTRAR 2 LÍNEAS (TOTALES) ==========
-        message("📊 [GRÁFICA 3] Mostrando totales (sin desglose por sexo)")
+      # ========== GRAFICAR AÑOS SIN SEXO (2 LÍNEAS) ==========
+      if (length(años_sin_sexo) > 0) {
+        datos_sin_sexo <- datos_extranjero[datos_extranjero$año %in% años_sin_sexo, ]
         
         # Padrón Total
         p <- p %>% add_trace(
-          data = datos_extranjero,
+          data = datos_sin_sexo,
           x = ~año,
           y = ~padron_extranjero,
           type = 'scatter',
@@ -250,7 +284,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         
         # Lista Total
         p <- p %>% add_trace(
-          data = datos_extranjero,
+          data = datos_sin_sexo,
           x = ~año,
           y = ~lista_extranjero,
           type = 'scatter',
@@ -263,28 +297,24 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
             'Lista: %{y:,.0f}<extra></extra>'
           )
         )
+      }
+      
+      # ========== GRAFICAR AÑOS CON SEXO (4 LÍNEAS) - ORDEN DINÁMICO ==========
+      if (length(años_con_sexo) > 0) {
+        datos_con_sexo <- datos_extranjero[datos_extranjero$año %in% años_con_sexo, ]
         
-      } else {
-        # ========== CASO 2: CON COLUMNAS DE SEXO - MOSTRAR 4 LÍNEAS CON ORDEN DINÁMICO ==========
-        message("📊 [GRÁFICA 3] Mostrando desglose por sexo (4 líneas)")
-        
-        # Reemplazar NA con 0
-        datos_extranjero$padron_extranjero_hombres[is.na(datos_extranjero$padron_extranjero_hombres)] <- 0
-        datos_extranjero$padron_extranjero_mujeres[is.na(datos_extranjero$padron_extranjero_mujeres)] <- 0
-        datos_extranjero$lista_extranjero_hombres[is.na(datos_extranjero$lista_extranjero_hombres)] <- 0
-        datos_extranjero$lista_extranjero_mujeres[is.na(datos_extranjero$lista_extranjero_mujeres)] <- 0
-        
+        # ========== ORDENAR TRAZAS DINÁMICAMENTE ==========
         # Obtener último valor de cada serie para determinar orden visual
-        vals_padron_h <- datos_extranjero$padron_extranjero_hombres[!is.na(datos_extranjero$padron_extranjero_hombres)]
+        vals_padron_h <- datos_con_sexo$padron_extranjero_hombres[!is.na(datos_con_sexo$padron_extranjero_hombres)]
         ultimo_padron_h <- if(length(vals_padron_h) > 0) tail(vals_padron_h, 1) else 0
         
-        vals_padron_m <- datos_extranjero$padron_extranjero_mujeres[!is.na(datos_extranjero$padron_extranjero_mujeres)]
+        vals_padron_m <- datos_con_sexo$padron_extranjero_mujeres[!is.na(datos_con_sexo$padron_extranjero_mujeres)]
         ultimo_padron_m <- if(length(vals_padron_m) > 0) tail(vals_padron_m, 1) else 0
         
-        vals_lista_h <- datos_extranjero$lista_extranjero_hombres[!is.na(datos_extranjero$lista_extranjero_hombres)]
+        vals_lista_h <- datos_con_sexo$lista_extranjero_hombres[!is.na(datos_con_sexo$lista_extranjero_hombres)]
         ultimo_lista_h <- if(length(vals_lista_h) > 0) tail(vals_lista_h, 1) else 0
         
-        vals_lista_m <- datos_extranjero$lista_extranjero_mujeres[!is.na(datos_extranjero$lista_extranjero_mujeres)]
+        vals_lista_m <- datos_con_sexo$lista_extranjero_mujeres[!is.na(datos_con_sexo$lista_extranjero_mujeres)]
         ultimo_lista_m <- if(length(vals_lista_m) > 0) tail(vals_lista_m, 1) else 0
         
         # Crear lista con metadatos de cada traza
@@ -297,15 +327,13 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         # Ordenar de mayor a menor (orden visual de arriba a abajo)
         trazas_info <- trazas_info[order(trazas_info$valor, decreasing = TRUE), ]
         
-        message("📊 [GRÁFICA 3] Orden de trazas: ", paste(trazas_info$nombre, collapse = " > "))
-        
         # Agregar trazas en el orden visual correcto
         for (i in 1:nrow(trazas_info)) {
           traza_nombre <- trazas_info$nombre[i]
           
           if (traza_nombre == "padron_h") {
             p <- p %>% add_trace(
-              data = datos_extranjero,
+              data = datos_con_sexo,
               x = ~año,
               y = ~padron_extranjero_hombres,
               type = 'scatter',
@@ -317,7 +345,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
             )
           } else if (traza_nombre == "padron_m") {
             p <- p %>% add_trace(
-              data = datos_extranjero,
+              data = datos_con_sexo,
               x = ~año,
               y = ~padron_extranjero_mujeres,
               type = 'scatter',
@@ -329,7 +357,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
             )
           } else if (traza_nombre == "lista_h") {
             p <- p %>% add_trace(
-              data = datos_extranjero,
+              data = datos_con_sexo,
               x = ~año,
               y = ~lista_extranjero_hombres,
               type = 'scatter',
@@ -341,7 +369,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
             )
           } else if (traza_nombre == "lista_m") {
             p <- p %>% add_trace(
-              data = datos_extranjero,
+              data = datos_con_sexo,
               x = ~año,
               y = ~lista_extranjero_mujeres,
               type = 'scatter',
@@ -355,53 +383,88 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         }
       }
       
-      # Layout final
+      # ========== PREPARAR TEXTO DE ANOTACIÓN ==========
+      texto_nota <- ""
+      if (length(años_sin_sexo) > 0) {
+        if (length(años_sin_sexo) == 1) {
+          texto_nota <- paste0("Nota: Año ", años_sin_sexo, " sin desglose por sexo (se muestran totales).")
+        } else {
+          texto_nota <- paste0("Nota: Años ", paste(años_sin_sexo, collapse = ", "), " sin desglose por sexo (se muestran totales).")
+        }
+      }
+      
+      # ========== LAYOUT CON ANOTACIÓN ==========
+      annotations_list <- list(
+        list(
+          text = isolate(texto_alcance()),
+          x = 0.5, y = 1.12,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+          align = "center"
+        ),
+        list(
+          text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+          x = 0.5, y = -0.45,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+          align = "center"
+        )
+      )
+      
+      # Agregar nota si hay años sin sexo
+      if (texto_nota != "") {
+        annotations_list[[length(annotations_list) + 1]] <- list(
+          text = texto_nota,
+          x = 0.5, y = 1.05,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 11, color = "#EAC43E", family = "Arial, sans-serif", style = "italic"),
+          align = "center"
+        )
+      }
+      
+      # ✅ MANTENER: Card NB SÍ aplica en gráfica 3 (CON desglose por sexo cuando existe)
+      if (length(años_con_sexo) > 0) {
+        card_nb <- crear_card_no_binario(datos_extranjero, ambito = "extranjero", tipo_periodo = "anual")
+        if (!is.null(card_nb)) {
+          annotations_list[[length(annotations_list) + 1]] <- card_nb
+        }
+      }
+      
       p <- p %>% layout(
         title = list(
-          text = paste0("Evolución Anual por Sexo (2017-", anio_actual(), ") - Residentes en el Extranjero"),
+          text = paste0("Evolución Anual por Sexo (2020-", anio_actual(), ") - Extranjero"),
           font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
           x = 0.5,
           xanchor = "center"
         ),
         xaxis = list(title = "", type = 'category'),
         yaxis = list(title = "Número de Electores", separatethousands = TRUE),
-        legend = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.20),
-        margin = list(t = 120, b = 140, l = 90, r = 50),
+        legend = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.25),
+        margin = list(t = 130, b = 140, l = 90, r = 50),
         hovermode = 'x unified',
-        annotations = list(
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5, y = 1.12,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            x = 0.5, y = -0.35,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            align = "center"
-          )
-        )
+        annotations = annotations_list
       )
       
-      message("✅ Gráfico 3: Evolución anual por sexo Extranjero renderizado")
+      message("✅ Gráfico 3: Evolución anual por sexo Extranjero (híbrido) renderizado (CON card NB cuando aplica)")
       return(p)
     }
-    
   }) %>%
+    # ✅ CORRECCIÓN v2.6: Agregar ambito_reactivo para cambio de vista automático
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      input$ambito_datos,
+      ambito_reactivo(),  # ✅ v2.6: AGREGADO para cambio de vista
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_historico_3 v2.2 inicializado (LIMPIEZA COMPLETA)")
+  message("✅ graficas_historico_3 v2.6 inicializado")
+  message("   ✅ CORRECCIÓN: ambito_reactivo usado para cambio de vista automático")
 }
+

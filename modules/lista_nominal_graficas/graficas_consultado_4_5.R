@@ -1,17 +1,19 @@
 # modules/lista_nominal_graficas/graficas_consultado_4_5.R
 # Gráficas 4 y 5: Evolución mensual del año consultado (con y sin desglose por sexo)
-# Versión: 1.5 - CORRECCIÓN: Eliminado chequeo de año < 2020, gráficas uniformes para todos los años
+# Versión: 2.0 - CORRECCIÓN: Usar ambito_reactivo para cambio de vista automático
 
 graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta, 
-                                    anio_consultado, texto_alcance, mostrar_graficas_consultadas) {
+                                    anio_consultado, texto_alcance, estado_app, mostrar_graficas_consultadas, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_consultado_4_5 v1.5")
+  message("📊 Inicializando graficas_consultado_4_5 v2.0")
   
   # ========== GRÁFICA 4: EVOLUCIÓN MENSUAL DEL AÑO SELECCIONADO ==========
   
   output$grafico_evolucion_year <- renderPlotly({
     req(input$tipo_corte == "historico")
-    req(input$ambito_datos)
+    
+    # ✅ v2.0: Usar ambito_reactivo en lugar de input$ambito_datos
+    ambito_actual <- ambito_reactivo()
     
     datos_completos <- datos_year_consulta()
     
@@ -39,9 +41,9 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
     
     year_datos <- format(datos_completos$fecha[1], "%Y")
     
-    message("📊 [GRÁFICA 4] Renderizando año ", year_datos, " - Ámbito: ", input$ambito_datos)
+    message("📊 [GRÁFICA 4] Renderizando año ", year_datos, " - Ámbito: ", ambito_actual)
     
-    if (input$ambito_datos == "nacional") {
+    if (ambito_actual == "nacional") {
       
       p <- plot_ly()
       
@@ -78,6 +80,28 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       fechas_datos <- datos_completos$fecha
       etiquetas_meses <- format(fechas_datos, "%b")
       
+      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      annotations_list <- list(
+        list(
+          text = isolate(texto_alcance()),
+          x = 0.5, y = 1.12,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+          align = "center"
+        ),
+        list(
+          text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+          x = 0.5, y = -0.40,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+          align = "center"
+        )
+      )
+      
       p <- p %>% layout(
         title = list(
           text = paste0("Evolución Mensual ", year_datos, " - Padrón y LNE Nacional"),
@@ -98,36 +122,14 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         legend = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.20),
         margin = list(t = 120, b = 140, l = 90, r = 50),
         hovermode = 'x unified',
-        annotations = list(
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5, y = 1.12,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            x = 0.5, y = -0.40,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            align = "center"
-          )
-        )
+        annotations = annotations_list
       )
       
-      message("✅ Gráfico 4: Evolución mensual ", year_datos, " Nacional renderizado")
+      message("✅ Gráfico 4: Evolución mensual ", year_datos, " Nacional renderizado (SIN card NB)")
       return(p)
       
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
-      
-      # ✅ v1.5: ELIMINADO chequeo de año < 2020
-      # Ahora graficamos para TODOS los años (2017-2025)
       
       # Verificar que las columnas existan
       if (!("padron_extranjero" %in% colnames(datos_completos)) ||
@@ -196,6 +198,28 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       fechas_extranjero <- datos_extranjero$fecha
       etiquetas_meses <- format(fechas_extranjero, "%b")
       
+      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      annotations_list <- list(
+        list(
+          text = isolate(texto_alcance()),
+          x = 0.5, y = 1.12,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+          align = "center"
+        ),
+        list(
+          text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+          x = 0.5, y = -0.40,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+          align = "center"
+        )
+      )
+      
       p <- p %>% layout(
         title = list(
           text = paste0("Evolución Mensual ", year_datos, " - Residentes en el Extranjero"),
@@ -216,36 +240,18 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         legend = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.20),
         margin = list(t = 120, b = 140, l = 90, r = 50),
         hovermode = 'x unified',
-        annotations = list(
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5, y = 1.12,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            x = 0.5, y = -0.40,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            align = "center"
-          )
-        )
+        annotations = annotations_list
       )
       
-      message("✅ Gráfico 4: Evolución mensual ", year_datos, " Extranjero renderizado")
+      message("✅ Gráfico 4: Evolución mensual ", year_datos, " Extranjero renderizado (SIN card NB)")
       return(p)
     }
   }) %>%
+    # ✅ CORRECCIÓN v2.0: Agregar ambito_reactivo para cambio de vista automático
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      input$ambito_datos,
+      ambito_reactivo(),  # ✅ v2.0: AGREGADO para cambio de vista
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
@@ -254,7 +260,9 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
   
   output$grafico_evolucion_year_sexo <- renderPlotly({
     req(input$tipo_corte == "historico")
-    req(input$ambito_datos)
+    
+    # ✅ v2.0: Usar ambito_reactivo en lugar de input$ambito_datos
+    ambito_actual <- ambito_reactivo()
     
     # ========== NO MOSTRAR SI NO SE DEBE ==========
     if (!mostrar_graficas_consultadas()) {
@@ -282,10 +290,10 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
     
     year_datos <- format(datos_completos$fecha[1], "%Y")
     
-    message("📊 [GRÁFICA 5] Renderizando año ", year_datos, " - Ámbito: ", input$ambito_datos)
+    message("📊 [GRÁFICA 5] Renderizando año ", year_datos, " - Ámbito: ", ambito_actual)
     
     # ========== GRÁFICA NACIONAL ==========
-    if (input$ambito_datos == "nacional") {
+    if (ambito_actual == "nacional") {
       
       if (!all(c("padron_hombres", "padron_mujeres", "lista_hombres", "lista_mujeres") %in% colnames(datos_completos))) {
         return(plot_ly() %>%
@@ -376,6 +384,34 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       fechas_datos <- datos_completos$fecha
       etiquetas_meses <- format(fechas_datos, "%b")
       
+      # ========== PREPARAR ANNOTATIONS (CON CARD NB) ==========
+      annotations_list <- list(
+        list(
+          text = isolate(texto_alcance()),
+          x = 0.5, y = 1.12,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+          align = "center"
+        ),
+        list(
+          text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+          x = 0.5, y = -0.40,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+          align = "center"
+        )
+      )
+      
+      # ✅ MANTENER v2.0: Card NB SÍ aplica en gráfica 5 (CON desglose por sexo)
+      card_nb <- crear_card_no_binario(datos_completos, ambito = "nacional", tipo_periodo = "mensual", año_consultado = year_datos)
+      if (!is.null(card_nb)) {
+        annotations_list[[length(annotations_list) + 1]] <- card_nb
+      }
+      
       p <- p %>% layout(
         title = list(
           text = paste0("Evolución Mensual ", year_datos, " por Sexo - Padrón y LNE Nacional"),
@@ -402,36 +438,17 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         ),
         margin = list(t = 120, b = 140, l = 90, r = 50),
         hovermode = 'x unified',
-        annotations = list(
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5, y = 1.12,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            x = 0.5, y = -0.40,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            align = "center"
-          )
-        )
+        annotations = annotations_list
       )
       
-      message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Nacional renderizado")
+      message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Nacional renderizado (CON card NB)")
       return(p)
       
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
       
       # Verificar que estamos en ámbito extranjero
-      if (input$ambito_datos != "extranjero") {
+      if (ambito_actual != "extranjero") {
         return(plot_ly() %>%
                  layout(
                    xaxis = list(visible = FALSE),
@@ -447,9 +464,6 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
                    )
                  ))
       }
-      
-      # ✅ v1.5: ELIMINADO chequeo de año < 2020
-      # Ahora graficamos para TODOS los años (2017-2025)
       
       # Verificar columnas de sexo
       cols_sexo_extranjero <- c("padron_extranjero_hombres", "padron_extranjero_mujeres", 
@@ -557,6 +571,34 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       fechas_extranjero <- datos_extranjero$fecha
       etiquetas_meses <- format(fechas_extranjero, "%b")
       
+      # ========== PREPARAR ANNOTATIONS (CON CARD NB) ==========
+      annotations_list <- list(
+        list(
+          text = isolate(texto_alcance()),
+          x = 0.5, y = 1.12,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+          align = "center"
+        ),
+        list(
+          text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+          x = 0.5, y = -0.40,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+          align = "center"
+        )
+      )
+      
+      # ✅ MANTENER v2.0: Card NB SÍ aplica en gráfica 5 (CON desglose por sexo)
+      card_nb <- crear_card_no_binario(datos_extranjero, ambito = "extranjero", tipo_periodo = "mensual", año_consultado = year_datos)
+      if (!is.null(card_nb)) {
+        annotations_list[[length(annotations_list) + 1]] <- card_nb
+      }
+      
       p <- p %>% layout(
         title = list(
           text = paste0("Evolución Mensual ", year_datos, " por Sexo - Residentes en el Extranjero"),
@@ -583,40 +625,24 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         ),
         margin = list(t = 120, b = 140, l = 90, r = 50),
         hovermode = 'x unified',
-        annotations = list(
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5, y = 1.12,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            x = 0.5, y = -0.40,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            align = "center"
-          )
-        )
+        annotations = annotations_list
       )
       
-      message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Extranjero renderizado")
+      message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Extranjero renderizado (CON card NB)")
       return(p)
     }
   }) %>%
+    # ✅ CORRECCIÓN v2.0: Agregar ambito_reactivo para cambio de vista automático
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      input$ambito_datos,
+      ambito_reactivo(),  # ✅ v2.0: AGREGADO para cambio de vista
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_consultado_4_5 v1.5 inicializado (Gráficas uniformes para todos los años 2017-2025)")
+  message("✅ graficas_consultado_4_5 v2.0 inicializado")
+  message("   ✅ CORRECCIÓN: Card NB eliminada de gráfica 4")
+  message("   ✅ MANTIENE: Cards NB en gráfica 5 (desglose por sexo)")
+  message("   ✅ CORRECCIÓN: ambito_reactivo usado para cambio de vista automático")
 }
-

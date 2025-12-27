@@ -1,17 +1,19 @@
 # modules/lista_nominal_graficas/graficas_historico_1_2.R
 # Gráficas históricas 1 y 2: Proyección mensual y Evolución anual
-# Versión: 2.2 - LIMPIEZA: Eliminados mensajes de "datos no disponibles", solo graficar
+# Versión: 2.7 - CORRECCIÓN: Usar ambito_reactivo para cambio de vista automático
 
 graficas_historico_1_2 <- function(input, output, session, datos_year_actual, datos_anuales_completos, 
-                                   anio_actual, texto_alcance, estado_app, mostrar_graficas_anuales) {
+                                   anio_actual, texto_alcance, estado_app, mostrar_graficas_anuales, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_historico_1_2 v2.2")
+  message("📊 Inicializando graficas_historico_1_2 v2.7")
   
   # ========== GRÁFICA 1: EVOLUCIÓN MENSUAL AÑO ACTUAL + PROYECCIÓN ==========
   
   output$grafico_evolucion_2025 <- renderPlotly({
     req(input$tipo_corte == "historico")
-    req(input$ambito_datos)
+    
+    # ✅ v2.7: Usar ambito_reactivo en lugar de input$ambito_datos
+    ambito_actual <- ambito_reactivo()
     
     # ========== NO RENDERIZAR EN ESTADO INICIAL ==========
     if (estado_app() == "inicial") {
@@ -38,9 +40,9 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     
     datos_completos <- datos_year_actual()
     
-    message("📊 [GRÁFICA 1] Renderizando - Estado: ", estado_app(), " | Ámbito: ", input$ambito_datos)
+    message("📊 [GRÁFICA 1] Renderizando - Estado: ", estado_app(), " | Ámbito: ", ambito_actual)
     
-    # ========== ✅ ÚNICO MENSAJE: Sin datos disponibles ==========
+    # ========== SIN DATOS DISPONIBLES ==========
     if (is.null(datos_completos) || !is.data.frame(datos_completos) || nrow(datos_completos) == 0) {
       return(plot_ly() %>%
                layout(
@@ -66,12 +68,11 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     meses_restantes <- 12 - ultimo_mes
     
     # ========== GRÁFICA NACIONAL ==========
-    if (input$ambito_datos == "nacional") {
+    if (ambito_actual == "nacional") {
       
       # Proyectar usando columnas nacionales
       proyeccion <- NULL
       if (meses_restantes > 0) {
-        # Crear dataframe temporal con solo columnas nacionales
         datos_para_proyeccion <- datos_completos
         datos_para_proyeccion$lista_nominal <- datos_para_proyeccion$lista_nacional
         datos_para_proyeccion$padron_electoral <- datos_para_proyeccion$padron_nacional
@@ -146,19 +147,38 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       }
       
-      # ========== CONFIGURACIÓN DEL EJE X CORREGIDA ==========
-      # Combinar fechas reales + fechas proyectadas
+      # ========== CONFIGURACIÓN DEL EJE X ==========
       fechas_reales <- datos_completos$fecha
       
-      # Si hay proyección, combinar fechas
       if (!is.null(proyeccion) && nrow(proyeccion) > 0) {
         fechas_completas_eje <- c(fechas_reales, proyeccion$fecha)
       } else {
         fechas_completas_eje <- fechas_reales
       }
       
-      # Generar etiquetas para todas las fechas
       etiquetas_meses <- format(fechas_completas_eje, "%b")
+      
+      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      annotations_list <- list(
+        list(
+          text = isolate(texto_alcance()),
+          x = 0.5, y = 1.12,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+          align = "center"
+        ),
+        list(
+          text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+          x = 0.5, y = -0.35,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+          align = "center"
+        )
+      )
       
       # Layout con eje X corregido
       p <- p %>% layout(
@@ -190,36 +210,14 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         ),
         margin = list(t = 120, b = 140, l = 90, r = 50),
         hovermode = 'x unified',
-        annotations = list(
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5, y = 1.12,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            x = 0.5, y = -0.35,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            align = "center"
-          )
-        )
+        annotations = annotations_list
       )
       
-      message("✅ Gráfico 1: Proyección ", year_datos, " Nacional renderizado")
+      message("✅ Gráfico 1: Proyección ", year_datos, " Nacional renderizado (SIN card NB)")
       return(p)
       
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
-      
-      # ✅ v2.2: ELIMINADAS todas las validaciones de columnas/datos
-      # Ahora simplemente graficamos con lo que haya (incluso si son 0 o NA)
       
       # Reemplazar NA con 0 para graficar
       datos_extranjero <- datos_completos
@@ -238,7 +236,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       # Proyectar usando columnas extranjero
       proyeccion <- NULL
       if (meses_restantes > 0) {
-        # Crear dataframe temporal
         datos_para_proyeccion <- datos_extranjero
         datos_para_proyeccion$lista_nominal <- datos_para_proyeccion$lista_extranjero
         datos_para_proyeccion$padron_electoral <- datos_para_proyeccion$padron_extranjero
@@ -313,19 +310,38 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       }
       
-      # ========== CONFIGURACIÓN DEL EJE X CORREGIDA ==========
-      # Combinar fechas reales + fechas proyectadas
+      # ========== CONFIGURACIÓN DEL EJE X ==========
       fechas_reales <- datos_extranjero$fecha
       
-      # Si hay proyección, combinar fechas
       if (!is.null(proyeccion) && nrow(proyeccion) > 0) {
         fechas_completas_eje <- c(fechas_reales, proyeccion$fecha)
       } else {
         fechas_completas_eje <- fechas_reales
       }
       
-      # Generar etiquetas para todas las fechas
       etiquetas_meses <- format(fechas_completas_eje, "%b")
+      
+      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      annotations_list <- list(
+        list(
+          text = isolate(texto_alcance()),
+          x = 0.5, y = 1.12,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+          align = "center"
+        ),
+        list(
+          text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+          x = 0.5, y = -0.35,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+          align = "center"
+        )
+      )
       
       # Layout con eje X corregido
       p <- p %>% layout(
@@ -357,37 +373,19 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         ),
         margin = list(t = 120, b = 140, l = 90, r = 50),
         hovermode = 'x unified',
-        annotations = list(
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5, y = 1.12,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            x = 0.5, y = -0.35,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            align = "center"
-          )
-        )
+        annotations = annotations_list
       )
       
-      message("✅ Gráfico 1: Proyección ", year_datos, " Extranjero renderizado")
+      message("✅ Gráfico 1: Proyección ", year_datos, " Extranjero renderizado (SIN card NB)")
       return(p)
     }
     
   }) %>%
+    # ✅ CORRECCIÓN v2.7: Agregar ambito_reactivo para cambio de vista automático
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      input$ambito_datos,
+      ambito_reactivo(),  # ✅ v2.7: AGREGADO para cambio de vista
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
@@ -396,7 +394,9 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
   
   output$grafico_evolucion_anual <- renderPlotly({
     req(input$tipo_corte == "historico")
-    req(input$ambito_datos)
+    
+    # ✅ v2.7: Usar ambito_reactivo en lugar de input$ambito_datos
+    ambito_actual <- ambito_reactivo()
     
     # ========== NO RENDERIZAR EN ESTADO INICIAL ==========
     if (estado_app() == "inicial") {
@@ -423,9 +423,9 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     
     datos_anuales <- datos_anuales_completos()
     
-    message("📊 [GRÁFICA 2] Renderizando - Estado: ", estado_app(), " | Ámbito: ", input$ambito_datos)
+    message("📊 [GRÁFICA 2] Renderizando - Estado: ", estado_app(), " | Ámbito: ", ambito_actual)
     
-    # ========== ✅ ÚNICO MENSAJE: Sin datos disponibles ==========
+    # ========== SIN DATOS DISPONIBLES ==========
     if (is.null(datos_anuales) || !is.data.frame(datos_anuales) || nrow(datos_anuales) == 0) {
       return(plot_ly() %>%
                layout(
@@ -444,7 +444,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     }
     
     # ========== GRÁFICA NACIONAL ==========
-    if (input$ambito_datos == "nacional") {
+    if (ambito_actual == "nacional") {
       
       p <- plot_ly()
       
@@ -480,6 +480,28 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
+      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      annotations_list <- list(
+        list(
+          text = isolate(texto_alcance()),
+          x = 0.5, y = 1.12,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+          align = "center"
+        ),
+        list(
+          text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+          x = 0.5, y = -0.35,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+          align = "center"
+        )
+      )
+      
       # Layout
       p <- p %>% layout(
         title = list(
@@ -493,36 +515,14 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         legend = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.20),
         margin = list(t = 120, b = 140, l = 90, r = 50),
         hovermode = 'x unified',
-        annotations = list(
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5, y = 1.12,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            x = 0.5, y = -0.35,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            align = "center"
-          )
-        )
+        annotations = annotations_list
       )
       
-      message("✅ Gráfico 2: Evolución anual Nacional renderizado")
+      message("✅ Gráfico 2: Evolución anual Nacional renderizado (SIN card NB)")
       return(p)
       
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
-      
-      # ✅ v2.2: ELIMINADO filtro de años >= 2020
-      # Ahora graficamos TODOS los años con lo que haya (incluso 0 o NA)
       
       # Reemplazar NA con 0 para graficar
       datos_extranjero <- datos_anuales
@@ -572,6 +572,28 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
+      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      annotations_list <- list(
+        list(
+          text = isolate(texto_alcance()),
+          x = 0.5, y = 1.12,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+          align = "center"
+        ),
+        list(
+          text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+          x = 0.5, y = -0.35,
+          xref = "paper", yref = "paper",
+          xanchor = "center", yanchor = "top",
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+          align = "center"
+        )
+      )
+      
       # Layout
       p <- p %>% layout(
         title = list(
@@ -585,37 +607,19 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         legend = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.20),
         margin = list(t = 120, b = 140, l = 90, r = 50),
         hovermode = 'x unified',
-        annotations = list(
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5, y = 1.12,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            x = 0.5, y = -0.35,
-            xref = "paper", yref = "paper",
-            xanchor = "center", yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            align = "center"
-          )
-        )
+        annotations = annotations_list
       )
       
-      message("✅ Gráfico 2: Evolución anual Extranjero renderizado")
+      message("✅ Gráfico 2: Evolución anual Extranjero renderizado (SIN card NB)")
       return(p)
     }
     
   }) %>%
+    # ✅ CORRECCIÓN v2.7: Agregar ambito_reactivo para cambio de vista automático
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      input$ambito_datos,
+      ambito_reactivo(),  # ✅ v2.7: AGREGADO para cambio de vista
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
@@ -713,5 +717,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     ))
   })
   
-  message("✅ graficas_historico_1_2 v2.2 inicializado (LIMPIEZA COMPLETA)")
+  message("✅ graficas_historico_1_2 v2.7 inicializado")
+  message("   ✅ CORRECCIÓN: ambito_reactivo usado para cambio de vista automático")
 }

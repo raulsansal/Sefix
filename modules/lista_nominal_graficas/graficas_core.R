@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_core.R
 # Reactives base: caché, filtros, año, estado
-# Versión: 2.4 - CORRECCIÓN CRÍTICA: anio_consultado solo se actualiza con botón Consultar
+# Versión: 2.6 - CORRECCIÓN: ambito_reactivo reacciona en estado "restablecido" (carga inicial)
 
 graficas_core <- function(input, output, session, estado_app) {
   
-  message("📦 Inicializando graficas_core v2.4")
+  message("📦 Inicializando graficas_core v2.6")
   
   # ========== SISTEMA DE CACHÉ GLOBAL ==========
   
@@ -157,9 +157,28 @@ graficas_core <- function(input, output, session, estado_app) {
     return(texto)
   })
   
+  # ========== ✅ v2.6: REACTIVE PARA ÁMBITO (DISPARA EN RESTABLECIDO Y CONSULTADO) ==========
+  
+  ambito_reactivo <- reactive({
+    estado_actual <- estado_app()
+    
+    # ✅ CORRECCIÓN v2.6: Reaccionar si ya salimos del estado inicial
+    # Esto incluye: estado "restablecido" (carga automática) O estado "consultado" (consulta manual)
+    if (estado_actual %in% c("restablecido", "consultado")) {
+      ambito <- input$ambito_datos %||% "nacional"
+      message("🔄 [ambito_reactivo] Estado: ", estado_actual, " - Ámbito: ", ambito)
+      return(ambito)
+    }
+    
+    # En estado inicial, retornar valor por defecto (evita renderizado prematuro)
+    message("⏸️ [ambito_reactivo] Estado inicial - usando ámbito por defecto: nacional")
+    return("nacional")
+  })
+  
   # ========== RETORNAR LISTA DE REACTIVES Y FUNCIONES ==========
   
-  message("✅ graficas_core v2.4 inicializado")
+  message("✅ graficas_core v2.6 inicializado")
+  message("   ✅ CORRECCIÓN v2.6: ambito_reactivo ahora reacciona en estado 'restablecido'")
   
   return(list(
     anio_actual = anio_actual,
@@ -168,6 +187,7 @@ graficas_core <- function(input, output, session, estado_app) {
     mostrar_graficas_consultadas = mostrar_graficas_consultadas,
     filtros_usuario = filtros_usuario,
     texto_alcance = texto_alcance,
-    cache_valido = cache_valido
+    cache_valido = cache_valido,
+    ambito_reactivo = ambito_reactivo  # ✅ REACTIVE CORREGIDO
   ))
 }

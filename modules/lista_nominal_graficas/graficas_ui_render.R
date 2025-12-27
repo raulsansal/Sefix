@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_ui_render.R
 # Renderizado dinámico de UI para gráficas históricas
-# Versión: 2.0 - Control total por botón Consultar
+# Versión: 2.2 - CORRECCIÓN: Agregar ambito_reactivo para cambio de vista automático
 
-graficas_ui_render <- function(input, output, session, estado_app, mostrar_graficas_anuales, mostrar_graficas_consultadas) {
+graficas_ui_render <- function(input, output, session, estado_app, mostrar_graficas_anuales, mostrar_graficas_consultadas, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_ui_render")
+  message("📊 Inicializando graficas_ui_render v2.2")
   
   # ========== RENDERIZADO DINÁMICO DE GRÁFICAS ==========
   
@@ -36,7 +36,9 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
     
     # ========== ✅ AISLAR INPUTS Y REACTIVES PARA EVITAR REACTIVIDAD ==========
     btn_count <- isolate(input$btn_consultar)
-    ambito_actual <- isolate(input$ambito_datos)
+    
+    # ✅ v2.2: Usar ambito_reactivo en lugar de isolate(input$ambito_datos)
+    ambito_actual <- ambito_reactivo()
     
     # ✅ AISLAR las llamadas a los reactives que controlan visibilidad
     mostrar_anuales <- isolate(mostrar_graficas_anuales())
@@ -156,14 +158,19 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
     ))
     
   }) %>%
-    # ========== ✅ BINDEVET CRÍTICO: CONTROLA CUÁNDO SE EJECUTA renderUI ==========
+    # ========== ✅ CORRECCIÓN v2.2: AGREGAR ambito_reactivo PARA CAMBIO DE VISTA ==========
+  # Se ejecuta cuando:
+  # 1. Cambia estado_app (inicial → restablecido → consultado)
+  # 2. Se presiona btn_consultar
+  # 3. Se cambia ambito_reactivo (nacional ↔ extranjero) DESPUÉS de consultar
   bindEvent(
     estado_app(),
     input$btn_consultar,
-    input$ambito_datos,
+    ambito_reactivo(),  # ✅ v2.2: AGREGADO para cambio de vista automático
     ignoreNULL = FALSE,
     ignoreInit = FALSE
   )
   
-  message("✅ graficas_ui_render inicializado")
+  message("✅ graficas_ui_render v2.2 inicializado")
+  message("   ✅ NUEVO: ambito_reactivo agregado a bindEvent para cambio de vista automático")
 }
