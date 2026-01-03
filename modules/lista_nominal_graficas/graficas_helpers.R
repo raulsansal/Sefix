@@ -1,6 +1,6 @@
 # modules/lista_nominal_graficas/graficas_helpers.R
 # Funciones auxiliares para cálculos y proyecciones
-# Versión: 1.6 - CORRECCIÓN: Card NB condensada (Opción C) sin tooltip HTML
+# Versión: 1.7 - CORRECCIÓN: Card NB con tabla de desglose anual
 
 # ========== FUNCIÓN: GENERAR TEXTO DE ALCANCE ==========
 
@@ -37,7 +37,7 @@ generar_texto_alcance <- function(input) {
 }
 
 # ========== FUNCIÓN: CREAR CARD NO BINARIO ==========
-# ✅ v1.6: Implementa OPCIÓN C - Card condensada sin tooltip HTML
+# ✅ v1.7: Card con tabla de desglose anual para gráficas anuales
 
 crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "mensual", año_consultado = NULL) {
   
@@ -56,9 +56,13 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
     if (ambito == "nacional") {
       posibles_padron <- c("padron_nacional_no_binario", "padron_no_binario", "padron_nb")
       posibles_lista <- c("lista_nacional_no_binario", "lista_no_binario", "lista_nb")
+      etiqueta_padron <- "Padrón Nacional"
+      etiqueta_lista <- "Lista Nacional"
     } else {
       posibles_padron <- c("padron_extranjero_no_binario", "padron_no_binario", "padron_nb")
       posibles_lista <- c("lista_extranjero_no_binario", "lista_no_binario", "lista_nb")
+      etiqueta_padron <- "Padrón Extranjero"
+      etiqueta_lista <- "Lista Extranjero"
     }
     
     # Buscar primera columna que exista
@@ -131,10 +135,10 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
       return(NULL)
     }
     
-    # ========== ✅ NUEVA ESTRUCTURA v1.6: CARD CONDENSADA (OPCIÓN C) ==========
+    # ========== DIFERENCIAR ENTRE MENSUAL Y ANUAL ==========
     
     if (tipo_periodo == "mensual") {
-      # ========== CARD MENSUAL ==========
+      # ========== CARD MENSUAL (SIN CAMBIOS) ==========
       
       # Obtener meses con casos (solo nombres)
       meses_con_casos <- datos_con_casos$periodo
@@ -158,9 +162,6 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
       historico_lista <- total_lista
       año_inicio_historico <- año_consultado
       
-      # Si tienes acceso a datos históricos, ajusta aquí:
-      # historico_total <- sum(datos_historicos$padron_nb + datos_historicos$lista_nb)
-      
       # Texto condensado
       texto_card <- paste0(
         "<b style='color:#9B59B6; font-size:12px'>⚧ No Binario</b><br>",
@@ -173,32 +174,52 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
       )
       
     } else {
-      # ========== CARD ANUAL ==========
+      # ========== ✅ CARD ANUAL CON TABLA DE DESGLOSE (v1.7) ==========
       
-      # Obtener años con casos
-      años_con_casos <- datos_con_casos$periodo
+      # Crear tabla de desglose por año
+      desglose <- datos_con_casos[, c("periodo", "padron_nb", "lista_nb")]
+      desglose <- desglose[order(desglose$periodo), ]
       
-      # Limitar a 5 años + "..."
-      if (length(años_con_casos) > 5) {
-        años_texto <- paste0(paste(head(años_con_casos, 5), collapse=", "), "...")
-      } else {
-        años_texto <- paste(años_con_casos, collapse=", ")
+      # Construir filas de la tabla
+      filas_tabla <- c()
+      for (i in 1:nrow(desglose)) {
+        año <- desglose$periodo[i]
+        padron <- desglose$padron_nb[i]
+        lista <- desglose$lista_nb[i]
+        
+        # Formatear números con espacios para alineación
+        padron_str <- sprintf("%4d", padron)
+        lista_str <- sprintf("%4d", lista)
+        
+        fila <- paste0(año, "  ", padron_str, "  ", lista_str)
+        filas_tabla <- c(filas_tabla, fila)
       }
       
-      # Determinar rango de años
-      año_min <- min(as.integer(años_con_casos))
-      año_max <- max(as.integer(años_con_casos))
+      # Agregar fila de totales
+      total_padron_str <- sprintf("%4d", total_padron)
+      total_lista_str <- sprintf("%4d", total_lista)
+      fila_total <- paste0("Total ", total_padron_str, "  ", total_lista_str)
+      filas_tabla <- c(filas_tabla, fila_total)
       
-      # Texto condensado
+      # Unir todas las filas
+      tabla_texto <- paste(filas_tabla, collapse = "<br>")
+      
+      # Construir texto completo de la card
       texto_card <- paste0(
         "<b style='color:#9B59B6; font-size:12px'>⚧ No Binario</b><br>",
-        "<span style='font-size:10px; line-height:1.4'>",
-        "Total: <b>", total_casos, "</b><br>",
-        "P:", total_padron, " | L:", total_lista, "<br>",
-        "Años: ", años_texto, "<br>",
-        "Período: ", año_min, "-", año_max,
+        "<span style='font-size:10px; line-height:1.5'>",
+        "<b>", etiqueta_padron, ": ", total_padron, "</b><br>",
+        "<b>", etiqueta_lista, ": ", total_lista, "</b><br>",
+        "<br>",
+        "<b>Desglose por año:</b><br>",
+        "<span style='font-family:monospace; font-size:9px'>",
+        "Año  Padrón  Lista<br>",
+        tabla_texto,
+        "</span>",
         "</span>"
       )
+      
+      message("✅ [card_nb] Tabla anual creada con ", nrow(desglose), " años")
     }
     
     # ========== POSICIONAMIENTO INTELIGENTE ==========
@@ -441,6 +462,6 @@ tiene_datos_validos <- function(datos, columnas) {
   return(FALSE)
 }
 
-message("✅ graficas_helpers v1.6 cargado")
-message("   ✅ CORRECCIÓN: Card NB condensada (Opción C) implementada")
-
+message("✅ graficas_helpers v1.7 cargado")
+message("   ✅ NUEVA CARACTERÍSTICA: Card NB con tabla de desglose anual")
+message("   ✅ Formato: Padrón Nacional/Extranjero + Lista Nacional/Extranjero + Tabla por año")

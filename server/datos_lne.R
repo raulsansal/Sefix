@@ -1,6 +1,6 @@
 # server/datos_lne.R
 # Sistema de carga de datos de Lista Nominal Electoral (LNE)
-# Versión: 1.3 - CORRECCIÓN: Transformación de datos RESIDENTES EXTRANJERO para años < 2020
+# Versión: 1.4 - CORRECCIÓN CRÍTICA: Buscar fila totales con cve_entidad = NA
 
 library(data.table)
 library(dplyr)
@@ -177,7 +177,7 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
     stop("Fecha inválida: ", fecha)
   }
   
-  # ✅ v1.3: Detectar año del archivo
+  # Detectar año del archivo
   año_archivo <- as.integer(format(fecha, "%Y"))
   
   # Encontrar archivo por fecha
@@ -190,14 +190,13 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   
   message("📂 [cargar_lne] Cargando: ", ruta_archivo)
   
-  # ========== LEER ARCHIVO CSV CON FREAD (MÁS ROBUSTO) ==========
+  # ========== LEER ARCHIVO CSV CON FREAD ==========
   inicio_lectura <- Sys.time()
   
   dt <- tryCatch({
-    # fread es mucho más robusto que read.csv para manejar encoding
     fread(
       ruta_archivo,
-      encoding = "Latin-1",  # INE usa Latin-1
+      encoding = "Latin-1",
       stringsAsFactors = FALSE,
       na.strings = c("", "NA"),
       strip.white = TRUE,
@@ -208,7 +207,6 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
     message("❌ [cargar_lne] Error leyendo CSV con fread: ", e$message)
     message("   Intentando con read.csv...")
     
-    # Fallback a read.csv
     tryCatch({
       df_temp <- read.csv(
         ruta_archivo,
@@ -234,37 +232,61 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   message("📊 [cargar_lne] Filas leídas: ", format(nrow(dt), big.mark = ","))
   message("📊 [cargar_lne] Columnas leídas: ", ncol(dt))
   
-  # Verificar que se leyeron múltiples columnas
   if (ncol(dt) <= 1) {
     message("⚠️ [cargar_lne] ADVERTENCIA: Solo ", ncol(dt), " columna(s) detectada(s)")
     message("   Esto indica un problema con el delimitador")
   }
   
-  # ========== EXTRAER FILA TOTALES ANTES DE NORMALIZAR ==========
+  # ========== ✅ v1.4: EXTRAER FILA TOTALES ANTES DE NORMALIZAR (BUSCAR NA) ==========
   
   fila_totales_raw <- NULL
+  idx_totales <- NULL
   
-  # Buscar "TOTALES" en la PRIMERA columna (sin importar su nombre)
+  # Primera columna (antes de normalizar)
   primera_columna <- dt[[1]]
-  idx_totales <- which(grepl("^TOTALES$", primera_columna, ignore.case = TRUE))
   
-  if (length(idx_totales) > 0) {
-    if (length(idx_totales) > 1) {
-      message("⚠️ Encontradas ", length(idx_totales), " filas TOTALES, usando la última")
-      idx_totales <- idx_totales[length(idx_totales)]
+  # MÉTODO 1: Buscar "TOTALES" (compatibilidad con archivos antiguos)
+  idx_totales_texto <- which(grepl("^TOTALES$", primera_columna, ignore.case = TRUE))
+  
+  # MÉTODO 2: Buscar fila con cve_entidad = NA (archivos actuales del INE)
+  idx_totales_na <- which(is.na(primera_columna))
+  
+  if (length(idx_totales_na) > 0) {
+    # Usar fila con NA (método preferido)
+    if (length(idx_totales_na) > 1) {
+      message("⚠️ Encontradas ", length(idx_totales_na), " filas con NA, usando la última")
+      idx_totales <- idx_totales_na[length(idx_totales_na)]
+    } else {
+      idx_totales <- idx_totales_na[1]
     }
     
-    # Extraer fila completa como lista
     fila_totales_raw <- as.list(dt[idx_totales, ])
-    
-    message("✅ [ANTES NORMALIZAR] Fila TOTALES extraída en posición ", idx_totales)
+    message("✅ [ANTES NORMALIZAR] Fila TOTALES extraída en posición ", idx_totales, " (método: NA)")
     message("   📊 Total columnas en fila: ", length(fila_totales_raw))
     
     # Eliminar fila de totales del dataset
     dt <- dt[-idx_totales, ]
     message("🗑️ [ANTES NORMALIZAR] Fila TOTALES eliminada - Quedan ", nrow(dt), " filas")
+    
+  } else if (length(idx_totales_texto) > 0) {
+    # Usar fila con "TOTALES" (compatibilidad)
+    if (length(idx_totales_texto) > 1) {
+      message("⚠️ Encontradas ", length(idx_totales_texto), " filas TOTALES, usando la última")
+      idx_totales <- idx_totales_texto[length(idx_totales_texto)]
+    } else {
+      idx_totales <- idx_totales_texto[1]
+    }
+    
+    fila_totales_raw <- as.list(dt[idx_totales, ])
+    message("✅ [ANTES NORMALIZAR] Fila TOTALES extraída en posición ", idx_totales, " (método: texto)")
+    message("   📊 Total columnas en fila: ", length(fila_totales_raw))
+    
+    # Eliminar fila de totales del dataset
+    dt <- dt[-idx_totales, ]
+    message("🗑️ [ANTES NORMALIZAR] Fila TOTALES eliminada - Quedan ", nrow(dt), " filas")
+    
   } else {
-    message("⚠️ [ANTES NORMALIZAR] No se encontró fila TOTALES en primera columna")
+    message("⚠️ [ANTES NORMALIZAR] No se encontró fila TOTALES (ni NA ni texto)")
   }
   
   tiempo_lectura <- round(difftime(Sys.time(), inicio_lectura, units = "secs"), 2)
@@ -300,17 +322,15 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
     }
   }
   
-  # ========== ✅ v1.3: TRANSFORMACIÓN PARA RESIDENTES EXTRANJERO (AÑOS < 2020) ==========
+  # ========== v1.3: TRANSFORMACIÓN PARA RESIDENTES EXTRANJERO (AÑOS < 2020) ==========
   
   if (año_archivo < 2020) {
     message("🔄 [TRANSFORMACIÓN v1.3] Procesando datos de RESIDENTES EXTRANJERO para año ", año_archivo)
     
-    # Identificar columnas que necesitamos transformar
     tiene_cabecera <- "cabecera_distrital" %in% colnames(dt)
     tiene_municipio <- "nombre_municipio" %in% colnames(dt)
     
     if (tiene_cabecera || tiene_municipio) {
-      # Identificar filas de RESIDENTES EXTRANJERO
       filas_extranjero <- rep(FALSE, nrow(dt))
       
       if (tiene_cabecera) {
@@ -326,7 +346,6 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
       if (num_filas_extranjero > 0) {
         message("   📍 Encontradas ", num_filas_extranjero, " filas de RESIDENTES EXTRANJERO")
         
-        # Crear columnas extranjero si no existen
         if (!"padron_extranjero" %in% colnames(dt)) {
           dt[, padron_extranjero := NA_real_]
         }
@@ -346,10 +365,8 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
           dt[, lista_extranjero_mujeres := NA_real_]
         }
         
-        # Para filas de RESIDENTES EXTRANJERO: mover datos de nacional → extranjero
         idx_extranjero <- which(filas_extranjero)
         
-        # Copiar valores de nacional a extranjero
         if ("padron_nacional" %in% colnames(dt)) {
           dt[idx_extranjero, padron_extranjero := padron_nacional]
           dt[idx_extranjero, padron_nacional := 0]
@@ -393,7 +410,6 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   fila_totales <- NULL
   
   if (!is.null(fila_totales_raw)) {
-    # Asignar nombres normalizados a los valores RAW
     nombres_normalizados <- colnames(dt)
     
     if (length(fila_totales_raw) == length(nombres_normalizados)) {
@@ -402,7 +418,7 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
       
       message("✅ [DESPUÉS NORMALIZAR] Fila TOTALES procesada con nombres normalizados")
       
-      # Mostrar valores clave (buscar columnas flexiblemente)
+      # Mostrar valores clave
       col_padron_nac <- grep("^padron_nacional$", names(fila_totales), ignore.case = TRUE, value = TRUE)[1]
       col_lista_nac <- grep("^lista_nacional$", names(fila_totales), ignore.case = TRUE, value = TRUE)[1]
       col_padron_ext <- grep("^padron_extranjero$", names(fila_totales), ignore.case = TRUE, value = TRUE)[1]
@@ -449,12 +465,7 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
     dt[, nombre_entidad := entidades[sprintf("%02d", as.integer(clave_entidad))]]
   }
   
-  # ========== MAPEO DE DISTRITO ==========
-  # IMPORTANTE: cabecera_distrital YA viene en el CSV con NOMBRES
-  # Solo crear si NO existe (caso excepcional)
-  
   if (!"cabecera_distrital" %in% colnames(dt)) {
-    # Solo crear si NO existe
     if ("clave_distrito" %in% colnames(dt)) {
       dt[, cabecera_distrital := sprintf("%02d", as.integer(clave_distrito))]
       message("⚠️ cabecera_distrital no encontrada, creada desde clave_distrito")
@@ -463,13 +474,10 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
     message("✅ cabecera_distrital ya existe en CSV con nombres")
   }
   
-  # Crear columna adicional con CÓDIGO de distrito (útil para ordenamiento)
   if ("clave_distrito" %in% colnames(dt)) {
     dt[, codigo_distrito := sprintf("%02d", as.integer(clave_distrito))]
   }
   
-  # IMPORTANTE: nombre_municipio ya viene en el CSV, solo asegurar que existe
-  # Si no existe, crear uno basado en claves
   if (!"nombre_municipio" %in% colnames(dt)) {
     if (all(c("clave_entidad", "clave_municipio") %in% colnames(dt))) {
       dt[, nombre_municipio := paste0(
@@ -509,10 +517,8 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   # ========== APLICAR FILTROS ==========
   inicio_filtros <- Sys.time()
   
-  # ✅ CRÍTICO: Renombrar parámetro de sección ANTES de filtrar para evitar conflicto de nombres
   seccion_filtro <- seccion
   
-  # Aplicar filtros normales
   if (estado != "Nacional" && "nombre_entidad" %in% colnames(dt)) {
     dt <- dt[toupper(nombre_entidad) == toupper(estado)]
     message("🔍 Filtro estado: ", estado, " → ", nrow(dt), " filas")
@@ -528,18 +534,15 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
     message("🔍 Filtro municipio: ", municipio, " → ", nrow(dt), " filas")
   }
   
-  # ✅ CORRECCIÓN CRÍTICA: Usar seccion_filtro y sintaxis correcta de data.table
   if (!is.null(seccion_filtro) && length(seccion_filtro) > 0 && 
       !("Todas" %in% seccion_filtro) && "seccion" %in% colnames(dt)) {
     
-    # Convertir a character para comparación segura
     secciones_char <- as.character(seccion_filtro)
     dt <- dt[as.character(seccion) %in% secciones_char]
     
     message("🔍 Filtro secciones: ", paste(secciones_char, collapse = ", "), " → ", nrow(dt), " filas")
   }
   
-  # ========== FILTRO PARA EXCLUIR EXTRANJERO (SI SE SOLICITA) ==========
   if (!incluir_extranjero && "nombre_entidad" %in% colnames(dt)) {
     dt <- dt[nombre_entidad != "EXTRANJERO"]
     message("🔍 Excluir extranjero → ", nrow(dt), " filas")
@@ -589,4 +592,6 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   return(resultado)
 }
 
-message("✅ datos_lne.R v1.3 cargado (transformación RESIDENTES EXTRANJERO para años < 2020)")
+message("✅ datos_lne.R v1.4 cargado")
+message("   ✅ CORRECCIÓN CRÍTICA: Busca fila totales con cve_entidad = NA")
+message("   ✅ Compatibilidad con archivos antiguos que usan 'TOTALES'")
