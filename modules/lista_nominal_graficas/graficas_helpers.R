@@ -1,6 +1,6 @@
 # modules/lista_nominal_graficas/graficas_helpers.R
 # Funciones auxiliares para cálculos y proyecciones
-# Versión: 1.7 - CORRECCIÓN: Card NB con tabla de desglose anual
+# Versión: 2.1 - CORRECCIÓN: Card condensada con tooltip hover para desglose
 
 # ========== FUNCIÓN: GENERAR TEXTO DE ALCANCE ==========
 
@@ -37,7 +37,7 @@ generar_texto_alcance <- function(input) {
 }
 
 # ========== FUNCIÓN: CREAR CARD NO BINARIO ==========
-# ✅ v1.7: Card con tabla de desglose anual para gráficas anuales
+# ✅ v2.1: Card condensada + tooltip hover con desglose completo
 
 crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "mensual", año_consultado = NULL) {
   
@@ -50,7 +50,6 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
     
     # ========== DETECTAR COLUMNAS DISPONIBLES ==========
     cols_disponibles <- colnames(datos)
-    message("📋 [card_nb] Columnas disponibles: ", paste(head(cols_disponibles, 10), collapse = ", "))
     
     # Posibles nombres de columnas NB
     if (ambito == "nacional") {
@@ -85,156 +84,139 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
     # Si no se encuentran columnas, retornar NULL
     if (is.null(col_padron) || is.null(col_lista)) {
       message("ℹ️ [card_nb] Columnas NB no disponibles para ", ambito)
-      message("   Buscadas padrón: ", paste(posibles_padron, collapse = ", "))
-      message("   Buscadas lista: ", paste(posibles_lista, collapse = ", "))
       return(NULL)
     }
-    
-    message("✅ [card_nb] Columnas encontradas: ", col_padron, ", ", col_lista)
     
     # Reemplazar NA con 0
     datos[[col_padron]][is.na(datos[[col_padron]])] <- 0
     datos[[col_lista]][is.na(datos[[col_lista]])] <- 0
     
-    # Calcular totales
-    total_padron <- sum(datos[[col_padron]], na.rm = TRUE)
-    total_lista <- sum(datos[[col_lista]], na.rm = TRUE)
-    total_casos <- total_padron + total_lista
+    # ========== CALCULAR TOTAL (ÚLTIMO PERÍODO CON DATOS) ==========
+    datos_ordenados <- datos[order(datos$fecha), ]
     
-    # Si no hay casos, no mostrar card
-    if (total_casos == 0) {
-      message("ℹ️ [card_nb] Sin casos NB en este período (P:", total_padron, " L:", total_lista, ")")
+    # Encontrar último período con datos > 0
+    datos_con_casos <- datos_ordenados[datos_ordenados[[col_padron]] + datos_ordenados[[col_lista]] > 0, ]
+    
+    if (nrow(datos_con_casos) == 0) {
+      message("ℹ️ [card_nb] Sin casos NB en ningún período")
       return(NULL)
     }
     
-    # Construir lista de períodos con casos
+    ultima_fila <- datos_con_casos[nrow(datos_con_casos), ]
+    
+    total_padron <- ultima_fila[[col_padron]]
+    total_lista <- ultima_fila[[col_lista]]
+    
+    # Determinar mes/año del último dato
     if (tipo_periodo == "mensual") {
-      if ("fecha" %in% cols_disponibles) {
-        datos$periodo <- format(datos$fecha, "%b")
-      } else {
-        message("⚠️ [card_nb] No hay columna 'fecha' para períodos mensuales")
-        return(NULL)
-      }
+      periodo_texto <- format(ultima_fila$fecha, "%B %Y")  # "Diciembre 2024"
     } else {
-      if ("año" %in% cols_disponibles) {
-        datos$periodo <- as.character(datos$año)
-      } else {
-        message("⚠️ [card_nb] No hay columna 'año' para períodos anuales")
-        return(NULL)
-      }
+      periodo_texto <- format(ultima_fila$fecha, "%Y")  # "2024"
+    }
+    
+    message("📊 [card_nb] Último período con datos: ", periodo_texto, " | P:", total_padron, " L:", total_lista)
+    
+    # ========== PREPARAR DATOS PARA TOOLTIP ==========
+    
+    if (tipo_periodo == "mensual") {
+      datos$periodo <- format(datos$fecha, "%b")
+      datos$periodo_orden <- as.integer(format(datos$fecha, "%m"))
+      
+      # Eliminar duplicados de mes (usar fecha más reciente)
+      fechas_unicas <- aggregate(
+        fecha ~ periodo,
+        data = datos,
+        FUN = max
+      )
+      datos <- merge(datos, fechas_unicas, by = c("periodo", "fecha"))
+      
+    } else {
+      datos$periodo <- as.character(datos$año)
+      datos$periodo_orden <- as.integer(datos$año)
     }
     
     datos$padron_nb <- datos[[col_padron]]
     datos$lista_nb <- datos[[col_lista]]
     
-    # Filtrar solo con casos
+    # ========== FILTRAR SOLO PERÍODOS CON CASOS ==========
     datos_con_casos <- datos[datos$padron_nb + datos$lista_nb > 0, ]
     
     if (nrow(datos_con_casos) == 0) {
-      message("ℹ️ [card_nb] No hay períodos con casos NB")
+      message("ℹ️ [card_nb] Sin casos NB")
       return(NULL)
     }
     
-    # ========== DIFERENCIAR ENTRE MENSUAL Y ANUAL ==========
+    # Ordenar
+    datos_con_casos <- datos_con_casos[order(datos_con_casos$periodo_orden), ]
+    
+    # ========== CREAR TABLA PARA TOOLTIP ==========
+    
+    desglose <- datos_con_casos[, c("periodo", "padron_nb", "lista_nb")]
+    
+    # Construir filas de la tabla
+    filas_tabla <- c()
+    for (i in 1:nrow(desglose)) {
+      periodo <- desglose$periodo[i]
+      padron <- desglose$padron_nb[i]
+      lista <- desglose$lista_nb[i]
+      
+      if (tipo_periodo == "mensual") {
+        # "Jan    25    21"
+        fila <- sprintf("%-7s %4d  %4d", periodo, padron, lista)
+      } else {
+        # "2023    80    75"
+        fila <- sprintf("%4s  %4d  %4d", periodo, padron, lista)
+      }
+      
+      filas_tabla <- c(filas_tabla, fila)
+    }
+    
+    # Unir filas (sin total, valores ya son acumulativos)
+    tabla_texto <- paste(filas_tabla, collapse = "\n")
+    
+    # ========== CONSTRUIR TEXTO DE CARD CONDENSADA ==========
+    
+    texto_card <- paste0(
+      "<b style='color:#9B59B6; font-size:12px'>⚧ No Binario</b><br>",
+      "<span style='font-size:10px; line-height:1.5'>",
+      "<b>", periodo_texto, "</b><br>",
+      "<b>", etiqueta_padron, ": ", total_padron, "</b><br>",
+      "<b>", etiqueta_lista, ": ", total_lista, "</b><br>",
+      "<span style='font-size:8px; color:#666; font-style:italic'>",
+      "(Pase el mouse para ver desglose)",
+      "</span>",
+      "</span>"
+    )
+    
+    # ========== CONSTRUIR TEXTO DE TOOLTIP ==========
     
     if (tipo_periodo == "mensual") {
-      # ========== CARD MENSUAL (SIN CAMBIOS) ==========
-      
-      # Obtener meses con casos (solo nombres)
-      meses_con_casos <- datos_con_casos$periodo
-      
-      # Limitar a 5 meses + "..."
-      if (length(meses_con_casos) > 5) {
-        meses_texto <- paste0(paste(head(meses_con_casos, 5), collapse=", "), "...")
-      } else {
-        meses_texto <- paste(meses_con_casos, collapse=", ")
-      }
-      
-      # Determinar año consultado
-      if (is.null(año_consultado)) {
-        año_consultado <- format(datos$fecha[1], "%Y")
-      }
-      
-      # ========== CALCULAR HISTÓRICO ==========
-      # Para histórico necesitamos datos de años anteriores
-      # Como solo tenemos datos del año actual, usamos placeholder
-      historico_padron <- total_padron
-      historico_lista <- total_lista
-      año_inicio_historico <- año_consultado
-      
-      # Texto condensado
-      texto_card <- paste0(
-        "<b style='color:#9B59B6; font-size:12px'>⚧ No Binario</b><br>",
-        "<span style='font-size:10px; line-height:1.4'>",
-        año_consultado, ": <b>", total_casos, "</b><br>",
-        "P:", total_padron, " | L:", total_lista, "<br>",
-        "<i>", meses_texto, "</i><br>",
-        "Hist: P:", historico_padron, " L:", historico_lista,
-        "</span>"
-      )
-      
+      encabezado_tooltip <- "Desglose mensual"
+      header_tabla <- "Mes     Padrón  Lista"
     } else {
-      # ========== ✅ CARD ANUAL CON TABLA DE DESGLOSE (v1.7) ==========
-      
-      # Crear tabla de desglose por año
-      desglose <- datos_con_casos[, c("periodo", "padron_nb", "lista_nb")]
-      desglose <- desglose[order(desglose$periodo), ]
-      
-      # Construir filas de la tabla
-      filas_tabla <- c()
-      for (i in 1:nrow(desglose)) {
-        año <- desglose$periodo[i]
-        padron <- desglose$padron_nb[i]
-        lista <- desglose$lista_nb[i]
-        
-        # Formatear números con espacios para alineación
-        padron_str <- sprintf("%4d", padron)
-        lista_str <- sprintf("%4d", lista)
-        
-        fila <- paste0(año, "  ", padron_str, "  ", lista_str)
-        filas_tabla <- c(filas_tabla, fila)
-      }
-      
-      # Agregar fila de totales
-      total_padron_str <- sprintf("%4d", total_padron)
-      total_lista_str <- sprintf("%4d", total_lista)
-      fila_total <- paste0("Total ", total_padron_str, "  ", total_lista_str)
-      filas_tabla <- c(filas_tabla, fila_total)
-      
-      # Unir todas las filas
-      tabla_texto <- paste(filas_tabla, collapse = "<br>")
-      
-      # Construir texto completo de la card
-      texto_card <- paste0(
-        "<b style='color:#9B59B6; font-size:12px'>⚧ No Binario</b><br>",
-        "<span style='font-size:10px; line-height:1.5'>",
-        "<b>", etiqueta_padron, ": ", total_padron, "</b><br>",
-        "<b>", etiqueta_lista, ": ", total_lista, "</b><br>",
-        "<br>",
-        "<b>Desglose por año:</b><br>",
-        "<span style='font-family:monospace; font-size:9px'>",
-        "Año  Padrón  Lista<br>",
-        tabla_texto,
-        "</span>",
-        "</span>"
-      )
-      
-      message("✅ [card_nb] Tabla anual creada con ", nrow(desglose), " años")
+      encabezado_tooltip <- "Desglose anual"
+      header_tabla <- "Año   Padrón  Lista"
     }
+    
+    texto_tooltip <- paste0(
+      encabezado_tooltip, "\n",
+      strrep("─", 22), "\n",
+      header_tabla, "\n",
+      tabla_texto
+    )
+    
+    message("✅ [card_nb] Card creada con ", nrow(desglose), " períodos en tooltip")
     
     # ========== POSICIONAMIENTO INTELIGENTE ==========
     
     if (tipo_periodo == "anual") {
-      # Anual: siempre arriba izquierda
       pos_x <- 0.08
       pos_y <- 0.92
-      message("📍 [card_nb] Posición ANUAL: arriba izquierda")
     } else {
-      # Mensual: detectar tendencia para evitar superposición
+      # Mensual: detectar tendencia
       if (nrow(datos) >= 3) {
         ultimos_3 <- tail(datos, 3)
         
-        # Buscar columna de referencia
         col_ref <- NULL
         if ("lista_nacional" %in% colnames(ultimos_3)) {
           col_ref <- "lista_nacional"
@@ -246,22 +228,11 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
           valores <- ultimos_3[[col_ref]][!is.na(ultimos_3[[col_ref]])]
           if (length(valores) >= 2) {
             pendiente <- valores[length(valores)] - valores[1]
-            if (pendiente > 0) {
-              # Tendencia ascendente → Card abajo derecha
-              pos_x <- 0.75
-              pos_y <- 0.15
-              message("📈 [card_nb] Tendencia ascendente → Card abajo derecha")
-            } else {
-              # Tendencia descendente → Card arriba derecha
-              pos_x <- 0.75
-              pos_y <- 0.85
-              message("📉 [card_nb] Tendencia descendente → Card arriba derecha")
-            }
+            pos_x <- if(pendiente > 0) 0.75 else 0.75
+            pos_y <- if(pendiente > 0) 0.15 else 0.85
           } else {
-            # Por defecto: arriba derecha
             pos_x <- 0.75
             pos_y <- 0.85
-            message("📍 [card_nb] Posición por defecto: arriba derecha")
           }
         } else {
           pos_x <- 0.75
@@ -273,10 +244,20 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
       }
     }
     
-    # ========== CREAR ANNOTATION ==========
+    # ========== CREAR ANNOTATION CON HOVERTEXT ==========
     
     annotation <- list(
       text = texto_card,
+      hovertext = texto_tooltip,  # ✅ v2.1: TOOLTIP
+      hoverlabel = list(
+        bgcolor = "rgba(255, 255, 255, 0.98)",
+        bordercolor = "#9B59B6",
+        font = list(
+          family = "Courier New, monospace",
+          size = 11,
+          color = "#333"
+        )
+      ),
       x = pos_x,
       y = pos_y,
       xref = "paper",
@@ -295,7 +276,7 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
       )
     )
     
-    message("✅ [card_nb] Card creada - Casos totales: ", total_casos, " | Posición: (", pos_x, ", ", pos_y, ")")
+    message("✅ [card_nb] Card creada - Hover habilitado")
     return(annotation)
     
   }, error = function(e) {
@@ -462,6 +443,9 @@ tiene_datos_validos <- function(datos, columnas) {
   return(FALSE)
 }
 
-message("✅ graficas_helpers v1.7 cargado")
-message("   ✅ NUEVA CARACTERÍSTICA: Card NB con tabla de desglose anual")
-message("   ✅ Formato: Padrón Nacional/Extranjero + Lista Nacional/Extranjero + Tabla por año")
+message("✅ graficas_helpers v2.1 cargado")
+message("   ✅ CORRECCIÓN: Card condensada con tooltip hover")
+message("   ✅ Solo muestra períodos con datos > 0")
+message("   ✅ Tooltip con desglose completo (sin total, valores acumulativos)")
+message("   ✅ Indicador visual: '(Pase el mouse para ver desglose)'")
+

@@ -994,8 +994,8 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
   }
   
   message("✅ Módulo lista_nominal_server_graficas v1.2 inicializado correctamente")
-    message("   ✅ Columnas NB agregadas en datos_year_actual, datos_year_consulta y datos_anuales_completos")
-
+  message("   ✅ Columnas NB agregadas en datos_year_actual, datos_year_consulta y datos_anuales_completos")
+  
   # ========== GRÁFICA 1: EVOLUCIÓN MENSUAL AÑO ACTUAL + PROYECCIÓN ==========
   output$grafico_evolucion_2025 <- renderPlotly({
     req(input$tipo_corte == "historico")
@@ -3536,8 +3536,5 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   message("✅ Módulo lista_nominal_server_graficas inicializado correctamente")
- 
-  }
-
-
-
+  
+}
