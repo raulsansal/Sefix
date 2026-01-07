@@ -1,64 +1,48 @@
-# === Carpetas y archivos de datos (no subir a GitHub) ===
-data/
-data/
-results/
-*.csv
-*.xlsx
-*.rds
-*.db
-*.sqlite
-modules/viz_geografica_ui.R
-modules/viz_geografica_server.R
-
-# === Archivos temporales del sistema (macOS) ===
+# Archivos temporales del sistema (macOS)
 .DS_Store
 ._*
+**/.DS_Store
+**/._*
 .Spotlight-V100
 .Trashes
 .fseventsd
+.Rapp.history
 
-# === Caché y archivos temporales de R / RStudio ===
+# Caché y archivos temporales de R
 .Rproj.user/
 .Rhistory
 .Rdata
-.Rproj
-*.Rproj
+.RData
 *.Rhistory
-*.Rdata
+*.RData
 *.sqlite-shm
 *.sqlite-wal
-
-# === Caché de R Markdown y knitr ===
-knitr/
 cache/
 *_cache/
 
-# === Paquetes y librerías locales ===
-/renv/library/
-/renv/staging/
-/renv/snapshot.R
-/renv/activate.R
-/renv/settings.json
+# Configuración de deploy
+rsconnect/
 
-# === Archivos generados por Shiny ===
-www/*
-/shinyapps/
-/shiny/
+# Variables de entorno
+.Renviron
+.env
 
-# === Archivos de sesión y logs ===
+# Logs y temporales
 *.log
 *.tmp
 *.bak
 *.swp
 *~
-/session_info.txt
 
-# === Entornos virtuales (por si usas Python u otros) ===
-venv/
-env/
-__pycache__/
-
-# === Archivos específicos del sistema ===
-.DS_Store?
+# Sistema Windows
 ehthumbs.db
 Thumbs.db
+
+# ========== DATOS YA EN FIREBASE ==========
+# Los datos ahora están en Firebase Storage
+# No necesitamos subirlos al repositorio
+data/
+*.csv
+*.xlsx
+*.rds
+

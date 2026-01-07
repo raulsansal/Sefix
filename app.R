@@ -24,13 +24,22 @@ library(tidyr)
 library(mapview)
 library(data.table) 
 library(shinycssloaders)
+library(httr)  # AGREGAR ESTA LÍNEA
+
+# ========== CARGAR SISTEMA DE FIREBASE (ANTES QUE TODO) ==========
+if (file.exists("firebase_loaders.R")) {
+  source("firebase_loaders.R")
+  message("✅ firebase_loaders.R cargado")
+} else {
+  stop("❌ No se encontró firebase_loaders.R")
+}
 
 # Cargar archivos compartidos
 source("server/partidos_mapping.R")
 source("server/datos.R")
 source("server/partidos_colores.R")
 
-# IMPORTANTE: Cargar módulo de LNE DESPUÉS de cargar utils_lne.R
+# Cargar módulo de LNE
 if (file.exists("utils_lne.R")) {
   source("utils_lne.R")
   message("✅ utils_lne.R cargado")
@@ -45,7 +54,7 @@ if (file.exists("server/datos_lne.R")) {
   stop("❌ No se encontró server/datos_lne.R")
 }
 
-# Cargar módulos de UI y server para cada pestaña
+# Cargar módulos de UI y server
 source("modules/elecciones_federales_ui.R")
 source("modules/elecciones_federales_server.R")
 source("modules/viz_geografica_ui.R")

@@ -1,88 +1,39 @@
 # utils_lne.R
 # Funciones utilitarias para manejo de datos de Lista Nominal Electoral (LNE)
+# Versión: 2.0 - FIREBASE STORAGE
 
 library(data.table)
-library(here)
 
-#' @title Encontrar directorios de datos de la Lista Nominal Electoral
-#' @description Busca las rutas de los directorios de datos históricos y semanales de la LNE.
-#' @return Lista con rutas a los directorios 'historico' y 'semanal'
-find_lne_data_dirs <- function() {
-  base_path <- here::here("data", "pdln")
-  
-  rutas <- list(
-    historico = file.path(base_path, "historico"),
-    semanal = file.path(base_path, "semanal")
-  )
-  
-  for (nombre in names(rutas)) {
-    if (!dir.exists(rutas[[nombre]])) {
-      warning(paste("⚠️ Directorio no encontrado:", rutas[[nombre]]))
-    } else {
-      message("✅ Directorio LNE encontrado:", nombre, "→", rutas[[nombre]])
-    }
-  }
-  
-  return(rutas)
+# Cargar sistema de Firebase
+if (file.exists("firebase_loaders.R")) {
+  source("firebase_loaders.R")
+  message("✅ firebase_loaders.R cargado en utils_lne.R")
+} else {
+  stop("❌ No se encontró firebase_loaders.R")
 }
 
-#' @title Extraer fecha de nombre de archivo LNE
-#' @param archivo Nombre del archivo (ej. derfe_pdln_20241031_base.csv)
-#' @return Fecha en formato Date o NULL si no coincide
-extract_fecha_lne <- function(archivo) {
-  # Patrón: derfe_pdln_YYYYMMDD_...
-  m <- regexec("derfe_pdln_(\\d{8})_", archivo)
-  match <- regmatches(archivo, m)[[1]]
-  
-  if (length(match) < 2) return(NULL)
-  
-  fecha_str <- match[2]
-  tryCatch({
-    as.Date(fecha_str, format = "%Y%m%d")
-  }, error = function(e) {
-    message("⚠️ Fecha inválida en archivo: ", archivo)
-    return(NULL)
-  })
-}
-
-#' @title Generar catálogo de fechas disponibles
-#' @description Escanea directorios y genera listas de fechas disponibles por tipo
+#' @title Generar catálogo de fechas disponibles desde Firebase
+#' @description Genera listas de fechas disponibles por tipo
 #' @return Lista con fechas históricas y semanales
 build_lne_catalog <- function() {
-  dirs <- find_lne_data_dirs()
+  
+  message("🔍 Construyendo catálogo LNE desde Firebase Storage...")
+  
+  # Obtener fechas disponibles
+  fechas <- listar_fechas_disponibles_firebase()
   
   catalog <- list(
-    historico = character(0),
-    semanal = list(edad = character(0), origen = character(0), sexo = character(0))
+    historico = fechas$historico,
+    semanal = list(
+      edad = fechas$semanal,
+      origen = fechas$semanal,
+      sexo = fechas$semanal
+    ),
+    semanal_comun = fechas$semanal
   )
   
-  # --- Histórico ---
-  if (dir.exists(dirs$historico)) {
-    files_hist <- list.files(dirs$historico, pattern = "^derfe_pdln_\\d{8}_base\\.csv$", full.names = FALSE)
-    fechas_hist <- sapply(files_hist, extract_fecha_lne, USE.NAMES = FALSE)
-    fechas_hist <- fechas_hist[!sapply(fechas_hist, is.null)]
-    catalog$historico <- sort(unique(as.Date(unlist(fechas_hist), origin = "1970-01-01")), decreasing = TRUE)
-    message("📅 Fechas históricas encontradas: ", length(catalog$historico))
-  }
-  
-  # --- Semanal ---
-  if (dir.exists(dirs$semanal)) {
-    for (tipo in c("edad", "origen", "sexo")) {
-      pattern <- paste0("^derfe_pdln_\\d{8}_", tipo, "\\.csv$")
-      files_sem <- list.files(dirs$semanal, pattern = pattern, full.names = FALSE)
-      fechas_sem <- sapply(files_sem, extract_fecha_lne, USE.NAMES = FALSE)
-      fechas_sem <- fechas_sem[!sapply(fechas_sem, is.null)]
-      catalog$semanal[[tipo]] <- sort(unique(as.Date(unlist(fechas_sem), origin = "1970-01-01")), decreasing = TRUE)
-    }
-    message("📅 Fechas semanales (edad): ", length(catalog$semanal$edad))
-    message("📅 Fechas semanales (origen): ", length(catalog$semanal$origen))
-    message("📅 Fechas semanales (sexo): ", length(catalog$semanal$sexo))
-  }
-  
-  # Intersección de fechas semanales (solo fechas con los 3 archivos)
-  fechas_comunes <- Reduce(intersect, catalog$semanal)
-  catalog$semanal_comun <- sort(fechas_comunes, decreasing = TRUE)
-  message("📅 Fechas semanales completas (edad+origen+sexo): ", length(catalog$semanal_comun))
+  message("📅 Fechas históricas: ", length(catalog$historico))
+  message("📅 Fechas semanales: ", length(catalog$semanal_comun))
   
   return(catalog)
 }
@@ -91,65 +42,31 @@ build_lne_catalog <- function() {
 #' @description Carga un archivo semanal reciente y extrae el mapeo de claves a nombres
 #' @return Lista con mapeos: distritos (clave → nombre) y municipios (clave → nombre)
 crear_catalogo_geografico_lne <- function() {
-  message("🗺️ Creando catálogo geográfico desde datos semanales...")
+  message("🗺️ Creando catálogo geográfico desde Firebase Storage...")
   
-  dirs <- find_lne_data_dirs()
+  # Usar archivo semanal más reciente (origen tiene toda la info geográfica)
+  fecha_reciente <- "20250206"  # Actualizar según necesidad
   
-  if (!dir.exists(dirs$semanal)) {
-    message("❌ Directorio semanal no existe")
-    return(list(distritos = character(0), municipios = character(0)))
-  }
-  
-  # Buscar el archivo semanal más reciente (origen tiene toda la info geográfica)
-  archivos_origen <- list.files(dirs$semanal, pattern = "^derfe_pdln_\\d{8}_origen\\.csv$", full.names = TRUE)
-  
-  if (length(archivos_origen) == 0) {
-    message("❌ No se encontraron archivos semanales de origen")
-    return(list(distritos = character(0), municipios = character(0)))
-  }
-  
-  # Usar el más reciente
-  archivo_mas_reciente <- tail(sort(archivos_origen), 1)
-  message("📂 Usando archivo: ", basename(archivo_mas_reciente))
-  
-  # Cargar archivo
-  dt <- tryCatch({
-    df <- data.table::fread(
-      archivo_mas_reciente,
-      header = TRUE,
-      sep = "auto",
-      stringsAsFactors = FALSE,
-      encoding = "UTF-8",
-      check.names = FALSE,
-      quote = "\"",
-      na.strings = c("", "NA"),
-      strip.white = TRUE,
-      fill = TRUE,
-      data.table = TRUE
-    )
-    
-    # Normalizar columnas
-    df <- normalizar_columnas_semanal(df)
-    df
-  }, error = function(e) {
-    message("❌ Error cargando archivo para catálogo: ", e$message)
-    return(NULL)
-  })
+  # Cargar desde Firebase
+  dt <- cargar_pdln_semanal_firebase(fecha_reciente, tipo = "origen")
   
   if (is.null(dt) || nrow(dt) == 0) {
+    message("❌ No se pudo cargar archivo para catálogo geográfico")
     return(list(distritos = character(0), municipios = character(0)))
   }
+  
+  # Normalizar columnas
+  dt <- normalizar_columnas_semanal(dt)
   
   # Crear mapeos
   mapeo_distritos <- character(0)
   mapeo_municipios <- character(0)
   
-  # Mapeo de distritos: clave_entidad + clave_distrito → cabecera_distrital
+  # Mapeo de distritos
   if (all(c("clave_entidad", "clave_distrito", "cabecera_distrital") %in% colnames(dt))) {
     dt_distritos <- unique(dt[!is.na(cabecera_distrital) & cabecera_distrital != "", 
                               .(clave_entidad, clave_distrito, cabecera_distrital)])
     
-    # Crear clave compuesta: "ENTIDAD_DISTRITO"
     dt_distritos[, clave_compuesta := paste(clave_entidad, clave_distrito, sep = "_")]
     
     mapeo_distritos <- setNames(
@@ -160,12 +77,11 @@ crear_catalogo_geografico_lne <- function() {
     message("✅ Mapeo distritos creado: ", length(mapeo_distritos), " registros")
   }
   
-  # Mapeo de municipios: clave_entidad + clave_municipio → nombre_municipio
+  # Mapeo de municipios
   if (all(c("clave_entidad", "clave_municipio", "nombre_municipio") %in% colnames(dt))) {
     dt_municipios <- unique(dt[!is.na(nombre_municipio) & nombre_municipio != "", 
                                .(clave_entidad, clave_municipio, nombre_municipio)])
     
-    # Crear clave compuesta: "ENTIDAD_MUNICIPIO"
     dt_municipios[, clave_compuesta := paste(clave_entidad, clave_municipio, sep = "_")]
     
     mapeo_municipios <- setNames(
@@ -191,10 +107,9 @@ crear_catalogo_geografico_lne <- function() {
 normalizar_columnas_historico <- function(dt) {
   
   cols_originales <- colnames(dt)
-  message("🔍 Columnas originales del CSV: ", paste(head(cols_originales, 10), collapse = " | "))
   
   tryCatch({
-    # Limpiar nombres de columnas (quitar saltos de línea y espacios extra)
+    # Limpiar nombres de columnas
     cols_limpios <- gsub("\n", " ", cols_originales)
     cols_limpios <- gsub("\\s+", " ", cols_limpios)
     cols_limpios <- trimws(cols_limpios)
@@ -217,8 +132,6 @@ normalizar_columnas_historico <- function(dt) {
       setnames(dt, "SECCION", "seccion", skip_absent = TRUE)
     }
     
-    message("✅ Columnas geográficas normalizadas")
-    
   }, error = function(e) {
     message("⚠️ Error al normalizar columnas históricas: ", e$message)
   })
@@ -230,30 +143,25 @@ normalizar_columnas_historico <- function(dt) {
 #' @param dt data.table con columnas originales
 #' @return data.table con columnas normalizadas
 normalizar_columnas_semanal <- function(dt) {
-  # CRÍTICO: Si solo hay 1 columna, el archivo no se parseó correctamente
+  
+  # Si solo hay 1 columna, re-parsear
   if (ncol(dt) == 1) {
-    message("⚠️ Solo 1 columna detectada, intentando re-parsear con separador de tabulador")
+    message("⚠️ Solo 1 columna detectada, intentando re-parsear con tabulador")
     
-    # Obtener el texto crudo de la única columna
     primera_col <- names(dt)[1]
     
-    # Si la primera columna contiene tabuladores, necesitamos re-parsear
     if (grepl("\t", primera_col)) {
-      message("✅ Detectados tabuladores en el encabezado, re-parseando...")
+      message("✅ Detectados tabuladores, re-parseando...")
       
-      # Separar el encabezado por tabulador
       headers <- strsplit(primera_col, "\t")[[1]]
       headers <- trimws(headers)
       
-      # Separar cada fila por tabulador
       filas_parseadas <- lapply(1:nrow(dt), function(i) {
         valores <- strsplit(as.character(dt[[primera_col]][i]), "\t")[[1]]
         valores <- trimws(valores)
         
-        # Asegurarse de que tenga la misma longitud que los headers
         if (length(valores) < length(headers)) {
           valores <- c(valores, rep(NA, length(headers) - length(valores)))
-          
         } else if (length(valores) > length(headers)) {
           valores <- valores[1:length(headers)]
         }
@@ -261,8 +169,7 @@ normalizar_columnas_semanal <- function(dt) {
         return(valores)
       })
       
-      # Crear nuevo data.table correctamente parseado
-      dt_nuevo <- data.table::data.table(do.call(rbind, filas_parseadas))
+      dt_nuevo <- data.table(do.call(rbind, filas_parseadas))
       colnames(dt_nuevo) <- headers
       
       message("✅ Re-parseado exitoso: ", ncol(dt_nuevo), " columnas")
@@ -270,10 +177,9 @@ normalizar_columnas_semanal <- function(dt) {
     }
   }
   
-  # Ahora normalizar nombres de columnas
+  # Normalizar nombres
   cols_originales <- colnames(dt)
   
-  # Limpiar espacios y saltos de línea
   cols_nuevas <- gsub("\n", " ", cols_originales, fixed = TRUE)
   cols_nuevas <- gsub("\r", "", cols_nuevas, fixed = TRUE)
   cols_nuevas <- gsub("\\s+", " ", cols_nuevas)
@@ -281,7 +187,7 @@ normalizar_columnas_semanal <- function(dt) {
   
   setnames(dt, cols_originales, cols_nuevas, skip_absent = TRUE)
   
-  # Renombrar columnas geográficas estándar
+  # Mapeo de nombres estándar
   mapeo_nombres <- c(
     "CLAVE ENTIDAD" = "clave_entidad",
     "NOMBRE ENTIDAD" = "nombre_entidad",
@@ -303,12 +209,8 @@ normalizar_columnas_semanal <- function(dt) {
   for (viejo in names(mapeo_nombres)) {
     if (viejo %in% colnames(dt)) {
       setnames(dt, viejo, mapeo_nombres[[viejo]], skip_absent = TRUE)
-      message("✅ Renombrado: ", viejo, " → ", mapeo_nombres[[viejo]])
     }
   }
-  
-  message("✅ Normalización completada: ", ncol(dt), " columnas")
-  message("📋 Columnas finales: ", paste(head(colnames(dt), 10), collapse = ", "))
   
   return(dt)
 }
@@ -360,9 +262,7 @@ catalogo_entidades <- function() {
 #' @return data.table limpio
 limpiar_filas_especiales <- function(dt, incluir_extranjero = TRUE, incluir_totales = FALSE) {
   
-  # Identificar fila de totales (última fila usualmente, o donde clave_entidad == "TOTALES")
   if (!incluir_totales) {
-    # Detectar por contenido de texto "TOTALES" en cualquier columna de texto
     cols_texto <- sapply(dt, is.character)
     if (any(cols_texto)) {
       filas_totales <- apply(dt[, ..cols_texto], 1, function(row) any(grepl("TOTALES", row, ignore.case = TRUE)))
@@ -373,7 +273,6 @@ limpiar_filas_especiales <- function(dt, incluir_extranjero = TRUE, incluir_tota
     }
   }
   
-  # Identificar residentes extranjero (clave_entidad == "1" o "0" y distrito == "0")
   if (!incluir_extranjero) {
     if ("clave_entidad" %in% colnames(dt) && "clave_distrito" %in% colnames(dt)) {
       dt <- dt[!(clave_entidad %in% c("0", "1") & clave_distrito == "0")]
@@ -387,39 +286,21 @@ limpiar_filas_especiales <- function(dt, incluir_extranjero = TRUE, incluir_tota
 #' @title Validar integridad de datos cargados
 #' @param dt data.table con datos LNE
 #' @param tipo "historico" o "semanal"
-#' @return Lista con resultado de validación (valido = TRUE/FALSE, mensajes = character vector)
+#' @return Lista con resultado de validación
 validar_datos_lne <- function(dt, tipo = "historico") {
   resultado <- list(valido = TRUE, mensajes = character(0))
   
-  # Verificar que no esté vacío
   if (nrow(dt) == 0) {
     resultado$valido <- FALSE
     resultado$mensajes <- c(resultado$mensajes, "❌ Data.table vacío")
     return(resultado)
   }
   
-  # Verificar columnas geográficas
   cols_geograficas <- c("clave_entidad", "clave_distrito", "clave_municipio", "seccion")
   faltantes <- setdiff(cols_geograficas, colnames(dt))
   if (length(faltantes) > 0) {
     resultado$valido <- FALSE
-    resultado$mensajes <- c(resultado$mensajes, paste("❌ Faltan columnas geográficas:", paste(faltantes, collapse = ", ")))
-  }
-  
-  # Verificar columnas numéricas clave
-  if (tipo == "historico") {
-    cols_numericas <- c("padron_electoral", "lista_nominal")
-  } else {
-    cols_numericas <- c("padron_electoral", "lista_nominal")
-  }
-  
-  for (col in cols_numericas) {
-    if (col %in% colnames(dt)) {
-      if (!is.numeric(dt[[col]])) {
-        resultado$valido <- FALSE
-        resultado$mensajes <- c(resultado$mensajes, paste("❌ Columna", col, "no es numérica"))
-      }
-    }
+    resultado$mensajes <- c(resultado$mensajes, paste("❌ Faltan columnas:", paste(faltantes, collapse = ", ")))
   }
   
   if (resultado$valido) {
@@ -428,3 +309,5 @@ validar_datos_lne <- function(dt, tipo = "historico") {
   
   return(resultado)
 }
+
+message("✅ utils_lne.R v2.0 cargado (Firebase Storage)")
