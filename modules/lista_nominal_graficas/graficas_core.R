@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_core.R
 # Reactives base: caché, filtros, año, estado
-# Versión: 2.7 - CORRECCIÓN CRÍTICA: texto_alcance usa filtros_usuario en lugar de input
+# Versión: 2.8 - CORRECCIÓN: Validación de sección para manejar vectores correctamente
 
 graficas_core <- function(input, output, session, estado_app) {
   
-  message("📦 Inicializando graficas_core v2.7")
+  message("📦 Inicializando graficas_core v2.8")
   
   # ========== SISTEMA DE CACHÉ GLOBAL ==========
   
@@ -167,7 +167,10 @@ graficas_core <- function(input, output, session, estado_app) {
     partes <- c(partes, paste0("Municipio: ", filtros$municipio))
     
     seccion <- filtros$seccion
-    if (is.null(seccion) || length(seccion) == 0 || seccion == "Todas") {
+    # ✅ v2.8: Validación correcta para vectores de secciones
+    if (is.null(seccion) || length(seccion) == 0 || (length(seccion) == 1 && seccion == "Todas")) {
+      partes <- c(partes, "Sección: Todas")
+    } else if ("Todas" %in% seccion) {
       partes <- c(partes, "Sección: Todas")
     } else if (length(seccion) == 1) {
       partes <- c(partes, paste0("Sección: ", seccion))
@@ -202,8 +205,9 @@ graficas_core <- function(input, output, session, estado_app) {
   
   # ========== RETORNAR LISTA DE REACTIVES Y FUNCIONES ==========
   
-  message("✅ graficas_core v2.7 inicializado")
-  message("   ✅ CORRECCIÓN v2.7: texto_alcance usa filtros_usuario (reactivo a estado)")
+  message("✅ graficas_core v2.8 inicializado")
+  message("   ✅ CORRECCIÓN v2.8: Validación de sección para vectores (evita error ||)")
+  message("   ✅ MANTIENE v2.7: texto_alcance usa filtros_usuario (reactivo a estado)")
   message("   ✅ MANTIENE v2.6: ambito_reactivo reacciona en estado 'restablecido'")
   
   return(list(
