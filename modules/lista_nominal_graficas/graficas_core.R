@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_core.R
 # Reactives base: caché, filtros, año, estado
-# Versión: 2.6 - CORRECCIÓN: ambito_reactivo reacciona en estado "restablecido" (carga inicial)
+# Versión: 2.7 - CORRECCIÓN CRÍTICA: texto_alcance usa filtros_usuario en lugar de input
 
 graficas_core <- function(input, output, session, estado_app) {
   
-  message("📦 Inicializando graficas_core v2.6")
+  message("📦 Inicializando graficas_core v2.7")
   
   # ========== SISTEMA DE CACHÉ GLOBAL ==========
   
@@ -133,7 +133,10 @@ graficas_core <- function(input, output, session, estado_app) {
   # ========== REACTIVE: FILTROS ACTUALES DEL USUARIO ==========
   
   filtros_usuario <- reactive({
-    if (estado_app() %in% c("inicial", "restablecido")) {
+    estado_actual <- estado_app()
+    
+    # ✅ v2.7: Reaccionar a cambios en estado
+    if (estado_actual %in% c("inicial", "restablecido")) {
       return(list(
         entidad = "Nacional",
         distrito = "Todos",
@@ -151,9 +154,31 @@ graficas_core <- function(input, output, session, estado_app) {
   })
   
   # ========== REACTIVE: TEXTO DE ALCANCE ==========
+  # ✅ v2.7 CORRECCIÓN CRÍTICA: Usar filtros_usuario() en lugar de input
   
   texto_alcance <- reactive({
-    texto <- generar_texto_alcance(input)
+    # Leer filtros del reactive
+    filtros <- filtros_usuario()
+    
+    # Construir texto
+    partes <- c()
+    partes <- c(partes, paste0("Estado: ", filtros$entidad))
+    partes <- c(partes, paste0("Distrito: ", filtros$distrito))
+    partes <- c(partes, paste0("Municipio: ", filtros$municipio))
+    
+    seccion <- filtros$seccion
+    if (is.null(seccion) || length(seccion) == 0 || seccion == "Todas") {
+      partes <- c(partes, "Sección: Todas")
+    } else if (length(seccion) == 1) {
+      partes <- c(partes, paste0("Sección: ", seccion))
+    } else if (length(seccion) <= 5) {
+      partes <- c(partes, paste0("Secciones: ", paste(seccion, collapse = ", ")))
+    } else {
+      partes <- c(partes, paste0("Secciones: ", length(seccion), " seleccionadas"))
+    }
+    
+    texto <- paste(partes, collapse = " - ")
+    message("📋 [texto_alcance] ", texto)
     return(texto)
   })
   
@@ -177,8 +202,9 @@ graficas_core <- function(input, output, session, estado_app) {
   
   # ========== RETORNAR LISTA DE REACTIVES Y FUNCIONES ==========
   
-  message("✅ graficas_core v2.6 inicializado")
-  message("   ✅ CORRECCIÓN v2.6: ambito_reactivo ahora reacciona en estado 'restablecido'")
+  message("✅ graficas_core v2.7 inicializado")
+  message("   ✅ CORRECCIÓN v2.7: texto_alcance usa filtros_usuario (reactivo a estado)")
+  message("   ✅ MANTIENE v2.6: ambito_reactivo reacciona en estado 'restablecido'")
   
   return(list(
     anio_actual = anio_actual,
@@ -188,6 +214,6 @@ graficas_core <- function(input, output, session, estado_app) {
     filtros_usuario = filtros_usuario,
     texto_alcance = texto_alcance,
     cache_valido = cache_valido,
-    ambito_reactivo = ambito_reactivo  # ✅ REACTIVE CORREGIDO
+    ambito_reactivo = ambito_reactivo
   ))
 }

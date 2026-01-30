@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_main.R
 # Función principal que orquesta todos los módulos de gráficas
-# Versión: 1.3 - CORRECCIÓN: Pasar ambito_reactivo a submódulos para permitir cambio de vista
+# Versión: 1.4 - CORRECCIÓN: Pasar ambito_reactivo a graficas_semanal
 
 lista_nominal_server_graficas <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   
-  message("🚀 Iniciando módulo lista_nominal_server_graficas v1.3 (modularizado)")
+  message("🚀 Iniciando módulo lista_nominal_server_graficas v1.4 (modularizado)")
   
   # ========== CARGAR SUBMÓDULOS ==========
   
@@ -36,7 +36,7 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     core_reactives$texto_alcance,
     estado_app,
     core_reactives$mostrar_graficas_anuales,
-    core_reactives$ambito_reactivo  # ✅ v1.3: NUEVO parámetro
+    core_reactives$ambito_reactivo
   )
   
   # 5. GRÁFICA 3 (Histórico - Evolución Anual por Sexo)
@@ -48,7 +48,7 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     core_reactives$texto_alcance,
     estado_app,
     core_reactives$mostrar_graficas_anuales,
-    core_reactives$ambito_reactivo  # ✅ v1.3: NUEVO parámetro
+    core_reactives$ambito_reactivo
   )
   
   # 6. GRÁFICAS 4 Y 5 (Consultado - Evolución Mensual)
@@ -60,7 +60,7 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     core_reactives$texto_alcance,
     estado_app,
     core_reactives$mostrar_graficas_consultadas,
-    core_reactives$ambito_reactivo  # ✅ v1.3: NUEVO parámetro
+    core_reactives$ambito_reactivo
   )
   
   # 7. GRÁFICAS SEMANALES (Barras + Tasa Inclusión)
@@ -69,7 +69,8 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     input, output, session,
     datos_columnas,
     combinacion_valida,
-    core_reactives$texto_alcance
+    core_reactives$texto_alcance,
+    core_reactives$ambito_reactivo  # ✅ v1.4: CORRECCIÓN - Parámetro agregado
   )
   
   # 8. RENDERIZADO DINÁMICO DE UI
@@ -79,10 +80,9 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     estado_app,
     core_reactives$mostrar_graficas_anuales,
     core_reactives$mostrar_graficas_consultadas,
-    core_reactives$ambito_reactivo  # ✅ v1.3: NUEVO parámetro
+    core_reactives$ambito_reactivo
   )
   
-  message("✅ Módulo lista_nominal_server_graficas v1.3 inicializado correctamente")
-  message("   ✅ NUEVO: ambito_reactivo pasado a submódulos para cambio de vista automático")
+  message("✅ Módulo lista_nominal_server_graficas v1.4 inicializado correctamente")
+  message("   ✅ CORRECCIÓN v1.4: ambito_reactivo pasado a graficas_semanal")
 }
-

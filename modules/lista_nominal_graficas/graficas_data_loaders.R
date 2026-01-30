@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_data_loaders.R
 # Reactives de carga de datos: year_actual, year_consulta, anuales
-# Versión: 2.5 - CORRECCIÓN CRÍTICA: Agregar columnas NB en agregación
+# Versión: 2.11 - CORRECCIÓN CRÍTICA: bindCache incluye estado_app para invalidar en restablecer
 
 graficas_data_loaders <- function(input, output, session, anio_actual, anio_consultado, filtros_usuario, estado_app) {
   
-  message("📥 Inicializando graficas_data_loaders v2.5")
+  message("📥 Inicializando graficas_data_loaders v2.11")
   
   # Obtener función cache_valido del entorno padre
   cache_valido <- function(timestamp, max_horas = 24) {
@@ -16,15 +16,37 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
   
   datos_year_actual <- reactive({
     año_actual_valor <- anio_actual()
+    estado_actual <- estado_app()
     
-    # ✅ AISLAR INPUTS PARA EVITAR REACTIVIDAD NO DESEADA
-    filtros <- list(
-      entidad = isolate(input$entidad %||% "Nacional"),
-      distrito = isolate(input$distrito %||% "Todos"),
-      municipio = isolate(input$municipio %||% "Todos"),
-      seccion = isolate(input$seccion %||% "Todas"),
-      ambito = isolate(input$ambito_datos %||% "nacional")
-    )
+    # ✅ SOLUCIÓN DEFINITIVA: En estado restablecido, usar valores por defecto HARDCODEADOS
+    if (estado_actual == "restablecido") {
+      filtros <- list(
+        entidad = "Nacional",
+        distrito = "Todos",
+        municipio = "Todos",
+        seccion = "Todas",
+        ambito = "nacional"
+      )
+      
+      # ✅ CRÍTICO: Invalidar caché en estado restablecido
+      if (exists("LNE_CACHE_GRAFICAS", envir = .GlobalEnv)) {
+        cache_actual <- get("LNE_CACHE_GRAFICAS", envir = .GlobalEnv)
+        cache_actual$datos_year_actual <- NULL
+        cache_actual$timestamp_year <- NULL
+        cache_actual$año_cacheado <- NULL
+        assign("LNE_CACHE_GRAFICAS", cache_actual, envir = .GlobalEnv)
+      }
+      
+    } else {
+      # En estado consultado, leer inputs normalmente
+      filtros <- list(
+        entidad = input$entidad %||% "Nacional",
+        distrito = input$distrito %||% "Todos",
+        municipio = input$municipio %||% "Todos",
+        seccion = input$seccion %||% "Todas",
+        ambito = input$ambito_datos %||% "nacional"
+      )
+    }
     
     # ========== DETERMINAR SI USAR CACHÉ ==========
     es_nacional_sin_filtros <- (
@@ -124,7 +146,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
             as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres)))
           } else NA
           
-          # ========== ✅ CORRECCIÓN v2.5: AGREGAR COLUMNAS NO BINARIO NACIONAL ==========
+          # ========== COLUMNAS NO BINARIO NACIONAL ==========
           padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% names(totales_fila)) {
             as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_no_binario)))
           } else NA
@@ -150,7 +172,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
             as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres)))
           } else NA
           
-          # ========== ✅ CORRECCIÓN v2.5: AGREGAR COLUMNAS NO BINARIO EXTRANJERO ==========
+          # ========== COLUMNAS NO BINARIO EXTRANJERO ==========
           padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% names(totales_fila)) {
             as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_no_binario)))
           } else NA
@@ -173,14 +195,12 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
               padron_mujeres = padron_mujeres,
               lista_hombres = lista_hombres,
               lista_mujeres = lista_mujeres,
-              # ✅ v2.5: Agregar columnas NB nacional
               padron_nacional_no_binario = padron_nacional_no_binario,
               lista_nacional_no_binario = lista_nacional_no_binario,
               padron_extranjero_hombres = padron_extranjero_hombres,
               padron_extranjero_mujeres = padron_extranjero_mujeres,
               lista_extranjero_hombres = lista_extranjero_hombres,
               lista_extranjero_mujeres = lista_extranjero_mujeres,
-              # ✅ v2.5: Agregar columnas NB extranjero
               padron_extranjero_no_binario = padron_extranjero_no_binario,
               lista_extranjero_no_binario = lista_extranjero_no_binario,
               stringsAsFactors = FALSE
@@ -214,7 +234,6 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
             sum(df$lista_nacional_mujeres, na.rm = TRUE)
           } else NA
           
-          # ========== ✅ CORRECCIÓN v2.5: AGREGAR SUMA COLUMNAS NB NACIONAL ==========
           padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% colnames(df)) {
             sum(df$padron_nacional_no_binario, na.rm = TRUE)
           } else NA
@@ -239,7 +258,6 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
             sum(df$lista_extranjero_mujeres, na.rm = TRUE)
           } else NA
           
-          # ========== ✅ CORRECCIÓN v2.5: AGREGAR SUMA COLUMNAS NB EXTRANJERO ==========
           padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% colnames(df)) {
             sum(df$padron_extranjero_no_binario, na.rm = TRUE)
           } else NA
@@ -260,14 +278,12 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
             padron_mujeres = padron_mujeres,
             lista_hombres = lista_hombres,
             lista_mujeres = lista_mujeres,
-            # ✅ v2.5: Agregar columnas NB nacional
             padron_nacional_no_binario = padron_nacional_no_binario,
             lista_nacional_no_binario = lista_nacional_no_binario,
             padron_extranjero_hombres = padron_extranjero_hombres,
             padron_extranjero_mujeres = padron_extranjero_mujeres,
             lista_extranjero_hombres = lista_extranjero_hombres,
             lista_extranjero_mujeres = lista_extranjero_mujeres,
-            # ✅ v2.5: Agregar columnas NB extranjero
             padron_extranjero_no_binario = padron_extranjero_no_binario,
             lista_extranjero_no_binario = lista_extranjero_no_binario,
             stringsAsFactors = FALSE
@@ -414,7 +430,6 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
             as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres)))
           } else NA
           
-          # ✅ v2.5: Agregar NB nacional
           padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% names(totales_fila)) {
             as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_no_binario)))
           } else NA
@@ -439,7 +454,6 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
             as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres)))
           } else NA
           
-          # ✅ v2.5: Agregar NB extranjero
           padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% names(totales_fila)) {
             as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_no_binario)))
           } else NA
@@ -461,7 +475,6 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
               padron_mujeres = padron_mujeres,
               lista_hombres = lista_hombres,
               lista_mujeres = lista_mujeres,
-              # ✅ v2.5: Incluir NB
               padron_nacional_no_binario = padron_nacional_no_binario,
               lista_nacional_no_binario = lista_nacional_no_binario,
               padron_extranjero_hombres = padron_extranjero_hombres,
@@ -489,7 +502,6 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
           lista_hombres <- if ("lista_nacional_hombres" %in% colnames(df)) sum(df$lista_nacional_hombres, na.rm = TRUE) else NA
           lista_mujeres <- if ("lista_nacional_mujeres" %in% colnames(df)) sum(df$lista_nacional_mujeres, na.rm = TRUE) else NA
           
-          # ✅ v2.5: NB nacional
           padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% colnames(df)) sum(df$padron_nacional_no_binario, na.rm = TRUE) else NA
           lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% colnames(df)) sum(df$lista_nacional_no_binario, na.rm = TRUE) else NA
           
@@ -498,7 +510,6 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
           lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% colnames(df)) sum(df$lista_extranjero_hombres, na.rm = TRUE) else NA
           lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% colnames(df)) sum(df$lista_extranjero_mujeres, na.rm = TRUE) else NA
           
-          # ✅ v2.5: NB extranjero
           padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% colnames(df)) sum(df$padron_extranjero_no_binario, na.rm = TRUE) else NA
           lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% colnames(df)) sum(df$lista_extranjero_no_binario, na.rm = TRUE) else NA
           
@@ -549,14 +560,37 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
   # ========== REACTIVE: DATOS ANUALES (2017-ACTUAL) ==========
   
   datos_anuales_completos <- reactive({
+    estado_actual <- estado_app()
     
-    filtros <- list(
-      entidad = isolate(input$entidad %||% "Nacional"),
-      distrito = isolate(input$distrito %||% "Todos"),
-      municipio = isolate(input$municipio %||% "Todos"),
-      seccion = isolate(input$seccion %||% "Todas"),
-      ambito = isolate(input$ambito_datos %||% "nacional")
-    )
+    # ✅ SOLUCIÓN DEFINITIVA: En estado restablecido, usar valores por defecto HARDCODEADOS
+    if (estado_actual == "restablecido") {
+      filtros <- list(
+        entidad = "Nacional",
+        distrito = "Todos",
+        municipio = "Todos",
+        seccion = "Todas",
+        ambito = "nacional"
+      )
+      
+      # ✅ CRÍTICO: Invalidar caché en estado restablecido
+      if (exists("LNE_CACHE_GRAFICAS", envir = .GlobalEnv)) {
+        cache_actual <- get("LNE_CACHE_GRAFICAS", envir = .GlobalEnv)
+        cache_actual$datos_anuales <- NULL
+        cache_actual$timestamp_anuales <- NULL
+        assign("LNE_CACHE_GRAFICAS", cache_actual, envir = .GlobalEnv)
+        message("🧹 [datos_anuales_completos] Caché invalidado en estado restablecido")
+      }
+      
+    } else {
+      # En estado consultado, leer inputs normalmente
+      filtros <- list(
+        entidad = input$entidad %||% "Nacional",
+        distrito = input$distrito %||% "Todos",
+        municipio = input$municipio %||% "Todos",
+        seccion = input$seccion %||% "Todas",
+        ambito = input$ambito_datos %||% "nacional"
+      )
+    }
     
     es_nacional_sin_filtros <- (
       filtros$entidad == "Nacional" && 
@@ -645,7 +679,6 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
           lista_hombres <- if ("lista_nacional_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_hombres))) else NA
           lista_mujeres <- if ("lista_nacional_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres))) else NA
           
-          # ✅ v2.5: NB nacional
           padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_no_binario))) else NA
           lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_no_binario))) else NA
           
@@ -654,7 +687,6 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
           lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_hombres))) else NA
           lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres))) else NA
           
-          # ✅ v2.5: NB extranjero
           padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_no_binario))) else NA
           lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_no_binario))) else NA
           
@@ -743,12 +775,14 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     
     return(datos_completos)
   }) %>% 
-    bindCache(input$btn_consultar, input$tipo_corte, input$ambito_datos) %>%
+    bindCache(estado_app(), input$btn_consultar, input$tipo_corte, input$ambito_datos) %>%
     bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== RETORNAR LISTA DE REACTIVES ==========
   
-  message("✅ graficas_data_loaders v2.5 inicializado")
+  message("✅ graficas_data_loaders v2.11 inicializado")
+  message("   ✅ CORRECCIÓN v2.11: bindCache incluye estado_app en datos_anuales_completos")
+  message("   ✅ MANTIENE v2.10: Invalidar caché + hardcodear filtros en restablecido")
   
   return(list(
     datos_year_actual = datos_year_actual,
@@ -756,4 +790,3 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     datos_anuales_completos = datos_anuales_completos
   ))
 }
-

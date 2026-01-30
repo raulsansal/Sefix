@@ -1,10 +1,10 @@
 # modules/lista_nominal_graficas/graficas_ui_render.R
 # Renderizado dinámico de UI para gráficas históricas
-# Versión: 2.2 - CORRECCIÓN: Agregar ambito_reactivo para cambio de vista automático
+# Versión: 2.3 - CORRECCIÓN: Eliminar req() que bloqueaba renderizado
 
 graficas_ui_render <- function(input, output, session, estado_app, mostrar_graficas_anuales, mostrar_graficas_consultadas, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_ui_render v2.2")
+  message("📊 Inicializando graficas_ui_render v2.3")
   
   # ========== RENDERIZADO DINÁMICO DE GRÁFICAS ==========
   
@@ -26,9 +26,17 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
       ))
     }
     
-    # ========== ✅ VALIDAR ESTADO CONSULTADO ==========
+    # ========== ✅ CORRECCIÓN v2.3: VALIDAR SIN BLOQUEAR CON req() ==========
     if (estado_actual == "consultado") {
-      req(input$btn_consultar > 0)  # ✅ CRÍTICO: Requiere botón presionado
+      # ✅ Validar sin bloquear con req() - esto permite que el reactive se complete
+      if (is.null(input$btn_consultar) || input$btn_consultar == 0) {
+        message("⚠️ [UI RENDER] Estado consultado pero botón no presionado - Esperando...")
+        return(div(
+          style = "text-align: center; padding: 40px; color: #999;",
+          icon("hourglass-half", style = "font-size: 48px; margin-bottom: 20px;"),
+          h4("Procesando consulta...", style = "color: #666; font-weight: normal;")
+        ))
+      }
       message("🔍 [UI RENDER] Renderizando en estado CONSULTADO - Botón: ", input$btn_consultar)
     } else {
       message("🔍 [UI RENDER] Renderizando en estado RESTABLECIDO")
@@ -171,6 +179,6 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
     ignoreInit = FALSE
   )
   
-  message("✅ graficas_ui_render v2.2 inicializado")
-  message("   ✅ NUEVO: ambito_reactivo agregado a bindEvent para cambio de vista automático")
+  message("✅ graficas_ui_render v2.3 inicializado")
+  message("   ✅ CORRECCIÓN v2.3: req() eliminado para no bloquear renderizado")
 }

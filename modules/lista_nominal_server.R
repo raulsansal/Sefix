@@ -1,5 +1,5 @@
 # modules/lista_nominal_server.R
-# Versión: 3.4 - SOLUCIÓN DEFINITIVA: Reimplementación de lógica de fecha sin llamar a reactive
+# Versión: 3.7 - SOLUCIÓN DEFINITIVA: Estado temporal "inicial" para forzar re-renderizado completo
 # FILTROS EN CASCADA: Reactivos e independientes de botón "Consultar"
 
 # Configurar nombres de meses en español
@@ -68,7 +68,6 @@ lista_nominal_server <- function(id) {
     })
     
     # ========== FUNCIÓN AUXILIAR: OBTENER FECHA SEGURA PARA FILTROS ==========
-    # ✅ v3.4 DEFINITIVO: Reimplementación SIN llamar al reactive
     
     obtener_fecha_para_filtros <- function() {
       # Obtener valores necesarios con isolate
@@ -101,7 +100,7 @@ lista_nominal_server <- function(id) {
         message("⚠️ [obtener_fecha_para_filtros] No hay tipo_corte, asumiendo 'historico'")
       }
       
-      # Obtener fechas del año seleccionado (REIMPLEMENTACIÓN DIRECTA)
+      # Obtener fechas del año seleccionado
       if (tipo_corte_val == "historico") {
         fechas_year <- catalog$historico[format(catalog$historico, "%Y") == year_val]
       } else {
@@ -301,7 +300,7 @@ lista_nominal_server <- function(id) {
       # CARGA PERSONALIZADA: validar inputs
       req(input$tipo_corte, input$year)
       
-      # ✅ NUEVA LÓGICA: Validar que existan fechas para el año seleccionado
+      # Validar que existan fechas para el año seleccionado
       fecha_disponible <- ultima_fecha_disponible()
       
       if (is.null(fecha_disponible) || is.na(fecha_disponible)) {
@@ -335,7 +334,7 @@ lista_nominal_server <- function(id) {
         desglose <- isolate(input$desglose %||% "Sexo")
         ambito <- isolate(input$ambito_datos %||% "nacional")
         
-        # ✅ OBTENER ÚLTIMA FECHA AUTOMÁTICAMENTE
+        # Obtener última fecha automáticamente
         fecha_seleccionada <- isolate(ultima_fecha_disponible())
         
         if (is.null(fecha_seleccionada) || is.na(fecha_seleccionada)) {
@@ -345,7 +344,6 @@ lista_nominal_server <- function(id) {
         
         message("📊 Configuración: tipo=", tipo_corte, ", año=", year, ", fecha=", fecha_seleccionada, ", ámbito=", ambito, ", entidad=", entidad)
         
-        # Los filtros son iguales para ambos ámbitos
         estado_filtro <- if (entidad == "Nacional") "Nacional" else entidad
         message("📍 Estado: ", estado_filtro, " | Ámbito: ", ambito)
         
@@ -399,13 +397,13 @@ lista_nominal_server <- function(id) {
     }) %>% bindCache(estado_app(), input$btn_consultar, input$tipo_corte, input$year,
                      input$entidad, input$distrito, input$municipio, input$seccion, input$ambito_datos)
     
-    # ========== ✅ FILTROS EN CASCADA REACTIVOS (SIN PESTAÑEO) ==========
+    # ========== FILTROS EN CASCADA REACTIVOS (SIN PESTAÑEO) ==========
     
     # PASO 1: ACTUALIZAR ESTADOS (SOLO AL INICIO)
     observeEvent(input$tipo_corte, {
       req(input$tipo_corte)
       
-      # Obtener TODOS los estados disponibles (lista estática)
+      # Obtener TODOS los estados disponibles
       todos_estados <- get_entidades()
       
       # Preservar selección actual si es válida
@@ -427,32 +425,18 @@ lista_nominal_server <- function(id) {
     observeEvent(input$entidad, {
       req(input$entidad)
       
-      # ✅ v3.4: Obtener fecha con función mejorada
       fecha_actual <- obtener_fecha_para_filtros()
       
-      # Validación robusta
-      if (is.null(fecha_actual)) {
-        message("⚠️ [FILTROS CASCADA] No hay fecha disponible, abortando actualización de distritos")
+      if (is.null(fecha_actual) || !inherits(fecha_actual, "Date") || is.na(fecha_actual)) {
+        message("⚠️ [FILTROS CASCADA] No hay fecha válida, abortando actualización de distritos")
         return()
       }
       
-      if (!inherits(fecha_actual, "Date")) {
-        message("❌ [FILTROS CASCADA] Fecha no es objeto Date: ", class(fecha_actual))
-        return()
-      }
-      
-      if (is.na(fecha_actual)) {
-        message("❌ [FILTROS CASCADA] Fecha es NA")
-        return()
-      }
-      
-      # Obtener distritos usando función helper
       nuevos_distritos <- get_distritos_por_entidad(
         entidad = input$entidad,
         fecha = fecha_actual
       )
       
-      # Preservar selección actual si es válida
       current_distrito <- isolate(input$distrito)
       selected_distrito <- if (!is.null(current_distrito) && current_distrito %in% nuevos_distritos) {
         current_distrito
@@ -477,33 +461,19 @@ lista_nominal_server <- function(id) {
         return()
       }
       
-      # ✅ v3.4: Obtener fecha con función mejorada
       fecha_actual <- obtener_fecha_para_filtros()
       
-      # Validación robusta
-      if (is.null(fecha_actual)) {
-        message("⚠️ [FILTROS CASCADA] No hay fecha disponible, abortando actualización de municipios")
+      if (is.null(fecha_actual) || !inherits(fecha_actual, "Date") || is.na(fecha_actual)) {
+        message("⚠️ [FILTROS CASCADA] No hay fecha válida, abortando actualización de municipios")
         return()
       }
       
-      if (!inherits(fecha_actual, "Date")) {
-        message("❌ [FILTROS CASCADA] Fecha no es objeto Date: ", class(fecha_actual))
-        return()
-      }
-      
-      if (is.na(fecha_actual)) {
-        message("❌ [FILTROS CASCADA] Fecha es NA")
-        return()
-      }
-      
-      # Obtener municipios usando función helper
       nuevos_municipios <- get_municipios_por_distrito(
         entidad = entidad_actual,
         distrito = input$distrito,
         fecha = fecha_actual
       )
       
-      # Preservar selección actual si es válida
       current_municipio <- isolate(input$municipio)
       selected_municipio <- if (!is.null(current_municipio) && current_municipio %in% nuevos_municipios) {
         current_municipio
@@ -529,26 +499,13 @@ lista_nominal_server <- function(id) {
         return()
       }
       
-      # ✅ v3.4: Obtener fecha con función mejorada
       fecha_actual <- obtener_fecha_para_filtros()
       
-      # Validación robusta
-      if (is.null(fecha_actual)) {
-        message("⚠️ [FILTROS CASCADA] No hay fecha disponible, abortando actualización de secciones")
+      if (is.null(fecha_actual) || !inherits(fecha_actual, "Date") || is.na(fecha_actual)) {
+        message("⚠️ [FILTROS CASCADA] No hay fecha válida, abortando actualización de secciones")
         return()
       }
       
-      if (!inherits(fecha_actual, "Date")) {
-        message("❌ [FILTROS CASCADA] Fecha no es objeto Date: ", class(fecha_actual))
-        return()
-      }
-      
-      if (is.na(fecha_actual)) {
-        message("❌ [FILTROS CASCADA] Fecha es NA")
-        return()
-      }
-      
-      # Obtener secciones usando función helper
       nuevas_secciones <- get_secciones_por_municipio(
         entidad = entidad_actual,
         distrito = distrito_actual,
@@ -556,7 +513,6 @@ lista_nominal_server <- function(id) {
         fecha = fecha_actual
       )
       
-      # Preservar selección actual si es válida
       current_seccion <- isolate(input$seccion)
       
       if (!is.null(current_seccion) && length(current_seccion) > 0) {
@@ -607,12 +563,16 @@ lista_nominal_server <- function(id) {
     }, ignoreInit = TRUE)
     
     # ========== BOTÓN RESTABLECER CONSULTA ==========
+    # ✅ v3.6: CORRECCIÓN CRÍTICA - Usar variable GLOBAL para timestamp
+    
     observeEvent(input$reset_config, {
       message("🔄 [RESTABLECER] Botón presionado - Restableciendo configuración...")
       
-      estado_app("restablecido")
-      message("   ✅ Estado → restablecido")
+      # ✅ PASO 1: Cambiar a estado "inicial" temporalmente para detener reactivos
+      estado_app("inicial")
+      message("   ⏸️ Estado → inicial (temporal)")
       
+      # ✅ PASO 2: Limpiar caché de gráficas
       if (exists("LNE_CACHE_GRAFICAS", envir = .GlobalEnv)) {
         message("🧹 [RESTABLECER] Limpiando caché de gráficas...")
         assign("LNE_CACHE_GRAFICAS", list(
@@ -632,6 +592,7 @@ lista_nominal_server <- function(id) {
       
       catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
       
+      # ✅ PASO 3: Actualizar TODOS los inputs a valores por defecto
       updateRadioButtons(session, "tipo_corte", selected = "historico")
       message("   ✅ tipo_corte → historico")
       
@@ -647,10 +608,25 @@ lista_nominal_server <- function(id) {
       updateSelectInput(session, "entidad", selected = "Nacional")
       message("   ✅ entidad → Nacional")
       
+      updateSelectInput(session, "distrito", selected = "Todos")
+      message("   ✅ distrito → Todos")
+      
+      updateSelectInput(session, "municipio", selected = "Todos")
+      message("   ✅ municipio → Todos")
+      
+      updateSelectInput(session, "seccion", selected = "Todas")
+      message("   ✅ seccion → Todas")
+      
+      # ✅ PASO 4: Esperar 200ms y cambiar a "restablecido" usando Sys.sleep
+      Sys.sleep(0.2)
+      
+      message("   ✅ Cambiando estado → restablecido")
+      estado_app("restablecido")
       message("✅ [RESTABLECER] Configuración restablecida correctamente")
+      
     })
     
-    # ========== ✅ LLAMAR A SUBMÓDULOS CON estado_app ==========
+    # ========== LLAMAR A SUBMÓDULOS CON estado_app ==========
     
     if (file.exists("modules/lista_nominal_server_main.R")) {
       source("modules/lista_nominal_server_main.R", local = TRUE)
@@ -674,6 +650,6 @@ lista_nominal_server <- function(id) {
       message("⚠️ No se encontró lista_nominal_server_text_analysis.R")
     }
     
-    message("✅ Módulo lista_nominal_server v3.4 inicializado (SOLUCIÓN DEFINITIVA)")
+    message("✅ Módulo lista_nominal_server v3.7 inicializado (ESTADO TEMPORAL)")
   })
 }

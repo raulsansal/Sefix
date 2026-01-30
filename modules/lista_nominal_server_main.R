@@ -1,11 +1,11 @@
 # modules/lista_nominal_server_main.R
-# Versión: 3.6 - CORRECCIÓN CRÍTICA: Eliminar input$ambito_datos de bindEvent
+# Versión: 3.7 - CORRECCIÓN CRÍTICA: Observer separado para botón restablecer
 # Coordinador principal que integra los módulos de gráficas y tablas
 
 lista_nominal_server_main <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   ns <- session$ns
   
-  message("📊 Inicializando lista_nominal_server_main v3.6")
+  message("📊 Inicializando lista_nominal_server_main v3.7")
   
   # ========== CARGAR HELPERS PARA TEXTO DE ALCANCE ==========
   source("modules/lista_nominal_graficas/graficas_helpers.R", local = TRUE)
@@ -152,15 +152,12 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     columnas_datos <- c()
     
     if (ambito == "nacional") {
-      # Vista Nacional
       message("📊 [DATATABLE] Construyendo columnas para vista NACIONAL")
       
-      # Padrón Nacional (total primero)
       if ("padron_nacional" %in% colnames(df)) {
         columnas_datos <- c(columnas_datos, "padron_nacional")
       }
       
-      # Padrón Nacional por sexo (si existen)
       if ("padron_nacional_hombres" %in% colnames(df)) {
         columnas_datos <- c(columnas_datos, "padron_nacional_hombres")
       }
@@ -171,12 +168,10 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
         columnas_datos <- c(columnas_datos, "padron_nacional_no_binario")
       }
       
-      # Lista Nacional (total primero)
       if ("lista_nacional" %in% colnames(df)) {
         columnas_datos <- c(columnas_datos, "lista_nacional")
       }
       
-      # Lista Nacional por sexo (si existen)
       if ("lista_nacional_hombres" %in% colnames(df)) {
         columnas_datos <- c(columnas_datos, "lista_nacional_hombres")
       }
@@ -188,15 +183,12 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       }
       
     } else {
-      # Vista Extranjero
       message("📊 [DATATABLE] Construyendo columnas para vista EXTRANJERO")
       
-      # Padrón Extranjero (total primero)
       if ("padron_extranjero" %in% colnames(df)) {
         columnas_datos <- c(columnas_datos, "padron_extranjero")
       }
       
-      # Padrón Extranjero por sexo (si existen)
       if ("padron_extranjero_hombres" %in% colnames(df)) {
         columnas_datos <- c(columnas_datos, "padron_extranjero_hombres")
       }
@@ -207,12 +199,10 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
         columnas_datos <- c(columnas_datos, "padron_extranjero_no_binario")
       }
       
-      # Lista Extranjero (total primero)
       if ("lista_extranjero" %in% colnames(df)) {
         columnas_datos <- c(columnas_datos, "lista_extranjero")
       }
       
-      # Lista Extranjero por sexo (si existen)
       if ("lista_extranjero_hombres" %in% colnames(df)) {
         columnas_datos <- c(columnas_datos, "lista_extranjero_hombres")
       }
@@ -245,7 +235,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       if (col %in% names(etiquetas_mapeo_tabla)) {
         etiquetas_mapeo_tabla[[col]]
       } else {
-        # Fallback: capitalizar
         nombre_limpio <- gsub("_", " ", col)
         nombre_limpio <- tools::toTitleCase(nombre_limpio)
         nombre_limpio
@@ -258,12 +247,9 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     
     # ========== IDENTIFICAR COLUMNAS NUMÉRICAS PARA FORMATEO ==========
     columnas_con_comas <- nombres_columnas[grepl("Padrón|Lista", nombres_columnas)]
-    
-    # Obtener índices de columnas (base 0 para JavaScript)
     indices_con_comas <- which(nombres_columnas %in% columnas_con_comas) - 1
     indices_con_comas <- indices_con_comas[!is.na(indices_con_comas) & indices_con_comas >= 0]
     
-    # Configurar columnDefs para formateo
     column_defs <- if (length(indices_con_comas) > 0) list(
       list(
         targets = indices_con_comas,
@@ -278,13 +264,7 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     
     # ========== OBTENER TEXTO DE ALCANCE ==========
     alcance_texto <- texto_alcance()
-    
-    # Determinar ámbito para display
-    ambito_display <- if (ambito == "extranjero") {
-      "Extranjero"
-    } else {
-      "Nacional"
-    }
+    ambito_display <- if (ambito == "extranjero") "Extranjero" else "Nacional"
     
     # ========== CREAR CAPTION ==========
     caption_html <- htmltools::tags$caption(
@@ -318,7 +298,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     dt
     
   }) %>%
-    # ✅ CORRECCIÓN CRÍTICA v3.6: Eliminar input$ambito_datos
     bindEvent(
       estado_app(),
       input$btn_consultar,
@@ -340,7 +319,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       }
       
       entidad_str <- gsub(" ", "_", input$entidad %||% "Nacional")
-      
       ambito_str <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
         "Extranjero"
       } else {
@@ -353,20 +331,15 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       return(nombre_archivo)
     },
     content = function(file) {
-      # ✅ Descargar exactamente las mismas columnas que muestra la tabla
       datos <- datos_columnas()
       req(is.list(datos), !is.null(datos$datos))
       
       df <- datos$datos
       req(is.data.frame(df), nrow(df) > 0)
       
-      # Agregar año
       df$año <- input$year
-      
-      # Determinar ámbito
       ambito <- input$ambito_datos %||% "nacional"
       
-      # Construir columnas (MISMA LÓGICA QUE LA TABLA)
       columnas_base <- c("año", "nombre_entidad")
       
       if ("cabecera_distrital" %in% colnames(df)) {
@@ -404,7 +377,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       columnas_seleccionadas <- c(columnas_base, columnas_datos)
       datos_tabla <- df[, columnas_seleccionadas, drop = FALSE]
       
-      # Aplicar nombres legibles
       nombres_columnas <- sapply(columnas_seleccionadas, function(col) {
         if (col %in% names(etiquetas_mapeo_tabla)) {
           etiquetas_mapeo_tabla[[col]]
@@ -420,7 +392,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       message("📥 [DESCARGA CSV] Preparando ", nrow(datos_tabla), " filas para descarga")
       message("📥 [DESCARGA CSV] Columnas exportadas: ", paste(colnames(datos_tabla), collapse = ", "))
       
-      # Escribir encabezados
       alcance_info <- texto_alcance()
       ambito_display <- if (ambito == "extranjero") "Extranjero" else "Nacional"
       
@@ -431,7 +402,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
         ""
       ), file)
       
-      # Escribir datos
       write.table(datos_tabla, file, 
                   append = TRUE,
                   sep = ",", 
@@ -444,10 +414,11 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     }
   )
   
-  # ========== BOTÓN RESTABLECER ==========
+  # ========== ✅ v3.7: BOTÓN RESTABLECER - OBSERVER SEPARADO ==========
+  # Este observer NO afecta a los reactives de datos porque solo actualiza inputs
   
   observeEvent(input$reset_config, {
-    message("🔄 Restableciendo configuración de Lista Nominal Electoral")
+    message("🔄 [RESTABLECER MAIN] Botón presionado - Actualizando inputs adicionales...")
     
     if (exists("LNE_CATALOG", envir = .GlobalEnv)) {
       catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
@@ -455,25 +426,21 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       if (input$tipo_corte == "historico" && length(catalog$historico) > 0) {
         año_reciente <- format(max(catalog$historico), "%Y")
         updateSelectInput(session, "year", selected = año_reciente)
+        message("   ✅ year actualizado → ", año_reciente)
       } else if (input$tipo_corte == "semanal" && length(catalog$semanal_comun) > 0) {
         año_reciente <- format(max(catalog$semanal_comun), "%Y")
         updateSelectInput(session, "year", selected = año_reciente)
+        message("   ✅ year actualizado → ", año_reciente)
       }
     }
     
-    updateRadioButtons(session, "tipo_corte", selected = "historico")
-    updateRadioButtons(session, "ambito_datos", selected = "nacional")
-    updateSelectInput(session, "entidad", selected = "Nacional")
-    updateSelectInput(session, "distrito", selected = "Todos")
-    updateSelectInput(session, "municipio", selected = "Todos")
-    updateSelectInput(session, "seccion", selected = "Todas")
-    
     if (!is.null(input$desglose)) {
       updateSelectInput(session, "desglose", selected = "Sexo")
+      message("   ✅ desglose → Sexo")
     }
     
-    message("✅ Configuración de Lista Nominal restablecida correctamente")
+    message("✅ [RESTABLECER MAIN] Inputs adicionales actualizados correctamente")
   })
   
-  message("✅ Módulo lista_nominal_server_main v3.6 inicializado")
+  message("✅ Módulo lista_nominal_server_main v3.7 inicializado")
 }
