@@ -1,10 +1,13 @@
 # modules/lista_nominal_graficas/graficas_main.R
 # Función principal que orquesta todos los módulos de gráficas
-# Versión: 1.4 - CORRECCIÓN: Pasar ambito_reactivo a graficas_semanal
+# Versión: 1.5 - INTEGRACIÓN: Retorna core_reactives y data_reactives para text_analysis
+# CAMBIOS vs v1.4:
+#   1. Retorna lista con core y data reactives para que lista_nominal_server.R
+#      pueda pasarlos al módulo de análisis textual
 
 lista_nominal_server_graficas <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   
-  message("🚀 Iniciando módulo lista_nominal_server_graficas v1.4 (modularizado)")
+  message("🚀 Iniciando módulo lista_nominal_server_graficas v1.5 (modularizado)")
   
   # ========== CARGAR SUBMÓDULOS ==========
   
@@ -83,6 +86,13 @@ lista_nominal_server_graficas <- function(input, output, session, datos_columnas
     core_reactives$ambito_reactivo
   )
   
-  message("✅ Módulo lista_nominal_server_graficas v1.4 inicializado correctamente")
-  message("   ✅ CORRECCIÓN v1.4: ambito_reactivo pasado a graficas_semanal")
+  message("✅ Módulo lista_nominal_server_graficas v1.5 inicializado correctamente")
+  message("   ✅ MANTIENE v1.4: ambito_reactivo pasado a graficas_semanal")
+  message("   ✅ NUEVO v1.5: Retorna core_reactives y data_reactives para text_analysis")
+  
+  # ✅ v1.5: RETORNAR REACTIVES para que lista_nominal_server.R los pase al módulo de texto
+  return(list(
+    core = core_reactives,
+    data = data_reactives
+  ))
 }

@@ -1,6 +1,9 @@
 # modules/lista_nominal_server.R
-# Versión: 3.7 - SOLUCIÓN DEFINITIVA: Estado temporal "inicial" para forzar re-renderizado completo
-# FILTROS EN CASCADA: Reactivos e independientes de botón "Consultar"
+# Versión: 3.8 - INTEGRACIÓN: Módulo de análisis textual dinámico v3.0
+# CAMBIOS vs v3.7:
+#   1. El callModule de text_analysis ahora recibe reactives de graficas_core y graficas_data_loaders
+#   2. Se exponen core_reactives y data_reactives fuera del bloque de gráficas
+#   3. Se agrega datos_year_consulta como parámetro al módulo de texto
 
 # Configurar nombres de meses en español
 meses_es <- c(
@@ -563,7 +566,6 @@ lista_nominal_server <- function(id) {
     }, ignoreInit = TRUE)
     
     # ========== BOTÓN RESTABLECER CONSULTA ==========
-    # ✅ v3.6: CORRECCIÓN CRÍTICA - Usar variable GLOBAL para timestamp
     
     observeEvent(input$reset_config, {
       message("🔄 [RESTABLECER] Botón presionado - Restableciendo configuración...")
@@ -635,21 +637,68 @@ lista_nominal_server <- function(id) {
       message("⚠️ No se encontró lista_nominal_server_main.R")
     }
     
+    # ========== VARIABLES PARA COMPARTIR REACTIVES ENTRE GRÁFICAS Y TEXTO ==========
+    # ✅ v3.8: Declarar variables que se poblarán desde graficas_main.R
+    core_reactives <- NULL
+    data_reactives <- NULL
+    
     if (file.exists("modules/lista_nominal_graficas/graficas_main.R")) {
       source("modules/lista_nominal_graficas/graficas_main.R", local = TRUE)
-      lista_nominal_server_graficas(input, output, session, datos_columnas, combinacion_valida, estado_app)
-      message("✅ Módulo de gráficas modularizado cargado correctamente")
+      graficas_result <- lista_nominal_server_graficas(input, output, session, datos_columnas, combinacion_valida, estado_app)
+      
+      # ✅ v3.8: Capturar los reactives retornados por graficas_main
+      if (is.list(graficas_result)) {
+        core_reactives <- graficas_result$core
+        data_reactives <- graficas_result$data
+        message("✅ Módulo de gráficas modularizado cargado correctamente")
+        message("   ✅ v3.8: core_reactives y data_reactives capturados para text_analysis")
+      } else {
+        message("✅ Módulo de gráficas cargado (sin retorno de reactives)")
+      }
     } else {
       message("⚠️ No se encontró módulo de gráficas modularizado en modules/lista_nominal_graficas/graficas_main.R")
     }
     
+    # ========== ✅ v3.8: LLAMAR MÓDULO DE ANÁLISIS TEXTUAL CON REACTIVES COMPLETOS ==========
+    
     if (file.exists("modules/lista_nominal_server_text_analysis.R")) {
       source("modules/lista_nominal_server_text_analysis.R", local = TRUE)
-      lista_nominal_server_text_analysis(input, output, session, datos_columnas, estado_app)
+      
+      if (!is.null(core_reactives) && !is.null(data_reactives)) {
+        # ✅ RUTA NUEVA: Usar reactives de graficas_core y graficas_data_loaders
+        lista_nominal_server_text_analysis(
+          input, output, session,
+          datos_year_actual     = data_reactives$datos_year_actual,
+          datos_anuales_completos = data_reactives$datos_anuales_completos,
+          datos_year_consulta   = data_reactives$datos_year_consulta,
+          filtros_usuario       = core_reactives$filtros_usuario,
+          estado_app            = estado_app,
+          anio_actual           = core_reactives$anio_actual,
+          anio_consultado       = core_reactives$anio_consultado,
+          ambito_reactivo       = core_reactives$ambito_reactivo,
+          texto_alcance         = core_reactives$texto_alcance
+        )
+        message("✅ Módulo text_analysis v3.0 conectado con reactives de gráficas")
+      } else {
+        # ✅ RUTA FALLBACK: Si graficas_main no retornó reactives, usar firma antigua
+        message("⚠️ Usando firma fallback para text_analysis (datos_columnas + estado_app)")
+        lista_nominal_server_text_analysis(
+          input, output, session,
+          datos_year_actual     = reactive(NULL),
+          datos_anuales_completos = reactive(NULL),
+          datos_year_consulta   = reactive(NULL),
+          filtros_usuario       = reactive(list(entidad = "Nacional", distrito = "Todos", municipio = "Todos", seccion = "Todas")),
+          estado_app            = estado_app,
+          anio_actual           = reactive(as.integer(format(Sys.Date(), "%Y"))),
+          anio_consultado       = reactive(as.integer(format(Sys.Date(), "%Y"))),
+          ambito_reactivo       = reactive("nacional"),
+          texto_alcance         = reactive("Estado: Nacional - Distrito: Todos - Municipio: Todos - Sección: Todas")
+        )
+      }
     } else {
       message("⚠️ No se encontró lista_nominal_server_text_analysis.R")
     }
     
-    message("✅ Módulo lista_nominal_server v3.7 inicializado (ESTADO TEMPORAL)")
+    message("✅ Módulo lista_nominal_server v3.8 inicializado (INTEGRACIÓN ANÁLISIS TEXTUAL)")
   })
 }
