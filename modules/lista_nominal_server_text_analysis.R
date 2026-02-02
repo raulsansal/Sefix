@@ -1,9 +1,10 @@
 # modules/lista_nominal_server_text_analysis.R
-# Versión: 3.6 - CORRECCIÓN: advertencia única y confiable en vista Extranjero
-# Cambios vs v3.5:
-#   - Eliminado sistema dual de advertencias (cambiar_ambito/seleccionar_distrito)
-#   - Una sola advertencia clara: "Selecciona Residentes en el Extranjero..."
-#   - Funciona correctamente en todos los escenarios A-G
+# Versión: 3.7 - Advertencia nacional + reestructuración encabezado
+# Cambios vs v3.6:
+#   - Nueva advertencia para vista Nacional con distrito "RESIDENTES EN EL EXTRANJERO"
+#   - Encabezado OUTPUT 1: label "Alcance del análisis:" alineado a la izquierda
+#   - Subtítulo de alcance ahora alineado a la izquierda (era centrado)
+#   - Interlineado 16px entre año destacado y label de alcance
 # Consume: datos_year_actual, datos_anuales_completos, datos_year_consulta,
 #          filtros_usuario, estado_app, anio_actual, anio_consultado,
 #          ambito_reactivo, texto_alcance
@@ -45,7 +46,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
                                                texto_alcance) {
   ns <- session$ns
   
-  message("\U0001f4dd Inicializando lista_nominal_server_text_analysis v3.6")
+  message("\U0001f4dd Inicializando lista_nominal_server_text_analysis v3.7")
   
   # ============================================================
   # HELPERS INTERNOS
@@ -151,9 +152,28 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   
   # Texto de advertencia para vista extranjero
   texto_advertencia_ext <- paste0(
-    "<strong>\u26A0\uFE0F</strong> Selecciona \"Residentes en el Extranjero\" ",
+    "<strong>\u26A0\uFE0F</strong> Selecciona \"RESIDENTES EXTRANJERO\" ",
     "en el campo \"Distrito Electoral\" y luego da clic en el bot\u00f3n \"Consultar\". ",
     "Estos datos est\u00e1n disponibles a nivel estatal."
+  )
+  
+  # Detectar si vista nacional necesita advertencia
+  # Retorna: FALSE (sin advertencia) o TRUE (tiene distrito RE en vista nacional)
+  # En vista Nacional, si el distrito es "RESIDENTES EN EL EXTRANJERO"
+  # los datos nacionales no aplican para ese distrito especial
+  necesita_advertencia_nacional <- function(ambito, filtros) {
+    if (ambito != "nacional") return(FALSE)
+    # Solo aplica si tiene un estado seleccionado con distrito RE
+    if (filtros$entidad == "Nacional") return(FALSE)
+    if (es_distrito_extranjero(filtros$distrito)) return(TRUE)
+    return(FALSE)
+  }
+  
+  # Texto de advertencia para vista nacional con distrito RE
+  texto_advertencia_nac <- paste0(
+    "<strong>\u26A0\uFE0F</strong> Si deseas realizar una consulta del \u00e1mbito ",
+    "de datos \"Nacional\", selecciona un Distrito Electoral distinto a ",
+    "\"RESIDENTES EXTRANJERO\" y luego presiona el bot\u00f3n \"Consultar\"."
   )
   
   # ============================================================
@@ -169,8 +189,11 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   # Año destacado: línea separada, centrado, con interlineado inferior (+2px: 18→20)
   css_year_highlight <- "display: block; text-align: center; color: #1a5276; font-weight: 700; font-size: 20px; margin-top: 4px; margin-bottom: 10px;"
   
-  # Subtítulo de alcance (+2px: 12→14)
-  css_alcance <- "text-align: center; margin: 0 0 0 0; font-size: 14px; color: #777; line-height: 1.4;"
+  # Label "Alcance del análisis:" - alineado a la izquierda
+  css_alcance_label <- "margin: 16px 0 2px 0; font-size: 14px; color: #555; font-weight: 600; text-align: left;"
+  
+  # Subtítulo de alcance - alineado a la izquierda (+2px: 12→14)
+  css_alcance <- "text-align: left; margin: 0 0 0 0; font-size: 14px; color: #777; line-height: 1.4;"
   
   # Encabezados de sección <h4> (+2px: 15→17, margin-top 12→22 para separar del alcance)
   css_titulo_h4 <- "margin: 22px 0 6px 0; font-size: 17px; color: #2c3e50; font-weight: 600; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px;"
@@ -186,7 +209,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   
   # ============================================================
   # OUTPUT 1: TÍTULO Y ALCANCE DEL ANÁLISIS
-  # Diseño: <h3> centrado con año destacado + subtítulo de alcance
+  # Diseño: <h3> centrado con año destacado + label + subtítulo de alcance alineado left
   # ============================================================
   
   output$`text_analysis-titulo_lista` <- renderUI({
@@ -219,6 +242,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       "An\u00e1lisis de ", texto_vista,
       " <span style='", css_year_highlight, "'>", anio_consul, "</span>",
       "</h3>",
+      "<p style='", css_alcance_label, "'>Alcance del an\u00e1lisis:</p>",
       "<p style='", css_alcance, "'>", alcance_formateado, "</p>",
       "</div>"
     ))
@@ -277,6 +301,18 @@ lista_nominal_server_text_analysis <- function(input, output, session,
         "<h4 style='", css_titulo_h4, "'>Resumen general</h4>",
         "<div style='", css_advertencia, "'>",
         texto_advertencia_ext,
+        "</div>",
+        "</div>"
+      )))
+    }
+    
+    # --- Verificar advertencia para vista nacional con distrito RE ---
+    if (necesita_advertencia_nacional(ambito, filtros)) {
+      return(HTML(paste0(
+        "<div style='", css_contenedor, "'>",
+        "<h4 style='", css_titulo_h4, "'>Resumen general</h4>",
+        "<div style='", css_advertencia, "'>",
+        texto_advertencia_nac,
         "</div>",
         "</div>"
       )))
@@ -387,6 +423,18 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       )))
     }
     
+    # --- Verificar advertencia para vista nacional con distrito RE ---
+    if (necesita_advertencia_nacional(ambito, filtros)) {
+      return(HTML(paste0(
+        "<div style='", css_contenedor, "'>",
+        "<h4 style='", css_titulo_h4, "'>Evoluci\u00f3n temporal</h4>",
+        "<div style='", css_advertencia, "'>",
+        texto_advertencia_nac,
+        "</div>",
+        "</div>"
+      )))
+    }
+    
     # ============================================================
     # RAMA I: Año consultado == año actual (gráficas 1, 2, 3)
     # → Evolución multi-anual (2017 → último año) o (2020 → último año para extranjero)
@@ -478,7 +526,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       } else {
         texto_evolucion <- paste0(
           "Entre <strong>", primer_anio, "</strong> y <strong>", ultimo_anio, "</strong>",
-          " el padr\u00f3n electoral ha ",
+          " el Padr\u00f3n Electoral ha ",
           var_padron$texto, " ",
           "<strong>", fmt_pct(var_padron$pct), "</strong>.",
           " En tanto que la LNE ha ",
@@ -556,7 +604,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       if (ambito == "extranjero") {
         texto_evolucion <- paste0(
           "Entre <strong>enero</strong> y <strong>diciembre de ", anio_consul, "</strong>",
-          " el padr\u00f3n electoral de residentes en el extranjero ",
+          " el Padr\u00f3n Electoral de Residentes en el Extranjero ",
           verbo_padron, " ",
           "<strong>", fmt_pct(abs(var_padron$pct)), "</strong>.",
           " En tanto que la LNE ",
@@ -571,7 +619,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       } else {
         texto_evolucion <- paste0(
           "Entre <strong>enero</strong> y <strong>diciembre de ", anio_consul, "</strong>",
-          " el padr\u00f3n electoral ",
+          " el Padr\u00f3n Electoral ",
           verbo_padron, " ",
           "<strong>", fmt_pct(abs(var_padron$pct)), "</strong>.",
           " En tanto que la LNE ",
@@ -605,9 +653,10 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   }) %>%
     bindEvent(estado_app(), input$btn_consultar, input$ambito_datos, ignoreNULL = FALSE, ignoreInit = FALSE)
   
-  message("\u2705 M\u00f3dulo lista_nominal_server_text_analysis v3.6 inicializado")
+  message("\u2705 M\u00f3dulo lista_nominal_server_text_analysis v3.7 inicializado")
   message("   \u2705 3 outputs principales: t\u00edtulo, resumen, evoluci\u00f3n temporal")
   message("   \u2705 Soporta \u00e1mbito nacional y extranjero")
   message("   \u2705 Rama I (a\u00f1o actual) y Rama II (a\u00f1o consultado)")
-  message("   \u2705 Correcci\u00f3n: advertencia \u00fanica y confiable en vista Extranjero")
+  message("   \u2705 Advertencias: extranjero (distrito no-RE) + nacional (distrito RE)")
+  message("   \u2705 Encabezado: t\u00edtulo centrado + 'Alcance del an\u00e1lisis:' alineado left")
 }
