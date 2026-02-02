@@ -1,10 +1,14 @@
 # modules/lista_nominal_server_text_analysis.R
-# Versión: 3.0 - IMPLEMENTACIÓN COMPLETA: Análisis textual dinámico del sidebar derecho
+# Versión: 3.6 - CORRECCIÓN: advertencia única y confiable en vista Extranjero
+# Cambios vs v3.5:
+#   - Eliminado sistema dual de advertencias (cambiar_ambito/seleccionar_distrito)
+#   - Una sola advertencia clara: "Selecciona Residentes en el Extranjero..."
+#   - Funciona correctamente en todos los escenarios A-G
 # Consume: datos_year_actual, datos_anuales_completos, datos_year_consulta,
 #          filtros_usuario, estado_app, anio_actual, anio_consultado,
 #          ambito_reactivo, texto_alcance
 # Genera:  3 bloques uiOutput en el sidebar derecho
-# Fecha:   31 de enero de 2026
+# Fecha:   01 de febrero de 2026
 
 # ========== FUNCIÓN AUXILIAR: FORMATEAR FECHAS EN ESPAÑOL ==========
 if (!exists("formatear_fecha_es")) {
@@ -41,7 +45,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
                                                texto_alcance) {
   ns <- session$ns
   
-  message("📝 Inicializando lista_nominal_server_text_analysis v3.0")
+  message("\U0001f4dd Inicializando lista_nominal_server_text_analysis v3.6")
   
   # ============================================================
   # HELPERS INTERNOS
@@ -53,10 +57,10 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     format(round(as.numeric(x)), big.mark = ",", scientific = FALSE)
   }
   
-  # Formatear porcentajes con 2 decimales
+  # Formatear porcentajes SIEMPRE con 2 decimales (ej: 99.00%, 12.50%)
   fmt_pct <- function(x) {
     if (is.null(x) || is.na(x)) return("N/D")
-    paste0(round(as.numeric(x), 2), "%")
+    paste0(sprintf("%.2f", round(as.numeric(x), 2)), "%")
   }
   
   # Obtener nombre del mes en español a partir de una fecha
@@ -132,38 +136,57 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     return(as.numeric(val))
   }
   
-  # Detectar si vista extranjero necesita advertencia (distrito NO es Residentes Extranjero)
+  # Detectar si vista extranjero necesita advertencia
+  # Retorna: FALSE (sin advertencia) o TRUE (necesita seleccionar distrito RE)
+  # En vista Extranjero, cualquier distrito que NO sea "RESIDENTES EN EL EXTRANJERO"
+  # requiere que el usuario reconfigure su consulta
   necesita_advertencia_extranjero <- function(ambito, filtros) {
     if (ambito != "extranjero") return(FALSE)
-    # Si es Nacional, se necesita advertencia porque los datos extranjero solo están a nivel estado+distrito especial
+    # Si es Nacional (nivel país), no necesita advertencia
     if (filtros$entidad == "Nacional") return(FALSE)
-    # Si el distrito NO es el de Residentes en el Extranjero
+    # Si hay estado seleccionado: el distrito DEBE ser RE para ver datos
     if (filtros$distrito == "Todos" || !es_distrito_extranjero(filtros$distrito)) return(TRUE)
     return(FALSE)
   }
   
+  # Texto de advertencia para vista extranjero
+  texto_advertencia_ext <- paste0(
+    "<strong>\u26A0\uFE0F</strong> Selecciona \"Residentes en el Extranjero\" ",
+    "en el campo \"Distrito Electoral\" y luego da clic en el bot\u00f3n \"Consultar\". ",
+    "Estos datos est\u00e1n disponibles a nivel estatal."
+  )
+  
   # ============================================================
-  # ESTILOS CSS INLINE REUTILIZABLES
+  # ESTILOS INLINE v3.2 - Paleta azul marca, tipografía consistente
   # ============================================================
   
-  css_contenedor   <- "font-size: 13px; line-height: 1.6; color: #333;"
-  css_titulo_h4    <- "margin: 0 0 8px 0; font-size: 15px; color: #2c3e50; font-weight: bold;"
-  css_parrafo      <- "margin: 0 0 10px 0;"
-  css_separador    <- "border: 0; border-top: 1px solid #e0e0e0; margin: 12px 0;"
-  css_alerta       <- "text-align: center; color: #999; padding: 20px; font-style: italic;"
-  css_advertencia  <- "background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 10px; margin: 8px 0; font-size: 12px; color: #856404;"
-  css_num_principal <- "color: #2c3e50; font-weight: bold;"
-  css_num_positivo  <- "color: #27ae60; font-weight: bold;"
-  css_num_negativo  <- "color: #e74c3c; font-weight: bold;"
+  # Contenedor base (+2px: 14→16)
+  css_contenedor <- "font-size: 16px; line-height: 1.6; color: #333;"
   
-  # Helper para colorear variación
-  css_variacion <- function(pct) {
-    if (is.na(pct)) return(css_num_principal)
-    if (pct >= 0) return(css_num_positivo) else return(css_num_negativo)
-  }
+  # Título principal <h3>: centrado (+2px: 16→18)
+  css_titulo_h3 <- "text-align: center; margin: 0 0 2px 0; font-size: 18px; color: #2c3e50; font-weight: 600; line-height: 1.4;"
+  
+  # Año destacado: línea separada, centrado, con interlineado inferior (+2px: 18→20)
+  css_year_highlight <- "display: block; text-align: center; color: #1a5276; font-weight: 700; font-size: 20px; margin-top: 4px; margin-bottom: 10px;"
+  
+  # Subtítulo de alcance (+2px: 12→14)
+  css_alcance <- "text-align: center; margin: 0 0 0 0; font-size: 14px; color: #777; line-height: 1.4;"
+  
+  # Encabezados de sección <h4> (+2px: 15→17, margin-top 12→22 para separar del alcance)
+  css_titulo_h4 <- "margin: 22px 0 6px 0; font-size: 17px; color: #2c3e50; font-weight: 600; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px;"
+  
+  # Párrafos de contenido (+2px: 13→15)
+  css_parrafo <- "margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #333;"
+  
+  # Alertas (+2px: 13→15)
+  css_alerta <- "text-align: center; color: #999; padding: 15px; font-style: italic; font-size: 15px;"
+  
+  # Advertencia extranjero (+2px: 12→14)
+  css_advertencia <- "background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 10px; margin: 8px 0; font-size: 14px; color: #856404;"
   
   # ============================================================
   # OUTPUT 1: TÍTULO Y ALCANCE DEL ANÁLISIS
+  # Diseño: <h3> centrado con año destacado + subtítulo de alcance
   # ============================================================
   
   output$`text_analysis-titulo_lista` <- renderUI({
@@ -174,7 +197,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       return(NULL)
     }
     
-    message("📝 [TÍTULO] Renderizando en estado: ", estado_actual)
+    message("\U0001f4dd [T\u00cdTULO] Renderizando en estado: ", estado_actual)
     
     # Obtener año consultado
     anio_consul <- tryCatch(anio_consultado(), error = function(e) anio_actual())
@@ -184,27 +207,19 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     cols <- cols_ambito(ambito)
     
     # Texto de vista según ámbito
-    texto_vista <- if (ambito == "extranjero") {
-      paste0("An\u00e1lisis de Padr\u00f3n y Lista Nominal Electoral ", cols$etiqueta)
-    } else {
-      paste0("An\u00e1lisis de Padr\u00f3n y Lista Nominal Electoral ", cols$etiqueta)
-    }
+    texto_vista <- paste0("Padr\u00f3n y Lista Nominal Electoral ", cols$etiqueta)
     
     # Texto de alcance (de texto_alcance reactive)
     alcance <- tryCatch(texto_alcance(), error = function(e) "")
-    # Reformatear: "Estado: X - Distrito: Y" → "Estado: X – Distrito: Y"
     alcance_formateado <- gsub(" - ", " \u2013 ", alcance)
     
     HTML(paste0(
       "<div style='", css_contenedor, "'>",
-      "<h3 style='margin: 0 0 4px 0; font-size: 16px; color: #2c3e50; font-weight: bold;'>",
-      "Alcance del An\u00e1lisis</h3>",
-      "<p style='margin: 0 0 4px 0; font-size: 15px; font-weight: bold; color: #2c3e50;'>",
-      anio_consul, "</p>",
-      "<p style='margin: 0 0 4px 0; font-size: 13px; color: #555;'>",
-      texto_vista, "</p>",
-      "<p style='margin: 0 0 0 0; font-size: 12px; color: #777;'>",
-      alcance_formateado, "</p>",
+      "<h3 style='", css_titulo_h3, "'>",
+      "An\u00e1lisis de ", texto_vista,
+      " <span style='", css_year_highlight, "'>", anio_consul, "</span>",
+      "</h3>",
+      "<p style='", css_alcance, "'>", alcance_formateado, "</p>",
       "</div>"
     ))
     
@@ -213,6 +228,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   
   # ============================================================
   # OUTPUT 2: RESUMEN GENERAL (SOLO año == anio_actual)
+  # Diseño: <h4> sin "a)", datos variables en <strong>
   # ============================================================
   
   output$`text_analysis-resumen_general_lista` <- renderUI({
@@ -230,9 +246,9 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     # --- Validar estado consultado ---
     if (estado_actual == "consultado") {
       req(input$btn_consultar > 0)
-      message("📝 [RESUMEN] Renderizando en estado CONSULTADO - Bot\u00f3n: ", input$btn_consultar)
+      message("\U0001f4dd [RESUMEN] Renderizando en estado CONSULTADO - Bot\u00f3n: ", input$btn_consultar)
     } else {
-      message("📝 [RESUMEN] Renderizando en estado RESTABLECIDO")
+      message("\U0001f4dd [RESUMEN] Renderizando en estado RESTABLECIDO")
     }
     
     # --- Obtener año consultado y año actual ---
@@ -245,7 +261,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     
     # --- Si el año consultado NO es el año actual: NO mostrar resumen general ---
     if (anio_consul != anio_act) {
-      message("📝 [RESUMEN] A\u00f1o consultado (", anio_consul, ") != a\u00f1o actual (", anio_act, ") - Sin resumen general")
+      message("\U0001f4dd [RESUMEN] A\u00f1o consultado (", anio_consul, ") != a\u00f1o actual (", anio_act, ") - Sin resumen general")
       return(NULL)
     }
     
@@ -258,10 +274,9 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     if (necesita_advertencia_extranjero(ambito, filtros)) {
       return(HTML(paste0(
         "<div style='", css_contenedor, "'>",
-        "<h4 style='", css_titulo_h4, "'>a) Resumen general</h4>",
+        "<h4 style='", css_titulo_h4, "'>Resumen general</h4>",
         "<div style='", css_advertencia, "'>",
-        "<strong>\u26A0\uFE0F</strong> Selecciona \"Residentes en el Extranjero\" ",
-        "en el campo \"Distrito Electoral\". Estos datos est\u00e1n disponibles a nivel estatal.",
+        texto_advertencia_ext,
         "</div>",
         "</div>"
       )))
@@ -290,34 +305,34 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     mes_texto <- nombre_mes_es(ultima_fecha)
     anio_texto <- format(as.Date(ultima_fecha), "%Y")
     
-    # Construir texto según ámbito
+    # Construir texto según ámbito — datos variables en <strong>
     if (ambito == "extranjero") {
       texto_padron <- paste0(
-        "Al mes de ", mes_texto, " de ", anio_texto, ", ",
+        "Al mes de <strong>", mes_texto, " de ", anio_texto, "</strong>, ",
         "el Padr\u00f3n Electoral de Residentes en el Extranjero totaliza ",
-        "<b style='", css_num_principal, "'>", fmt_num(padron_val), "</b> ciudadanos, ",
+        "<strong>", fmt_num(padron_val), "</strong> ciudadanos, ",
         "de los cuales, ",
-        "<b style='", css_num_principal, "'>", fmt_num(lista_val), "</b> ",
+        "<strong>", fmt_num(lista_val), "</strong> ",
         "est\u00e1n incluidos en la Lista Nominal de Residentes en el Extranjero, ",
         "lo que representa una tasa de inclusi\u00f3n de ",
-        "<b style='", css_num_positivo, "'>", fmt_pct(tasa_inclusion), "</b>."
+        "<strong>", fmt_pct(tasa_inclusion), "</strong>."
       )
     } else {
       texto_padron <- paste0(
-        "Al mes de ", mes_texto, " de ", anio_texto, ", ",
+        "Al mes de <strong>", mes_texto, " de ", anio_texto, "</strong>, ",
         "el Padr\u00f3n Electoral totaliza ",
-        "<b style='", css_num_principal, "'>", fmt_num(padron_val), "</b> ciudadanos, ",
+        "<strong>", fmt_num(padron_val), "</strong> ciudadanos, ",
         "de los cuales, ",
-        "<b style='", css_num_principal, "'>", fmt_num(lista_val), "</b> ",
+        "<strong>", fmt_num(lista_val), "</strong> ",
         "est\u00e1n incluidos en la Lista Nominal Electoral, ",
         "lo que representa una tasa de inclusi\u00f3n de ",
-        "<b style='", css_num_positivo, "'>", fmt_pct(tasa_inclusion), "</b>."
+        "<strong>", fmt_pct(tasa_inclusion), "</strong>."
       )
     }
     
     HTML(paste0(
       "<div style='", css_contenedor, "'>",
-      "<h4 style='", css_titulo_h4, "'>a) Resumen general</h4>",
+      "<h4 style='", css_titulo_h4, "'>Resumen general</h4>",
       "<p style='", css_parrafo, "'>", texto_padron, "</p>",
       "</div>"
     ))
@@ -327,6 +342,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   
   # ============================================================
   # OUTPUT 3: EVOLUCIÓN TEMPORAL
+  # Diseño: <h4> sin "b)", datos variables en <strong>
   # ============================================================
   
   output$`text_analysis-comparacion_lista` <- renderUI({
@@ -341,9 +357,9 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     # --- Validar estado consultado ---
     if (estado_actual == "consultado") {
       req(input$btn_consultar > 0)
-      message("📝 [EVOLUCI\u00d3N] Renderizando en estado CONSULTADO")
+      message("\U0001f4dd [EVOLUCI\u00d3N] Renderizando en estado CONSULTADO")
     } else {
-      message("📝 [EVOLUCI\u00d3N] Renderizando en estado RESTABLECIDO")
+      message("\U0001f4dd [EVOLUCI\u00d3N] Renderizando en estado RESTABLECIDO")
     }
     
     # --- Obtener año consultado y año actual ---
@@ -363,10 +379,9 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     if (necesita_advertencia_extranjero(ambito, filtros)) {
       return(HTML(paste0(
         "<div style='", css_contenedor, "'>",
-        "<h4 style='", css_titulo_h4, "'>b) Evoluci\u00f3n temporal</h4>",
+        "<h4 style='", css_titulo_h4, "'>Evoluci\u00f3n temporal</h4>",
         "<div style='", css_advertencia, "'>",
-        "<strong>\u26A0\uFE0F</strong> Selecciona \"Residentes en el Extranjero\" ",
-        "en el campo \"Distrito Electoral\" porque estos datos est\u00e1n disponibles a nivel estatal.",
+        texto_advertencia_ext,
         "</div>",
         "</div>"
       )))
@@ -384,30 +399,39 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       if (is.null(datos_anuales) || nrow(datos_anuales) == 0) {
         return(HTML(paste0(
           "<div style='", css_contenedor, "'>",
-          "<h4 style='", css_titulo_h4, "'>b) Evoluci\u00f3n temporal</h4>",
+          "<h4 style='", css_titulo_h4, "'>Evoluci\u00f3n temporal</h4>",
           "<p style='", css_alerta, "'>Sin datos anuales disponibles.</p>",
           "</div>"
         )))
       }
       
-      # Para extranjero, los datos empiezan en 2020
+      # Para extranjero, los datos empiezan en 2020 (años previos tienen valor 0)
+      # Filtramos filas con datos reales > 0 para que el texto refleje el rango correcto
       if (ambito == "extranjero") {
-        # Filtrar solo años donde hay datos de extranjero (columna no NA y > 0)
         datos_anuales_filtrado <- datos_anuales[!is.na(datos_anuales[[cols$padron]]) & datos_anuales[[cols$padron]] > 0, ]
         if (nrow(datos_anuales_filtrado) == 0) {
           return(HTML(paste0(
             "<div style='", css_contenedor, "'>",
-            "<h4 style='", css_titulo_h4, "'>b) Evoluci\u00f3n temporal</h4>",
+            "<h4 style='", css_titulo_h4, "'>Evoluci\u00f3n temporal</h4>",
             "<p style='", css_alerta, "'>Sin datos de residentes en el extranjero disponibles.</p>",
             "</div>"
           )))
         }
       } else {
-        datos_anuales_filtrado <- datos_anuales
+        # Nacional: también filtrar años con datos > 0 por robustez
+        datos_anuales_filtrado <- datos_anuales[!is.na(datos_anuales[[cols$padron]]) & datos_anuales[[cols$padron]] > 0, ]
+        if (nrow(datos_anuales_filtrado) == 0) {
+          return(HTML(paste0(
+            "<div style='", css_contenedor, "'>",
+            "<h4 style='", css_titulo_h4, "'>Evoluci\u00f3n temporal</h4>",
+            "<p style='", css_alerta, "'>Sin datos anuales disponibles.</p>",
+            "</div>"
+          )))
+        }
       }
       
       # Primer y último año disponible
-      # Acceder a la columna "año" usando [[ ]] para evitar problemas de encoding con $
+      # Usar [[ ]] para evitar problemas de encoding con $
       col_anio <- if ("año" %in% colnames(datos_anuales_filtrado)) {
         "año"
       } else if ("a\u00f1o" %in% colnames(datos_anuales_filtrado)) {
@@ -436,40 +460,40 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       mujeres_ultimo <- safe_val(datos_anuales_filtrado, nrow(datos_anuales_filtrado), cols$padron_m)
       sexo_pred <- sexo_predominante(hombres_ultimo, mujeres_ultimo)
       
-      # Construir texto según ámbito
+      # Construir texto según ámbito — datos variables en <strong>
       if (ambito == "extranjero") {
         texto_evolucion <- paste0(
-          "Entre ", primer_anio, " y ", ultimo_anio,
+          "Entre <strong>", primer_anio, "</strong> y <strong>", ultimo_anio, "</strong>",
           " el Padr\u00f3n Electoral de Residentes en el Extranjero ha ",
           var_padron$texto, " ",
-          "<b style='", css_variacion(var_padron$pct), "'>", fmt_pct(var_padron$pct), "</b>.",
+          "<strong>", fmt_pct(var_padron$pct), "</strong>.",
           " En tanto que la Lista Nominal de Residentes en el Extranjero ha ",
           var_lista$texto, " ",
-          "<b style='", css_variacion(var_lista$pct), "'>", fmt_pct(var_lista$pct), "</b>."
+          "<strong>", fmt_pct(var_lista$pct), "</strong>."
         )
         texto_sexo <- paste0(
           "La distribuci\u00f3n por sexo muestra una mayor presencia constante de ",
-          "<b>", sexo_pred, "</b> en el Padr\u00f3n y en la Lista Nominal de Residentes en el Extranjero."
+          "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal de Residentes en el Extranjero."
         )
       } else {
         texto_evolucion <- paste0(
-          "Entre ", primer_anio, " y ", ultimo_anio,
+          "Entre <strong>", primer_anio, "</strong> y <strong>", ultimo_anio, "</strong>",
           " el padr\u00f3n electoral ha ",
           var_padron$texto, " ",
-          "<b style='", css_variacion(var_padron$pct), "'>", fmt_pct(var_padron$pct), "</b>.",
+          "<strong>", fmt_pct(var_padron$pct), "</strong>.",
           " En tanto que la LNE ha ",
           var_lista$texto, " ",
-          "<b style='", css_variacion(var_lista$pct), "'>", fmt_pct(var_lista$pct), "</b>."
+          "<strong>", fmt_pct(var_lista$pct), "</strong>."
         )
         texto_sexo <- paste0(
           "La distribuci\u00f3n por sexo muestra una mayor presencia constante de ",
-          "<b>", sexo_pred, "</b> en el Padr\u00f3n y en la Lista Nominal Electoral."
+          "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal Electoral."
         )
       }
       
       HTML(paste0(
         "<div style='", css_contenedor, "'>",
-        "<h4 style='", css_titulo_h4, "'>b) Evoluci\u00f3n temporal</h4>",
+        "<h4 style='", css_titulo_h4, "'>Evoluci\u00f3n temporal</h4>",
         "<p style='", css_parrafo, "'>", texto_evolucion, "</p>",
         "<p style='", css_parrafo, "'>", texto_sexo, "</p>",
         "</div>"
@@ -528,35 +552,35 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       mujeres_ultimo <- safe_val(datos_consulta_filtrado, nrow(datos_consulta_filtrado), cols$padron_m)
       sexo_pred <- sexo_predominante(hombres_ultimo, mujeres_ultimo)
       
-      # Construir texto según ámbito
+      # Construir texto según ámbito — datos variables en <strong>
       if (ambito == "extranjero") {
         texto_evolucion <- paste0(
-          "Entre enero y diciembre de ", anio_consul,
+          "Entre <strong>enero</strong> y <strong>diciembre de ", anio_consul, "</strong>",
           " el padr\u00f3n electoral de residentes en el extranjero ",
           verbo_padron, " ",
-          "<b style='", css_variacion(var_padron$pct), "'>", fmt_pct(abs(var_padron$pct)), "</b>.",
+          "<strong>", fmt_pct(abs(var_padron$pct)), "</strong>.",
           " En tanto que la LNE ",
           verbo_lista, " ",
-          "<b style='", css_variacion(var_lista$pct), "'>", fmt_pct(abs(var_lista$pct)), "</b>."
+          "<strong>", fmt_pct(abs(var_lista$pct)), "</strong>."
         )
         texto_sexo <- paste0(
           "La distribuci\u00f3n por sexo muestra una mayor presencia constante de ",
-          "<b>", sexo_pred, "</b> en el Padr\u00f3n y en la Lista Nominal Electoral ",
+          "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal Electoral ",
           "de residentes en el extranjero."
         )
       } else {
         texto_evolucion <- paste0(
-          "Entre enero y diciembre de ", anio_consul,
+          "Entre <strong>enero</strong> y <strong>diciembre de ", anio_consul, "</strong>",
           " el padr\u00f3n electoral ",
           verbo_padron, " ",
-          "<b style='", css_variacion(var_padron$pct), "'>", fmt_pct(abs(var_padron$pct)), "</b>.",
+          "<strong>", fmt_pct(abs(var_padron$pct)), "</strong>.",
           " En tanto que la LNE ",
           verbo_lista, " ",
-          "<b style='", css_variacion(var_lista$pct), "'>", fmt_pct(abs(var_lista$pct)), "</b>."
+          "<strong>", fmt_pct(abs(var_lista$pct)), "</strong>."
         )
         texto_sexo <- paste0(
           "La distribuci\u00f3n por sexo muestra una mayor presencia constante de ",
-          "<b>", sexo_pred, "</b> en el Padr\u00f3n y en la Lista Nominal Electoral."
+          "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal Electoral."
         )
       }
       
@@ -573,19 +597,17 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     bindEvent(estado_app(), input$btn_consultar, input$ambito_datos, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ============================================================
-  # OUTPUT 4: DEMOGRAFÍA (reutilizado del sidebar, puede dejarse NULL o expandirse)
+  # OUTPUT 4: DEMOGRAFÍA (reservado para expansión futura)
   # ============================================================
   
   output$`text_analysis-demografia_lista` <- renderUI({
-    # Este output existe en la UI pero según la especificación del PDF,
-    # la información demográfica se integra en la sección de Evolución Temporal
-    # (sexo predominante). Si en el futuro se desea expandir, hacerlo aquí.
     return(NULL)
   }) %>%
     bindEvent(estado_app(), input$btn_consultar, input$ambito_datos, ignoreNULL = FALSE, ignoreInit = FALSE)
   
-  message("✅ M\u00f3dulo lista_nominal_server_text_analysis v3.0 inicializado")
-  message("   ✅ 3 outputs principales: t\u00edtulo, resumen, evoluci\u00f3n temporal")
-  message("   ✅ Soporta \u00e1mbito nacional y extranjero")
-  message("   ✅ Rama I (a\u00f1o actual) y Rama II (a\u00f1o consultado)")
+  message("\u2705 M\u00f3dulo lista_nominal_server_text_analysis v3.6 inicializado")
+  message("   \u2705 3 outputs principales: t\u00edtulo, resumen, evoluci\u00f3n temporal")
+  message("   \u2705 Soporta \u00e1mbito nacional y extranjero")
+  message("   \u2705 Rama I (a\u00f1o actual) y Rama II (a\u00f1o consultado)")
+  message("   \u2705 Correcci\u00f3n: advertencia \u00fanica y confiable en vista Extranjero")
 }
