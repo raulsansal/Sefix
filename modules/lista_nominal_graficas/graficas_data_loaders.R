@@ -1,15 +1,45 @@
 # modules/lista_nominal_graficas/graficas_data_loaders.R
 # Reactives de carga de datos: year_actual, year_consulta, anuales
-# Versión: 2.11 - CORRECCIÓN CRÍTICA: bindCache incluye estado_app para invalidar en restablecer
+# Versión: 2.12 - CORRECCIÓN: Mapeo correcto de columnas de sexo para archivos modificados pre-2020
+# Cambios vs v2.11:
+#   - Agregado diagnóstico detallado de columnas disponibles en cada fecha
+#   - Corrección en búsqueda de columnas: soporta tanto padron_hombres como padron_nacional_hombres
+#   - Eliminado bindCache en datos_year_consulta para evitar servir datos obsoletos
 
 graficas_data_loaders <- function(input, output, session, anio_actual, anio_consultado, filtros_usuario, estado_app) {
   
-  message("📥 Inicializando graficas_data_loaders v2.11")
+  message("📥 Inicializando graficas_data_loaders v2.12")
   
   # Obtener función cache_valido del entorno padre
   cache_valido <- function(timestamp, max_horas = 24) {
     if (is.null(timestamp)) return(FALSE)
     difftime(Sys.time(), timestamp, units = "hours") < max_horas
+  }
+  
+  # ========== HELPER: Extraer columna de sexo con fallback ==========
+  # Busca primero el nombre específico, luego alternativas comunes
+  extraer_col_sexo <- function(obj, col_preferida, col_alternativa = NULL, es_lista = FALSE) {
+    nombres <- if (es_lista) names(obj) else colnames(obj)
+    
+    # Intentar nombre preferido
+    if (col_preferida %in% nombres) {
+      if (es_lista) {
+        return(as.numeric(gsub(",", "", as.character(obj[[col_preferida]]))))
+      } else {
+        return(sum(obj[[col_preferida]], na.rm = TRUE))
+      }
+    }
+    
+    # Intentar alternativa
+    if (!is.null(col_alternativa) && col_alternativa %in% nombres) {
+      if (es_lista) {
+        return(as.numeric(gsub(",", "", as.character(obj[[col_alternativa]]))))
+      } else {
+        return(sum(obj[[col_alternativa]], na.rm = TRUE))
+      }
+    }
+    
+    return(NA)
   }
   
   # ========== REACTIVE: DATOS DEL AÑO ACTUAL (PARA GRÁFICAS 1, 2, 3) ==========
@@ -121,65 +151,30 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
           
           # ========== EXTRACCIÓN COLUMNAS PRINCIPALES ==========
           padron_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional)))
-          padron_extranjero <- if ("padron_extranjero" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero)))
-          } else NA_real_
+          padron_extranjero <- extraer_col_sexo(totales_fila, "padron_extranjero", es_lista = TRUE)
           lista_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional)))
-          lista_extranjero <- if ("lista_extranjero" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero)))
-          } else NA_real_
+          lista_extranjero <- extraer_col_sexo(totales_fila, "lista_extranjero", es_lista = TRUE)
           
           # ========== EXTRACCIÓN COLUMNAS SEXO NACIONAL ==========
-          padron_hombres <- if ("padron_nacional_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_hombres)))
-          } else NA
-          
-          padron_mujeres <- if ("padron_nacional_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_mujeres)))
-          } else NA
-          
-          lista_hombres <- if ("lista_nacional_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_hombres)))
-          } else NA
-          
-          lista_mujeres <- if ("lista_nacional_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres)))
-          } else NA
+          # v2.12: Soportar tanto padron_hombres como padron_nacional_hombres
+          padron_hombres <- extraer_col_sexo(totales_fila, "padron_hombres", "padron_nacional_hombres", es_lista = TRUE)
+          padron_mujeres <- extraer_col_sexo(totales_fila, "padron_mujeres", "padron_nacional_mujeres", es_lista = TRUE)
+          lista_hombres <- extraer_col_sexo(totales_fila, "lista_hombres", "lista_nacional_hombres", es_lista = TRUE)
+          lista_mujeres <- extraer_col_sexo(totales_fila, "lista_mujeres", "lista_nacional_mujeres", es_lista = TRUE)
           
           # ========== COLUMNAS NO BINARIO NACIONAL ==========
-          padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_no_binario)))
-          } else NA
-          
-          lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_no_binario)))
-          } else NA
+          padron_nacional_no_binario <- extraer_col_sexo(totales_fila, "padron_nacional_no_binario", es_lista = TRUE)
+          lista_nacional_no_binario <- extraer_col_sexo(totales_fila, "lista_nacional_no_binario", es_lista = TRUE)
           
           # ========== EXTRACCIÓN COLUMNAS SEXO EXTRANJERO ==========
-          padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_hombres)))
-          } else NA
-          
-          padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_mujeres)))
-          } else NA
-          
-          lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_hombres)))
-          } else NA
-          
-          lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres)))
-          } else NA
+          padron_extranjero_hombres <- extraer_col_sexo(totales_fila, "padron_extranjero_hombres", es_lista = TRUE)
+          padron_extranjero_mujeres <- extraer_col_sexo(totales_fila, "padron_extranjero_mujeres", es_lista = TRUE)
+          lista_extranjero_hombres <- extraer_col_sexo(totales_fila, "lista_extranjero_hombres", es_lista = TRUE)
+          lista_extranjero_mujeres <- extraer_col_sexo(totales_fila, "lista_extranjero_mujeres", es_lista = TRUE)
           
           # ========== COLUMNAS NO BINARIO EXTRANJERO ==========
-          padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_no_binario)))
-          } else NA
-          
-          lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_no_binario)))
-          } else NA
+          padron_extranjero_no_binario <- extraer_col_sexo(totales_fila, "padron_extranjero_no_binario", es_lista = TRUE)
+          lista_extranjero_no_binario <- extraer_col_sexo(totales_fila, "lista_extranjero_no_binario", es_lista = TRUE)
           
           # ========== CREAR REGISTRO CON TODAS LAS COLUMNAS ==========
           if (!is.na(padron_nacional) && !is.na(lista_nacional)) {
@@ -218,53 +213,22 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
           lista_nacional <- sum(df$lista_nacional, na.rm = TRUE)
           lista_extranjero <- sum(df$lista_extranjero, na.rm = TRUE)
           
-          padron_hombres <- if ("padron_nacional_hombres" %in% colnames(df)) {
-            sum(df$padron_nacional_hombres, na.rm = TRUE)
-          } else NA
+          # v2.12: Soportar ambos nombres de columna
+          padron_hombres <- extraer_col_sexo(df, "padron_hombres", "padron_nacional_hombres")
+          padron_mujeres <- extraer_col_sexo(df, "padron_mujeres", "padron_nacional_mujeres")
+          lista_hombres <- extraer_col_sexo(df, "lista_hombres", "lista_nacional_hombres")
+          lista_mujeres <- extraer_col_sexo(df, "lista_mujeres", "lista_nacional_mujeres")
           
-          padron_mujeres <- if ("padron_nacional_mujeres" %in% colnames(df)) {
-            sum(df$padron_nacional_mujeres, na.rm = TRUE)
-          } else NA
+          padron_nacional_no_binario <- extraer_col_sexo(df, "padron_nacional_no_binario")
+          lista_nacional_no_binario <- extraer_col_sexo(df, "lista_nacional_no_binario")
           
-          lista_hombres <- if ("lista_nacional_hombres" %in% colnames(df)) {
-            sum(df$lista_nacional_hombres, na.rm = TRUE)
-          } else NA
+          padron_extranjero_hombres <- extraer_col_sexo(df, "padron_extranjero_hombres")
+          padron_extranjero_mujeres <- extraer_col_sexo(df, "padron_extranjero_mujeres")
+          lista_extranjero_hombres <- extraer_col_sexo(df, "lista_extranjero_hombres")
+          lista_extranjero_mujeres <- extraer_col_sexo(df, "lista_extranjero_mujeres")
           
-          lista_mujeres <- if ("lista_nacional_mujeres" %in% colnames(df)) {
-            sum(df$lista_nacional_mujeres, na.rm = TRUE)
-          } else NA
-          
-          padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% colnames(df)) {
-            sum(df$padron_nacional_no_binario, na.rm = TRUE)
-          } else NA
-          
-          lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% colnames(df)) {
-            sum(df$lista_nacional_no_binario, na.rm = TRUE)
-          } else NA
-          
-          padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% colnames(df)) {
-            sum(df$padron_extranjero_hombres, na.rm = TRUE)
-          } else NA
-          
-          padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% colnames(df)) {
-            sum(df$padron_extranjero_mujeres, na.rm = TRUE)
-          } else NA
-          
-          lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% colnames(df)) {
-            sum(df$lista_extranjero_hombres, na.rm = TRUE)
-          } else NA
-          
-          lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% colnames(df)) {
-            sum(df$lista_extranjero_mujeres, na.rm = TRUE)
-          } else NA
-          
-          padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% colnames(df)) {
-            sum(df$padron_extranjero_no_binario, na.rm = TRUE)
-          } else NA
-          
-          lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% colnames(df)) {
-            sum(df$lista_extranjero_no_binario, na.rm = TRUE)
-          } else NA
+          padron_extranjero_no_binario <- extraer_col_sexo(df, "padron_extranjero_no_binario")
+          lista_extranjero_no_binario <- extraer_col_sexo(df, "lista_extranjero_no_binario")
           
           registro <- data.frame(
             fecha = as.Date(fecha, origin = "1970-01-01"),
@@ -335,6 +299,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== REACTIVE: DATOS DEL AÑO CONSULTADO (PARA GRÁFICAS 4, 5) ==========
+  # v2.12: ELIMINADO bindCache para evitar servir datos obsoletos en consultas filtradas
   
   datos_year_consulta <- reactive({
     req(input$tipo_corte == "historico")
@@ -347,6 +312,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     ambito <- isolate(input$ambito_datos %||% "nacional")
     
     message("🔄 [datos_year_consulta] CONSULTA - Año ", year, ", Ámbito: ", ambito)
+    message("   Entidad: ", entidad, " | Distrito: ", distrito)
     
     if (is.null(year)) {
       message("⚠️ [datos_year_consulta] year es NULL, usando año actual")
@@ -401,66 +367,37 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
       })
       
       if (!is.null(datos_temp)) {
+        # v2.12: Diagnóstico de columnas disponibles (solo primera fecha)
+        if (i == 1 && !is.null(datos_temp$datos) && nrow(datos_temp$datos) > 0) {
+          cols_disponibles <- colnames(datos_temp$datos)
+          cols_extranjero <- grep("extranjero", cols_disponibles, value = TRUE)
+          message("   📋 Columnas extranjero disponibles: ", paste(cols_extranjero, collapse = ", "))
+        }
+        
         if (estado_filtro == "Nacional" && !is.null(datos_temp$totales)) {
           totales_fila <- datos_temp$totales
           
-          # Igual que en datos_year_actual - copiar toda la lógica de extracción incluyendo NB
+          # Igual que en datos_year_actual - usar helper extraer_col_sexo
           padron_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional)))
-          padron_extranjero <- if ("padron_extranjero" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero)))
-          } else NA_real_
+          padron_extranjero <- extraer_col_sexo(totales_fila, "padron_extranjero", es_lista = TRUE)
           lista_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional)))
-          lista_extranjero <- if ("lista_extranjero" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero)))
-          } else NA_real_
+          lista_extranjero <- extraer_col_sexo(totales_fila, "lista_extranjero", es_lista = TRUE)
           
-          padron_hombres <- if ("padron_nacional_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_hombres)))
-          } else NA
+          padron_hombres <- extraer_col_sexo(totales_fila, "padron_hombres", "padron_nacional_hombres", es_lista = TRUE)
+          padron_mujeres <- extraer_col_sexo(totales_fila, "padron_mujeres", "padron_nacional_mujeres", es_lista = TRUE)
+          lista_hombres <- extraer_col_sexo(totales_fila, "lista_hombres", "lista_nacional_hombres", es_lista = TRUE)
+          lista_mujeres <- extraer_col_sexo(totales_fila, "lista_mujeres", "lista_nacional_mujeres", es_lista = TRUE)
           
-          padron_mujeres <- if ("padron_nacional_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_mujeres)))
-          } else NA
+          padron_nacional_no_binario <- extraer_col_sexo(totales_fila, "padron_nacional_no_binario", es_lista = TRUE)
+          lista_nacional_no_binario <- extraer_col_sexo(totales_fila, "lista_nacional_no_binario", es_lista = TRUE)
           
-          lista_hombres <- if ("lista_nacional_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_hombres)))
-          } else NA
+          padron_extranjero_hombres <- extraer_col_sexo(totales_fila, "padron_extranjero_hombres", es_lista = TRUE)
+          padron_extranjero_mujeres <- extraer_col_sexo(totales_fila, "padron_extranjero_mujeres", es_lista = TRUE)
+          lista_extranjero_hombres <- extraer_col_sexo(totales_fila, "lista_extranjero_hombres", es_lista = TRUE)
+          lista_extranjero_mujeres <- extraer_col_sexo(totales_fila, "lista_extranjero_mujeres", es_lista = TRUE)
           
-          lista_mujeres <- if ("lista_nacional_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres)))
-          } else NA
-          
-          padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_no_binario)))
-          } else NA
-          
-          lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_no_binario)))
-          } else NA
-          
-          padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_hombres)))
-          } else NA
-          
-          padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_mujeres)))
-          } else NA
-          
-          lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_hombres)))
-          } else NA
-          
-          lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres)))
-          } else NA
-          
-          padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_no_binario)))
-          } else NA
-          
-          lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% names(totales_fila)) {
-            as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_no_binario)))
-          } else NA
+          padron_extranjero_no_binario <- extraer_col_sexo(totales_fila, "padron_extranjero_no_binario", es_lista = TRUE)
+          lista_extranjero_no_binario <- extraer_col_sexo(totales_fila, "lista_extranjero_no_binario", es_lista = TRUE)
           
           if (!is.na(padron_nacional) && !is.na(lista_nacional)) {
             registro <- data.frame(
@@ -491,27 +428,35 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
         } else if (!is.null(datos_temp$datos) && nrow(datos_temp$datos) > 0) {
           df <- datos_temp$datos
           
-          # Igual agregación con NB
+          # Igual agregación con helper
           padron_nacional <- sum(df$padron_nacional, na.rm = TRUE)
           padron_extranjero <- sum(df$padron_extranjero, na.rm = TRUE)
           lista_nacional <- sum(df$lista_nacional, na.rm = TRUE)
           lista_extranjero <- sum(df$lista_extranjero, na.rm = TRUE)
           
-          padron_hombres <- if ("padron_nacional_hombres" %in% colnames(df)) sum(df$padron_nacional_hombres, na.rm = TRUE) else NA
-          padron_mujeres <- if ("padron_nacional_mujeres" %in% colnames(df)) sum(df$padron_nacional_mujeres, na.rm = TRUE) else NA
-          lista_hombres <- if ("lista_nacional_hombres" %in% colnames(df)) sum(df$lista_nacional_hombres, na.rm = TRUE) else NA
-          lista_mujeres <- if ("lista_nacional_mujeres" %in% colnames(df)) sum(df$lista_nacional_mujeres, na.rm = TRUE) else NA
+          padron_hombres <- extraer_col_sexo(df, "padron_hombres", "padron_nacional_hombres")
+          padron_mujeres <- extraer_col_sexo(df, "padron_mujeres", "padron_nacional_mujeres")
+          lista_hombres <- extraer_col_sexo(df, "lista_hombres", "lista_nacional_hombres")
+          lista_mujeres <- extraer_col_sexo(df, "lista_mujeres", "lista_nacional_mujeres")
           
-          padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% colnames(df)) sum(df$padron_nacional_no_binario, na.rm = TRUE) else NA
-          lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% colnames(df)) sum(df$lista_nacional_no_binario, na.rm = TRUE) else NA
+          padron_nacional_no_binario <- extraer_col_sexo(df, "padron_nacional_no_binario")
+          lista_nacional_no_binario <- extraer_col_sexo(df, "lista_nacional_no_binario")
           
-          padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% colnames(df)) sum(df$padron_extranjero_hombres, na.rm = TRUE) else NA
-          padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% colnames(df)) sum(df$padron_extranjero_mujeres, na.rm = TRUE) else NA
-          lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% colnames(df)) sum(df$lista_extranjero_hombres, na.rm = TRUE) else NA
-          lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% colnames(df)) sum(df$lista_extranjero_mujeres, na.rm = TRUE) else NA
+          padron_extranjero_hombres <- extraer_col_sexo(df, "padron_extranjero_hombres")
+          padron_extranjero_mujeres <- extraer_col_sexo(df, "padron_extranjero_mujeres")
+          lista_extranjero_hombres <- extraer_col_sexo(df, "lista_extranjero_hombres")
+          lista_extranjero_mujeres <- extraer_col_sexo(df, "lista_extranjero_mujeres")
           
-          padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% colnames(df)) sum(df$padron_extranjero_no_binario, na.rm = TRUE) else NA
-          lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% colnames(df)) sum(df$lista_extranjero_no_binario, na.rm = TRUE) else NA
+          padron_extranjero_no_binario <- extraer_col_sexo(df, "padron_extranjero_no_binario")
+          lista_extranjero_no_binario <- extraer_col_sexo(df, "lista_extranjero_no_binario")
+          
+          # v2.12: Diagnóstico de valores extraídos (solo primera fecha)
+          if (i == 1) {
+            message("   📊 Valores extranjero extraídos:")
+            message("      padron_extranjero: ", padron_extranjero)
+            message("      padron_extranjero_hombres: ", padron_extranjero_hombres)
+            message("      padron_extranjero_mujeres: ", padron_extranjero_mujeres)
+          }
           
           registro <- data.frame(
             fecha = as.Date(fecha, origin = "1970-01-01"),
@@ -551,10 +496,20 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
     
     message("✅ Datos del año ", year, " cargados: ", nrow(datos_completos), " registros")
     
+    # v2.12: Diagnóstico final de columnas extranjero
+    if (ambito == "extranjero") {
+      message("   📊 Resumen extranjero:")
+      message("      Rango padron_extranjero_hombres: ", 
+              min(datos_completos$padron_extranjero_hombres, na.rm = TRUE), " - ",
+              max(datos_completos$padron_extranjero_hombres, na.rm = TRUE))
+      message("      Rango padron_extranjero_mujeres: ", 
+              min(datos_completos$padron_extranjero_mujeres, na.rm = TRUE), " - ",
+              max(datos_completos$padron_extranjero_mujeres, na.rm = TRUE))
+    }
+    
     return(datos_completos)
   }) %>% 
-    bindCache(input$btn_consultar, input$tipo_corte, input$year, input$entidad, 
-              input$distrito, input$municipio, input$seccion, input$ambito_datos) %>%
+    # v2.12: ELIMINADO bindCache - causaba datos obsoletos en consultas filtradas
     bindEvent(estado_app(), input$btn_consultar, ignoreNULL = FALSE, ignoreInit = FALSE)
   
   # ========== REACTIVE: DATOS ANUALES (2017-ACTUAL) ==========
@@ -667,28 +622,28 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
           
           message("   ✅ Fila totales obtenida para año ", año)
           
-          # Igual extracción con NB
+          # Igual extracción con helper
           padron_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional)))
           lista_nacional <- as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional)))
           
-          padron_extranjero <- if ("padron_extranjero" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero))) else NA_real_
-          lista_extranjero <- if ("lista_extranjero" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero))) else NA_real_
+          padron_extranjero <- extraer_col_sexo(totales_fila, "padron_extranjero", es_lista = TRUE)
+          lista_extranjero <- extraer_col_sexo(totales_fila, "lista_extranjero", es_lista = TRUE)
           
-          padron_hombres <- if ("padron_nacional_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_hombres))) else NA
-          padron_mujeres <- if ("padron_nacional_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_mujeres))) else NA
-          lista_hombres <- if ("lista_nacional_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_hombres))) else NA
-          lista_mujeres <- if ("lista_nacional_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_mujeres))) else NA
+          padron_hombres <- extraer_col_sexo(totales_fila, "padron_hombres", "padron_nacional_hombres", es_lista = TRUE)
+          padron_mujeres <- extraer_col_sexo(totales_fila, "padron_mujeres", "padron_nacional_mujeres", es_lista = TRUE)
+          lista_hombres <- extraer_col_sexo(totales_fila, "lista_hombres", "lista_nacional_hombres", es_lista = TRUE)
+          lista_mujeres <- extraer_col_sexo(totales_fila, "lista_mujeres", "lista_nacional_mujeres", es_lista = TRUE)
           
-          padron_nacional_no_binario <- if ("padron_nacional_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_nacional_no_binario))) else NA
-          lista_nacional_no_binario <- if ("lista_nacional_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_nacional_no_binario))) else NA
+          padron_nacional_no_binario <- extraer_col_sexo(totales_fila, "padron_nacional_no_binario", es_lista = TRUE)
+          lista_nacional_no_binario <- extraer_col_sexo(totales_fila, "lista_nacional_no_binario", es_lista = TRUE)
           
-          padron_extranjero_hombres <- if ("padron_extranjero_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_hombres))) else NA
-          padron_extranjero_mujeres <- if ("padron_extranjero_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_mujeres))) else NA
-          lista_extranjero_hombres <- if ("lista_extranjero_hombres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_hombres))) else NA
-          lista_extranjero_mujeres <- if ("lista_extranjero_mujeres" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_mujeres))) else NA
+          padron_extranjero_hombres <- extraer_col_sexo(totales_fila, "padron_extranjero_hombres", es_lista = TRUE)
+          padron_extranjero_mujeres <- extraer_col_sexo(totales_fila, "padron_extranjero_mujeres", es_lista = TRUE)
+          lista_extranjero_hombres <- extraer_col_sexo(totales_fila, "lista_extranjero_hombres", es_lista = TRUE)
+          lista_extranjero_mujeres <- extraer_col_sexo(totales_fila, "lista_extranjero_mujeres", es_lista = TRUE)
           
-          padron_extranjero_no_binario <- if ("padron_extranjero_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$padron_extranjero_no_binario))) else NA
-          lista_extranjero_no_binario <- if ("lista_extranjero_no_binario" %in% names(totales_fila)) as.numeric(gsub(",", "", as.character(totales_fila$lista_extranjero_no_binario))) else NA
+          padron_extranjero_no_binario <- extraer_col_sexo(totales_fila, "padron_extranjero_no_binario", es_lista = TRUE)
+          lista_extranjero_no_binario <- extraer_col_sexo(totales_fila, "lista_extranjero_no_binario", es_lista = TRUE)
           
           if (!is.na(padron_nacional) && !is.na(lista_nacional)) {
             lista_anuales[[length(lista_anuales) + 1]] <- data.frame(
@@ -724,7 +679,7 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
         } else if (!is.null(datos_temp$datos) && nrow(datos_temp$datos) > 0) {
           df <- datos_temp$datos
           
-          # Igual agregación con NB
+          # Igual agregación con helper
           padron_nacional <- sum(df$padron_nacional, na.rm = TRUE)
           padron_extranjero <- sum(df$padron_extranjero, na.rm = TRUE)
           lista_nacional <- sum(df$lista_nacional, na.rm = TRUE)
@@ -737,18 +692,18 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
             padron_extranjero = ifelse(is.na(padron_extranjero) || padron_extranjero == 0, NA, padron_extranjero),
             lista_nacional = lista_nacional,
             lista_extranjero = ifelse(is.na(lista_extranjero) || lista_extranjero == 0, NA, lista_extranjero),
-            padron_hombres = if ("padron_nacional_hombres" %in% colnames(df)) sum(df$padron_nacional_hombres, na.rm = TRUE) else NA,
-            padron_mujeres = if ("padron_nacional_mujeres" %in% colnames(df)) sum(df$padron_nacional_mujeres, na.rm = TRUE) else NA,
-            lista_hombres = if ("lista_nacional_hombres" %in% colnames(df)) sum(df$lista_nacional_hombres, na.rm = TRUE) else NA,
-            lista_mujeres = if ("lista_nacional_mujeres" %in% colnames(df)) sum(df$lista_nacional_mujeres, na.rm = TRUE) else NA,
-            padron_nacional_no_binario = if ("padron_nacional_no_binario" %in% colnames(df)) sum(df$padron_nacional_no_binario, na.rm = TRUE) else NA,
-            lista_nacional_no_binario = if ("lista_nacional_no_binario" %in% colnames(df)) sum(df$lista_nacional_no_binario, na.rm = TRUE) else NA,
-            padron_extranjero_hombres = if ("padron_extranjero_hombres" %in% colnames(df)) sum(df$padron_extranjero_hombres, na.rm = TRUE) else NA,
-            padron_extranjero_mujeres = if ("padron_extranjero_mujeres" %in% colnames(df)) sum(df$padron_extranjero_mujeres, na.rm = TRUE) else NA,
-            lista_extranjero_hombres = if ("lista_extranjero_hombres" %in% colnames(df)) sum(df$lista_extranjero_hombres, na.rm = TRUE) else NA,
-            lista_extranjero_mujeres = if ("lista_extranjero_mujeres" %in% colnames(df)) sum(df$lista_extranjero_mujeres, na.rm = TRUE) else NA,
-            padron_extranjero_no_binario = if ("padron_extranjero_no_binario" %in% colnames(df)) sum(df$padron_extranjero_no_binario, na.rm = TRUE) else NA,
-            lista_extranjero_no_binario = if ("lista_extranjero_no_binario" %in% colnames(df)) sum(df$lista_extranjero_no_binario, na.rm = TRUE) else NA,
+            padron_hombres = extraer_col_sexo(df, "padron_hombres", "padron_nacional_hombres"),
+            padron_mujeres = extraer_col_sexo(df, "padron_mujeres", "padron_nacional_mujeres"),
+            lista_hombres = extraer_col_sexo(df, "lista_hombres", "lista_nacional_hombres"),
+            lista_mujeres = extraer_col_sexo(df, "lista_mujeres", "lista_nacional_mujeres"),
+            padron_nacional_no_binario = extraer_col_sexo(df, "padron_nacional_no_binario"),
+            lista_nacional_no_binario = extraer_col_sexo(df, "lista_nacional_no_binario"),
+            padron_extranjero_hombres = extraer_col_sexo(df, "padron_extranjero_hombres"),
+            padron_extranjero_mujeres = extraer_col_sexo(df, "padron_extranjero_mujeres"),
+            lista_extranjero_hombres = extraer_col_sexo(df, "lista_extranjero_hombres"),
+            lista_extranjero_mujeres = extraer_col_sexo(df, "lista_extranjero_mujeres"),
+            padron_extranjero_no_binario = extraer_col_sexo(df, "padron_extranjero_no_binario"),
+            lista_extranjero_no_binario = extraer_col_sexo(df, "lista_extranjero_no_binario"),
             stringsAsFactors = FALSE
           )
           
@@ -780,9 +735,10 @@ graficas_data_loaders <- function(input, output, session, anio_actual, anio_cons
   
   # ========== RETORNAR LISTA DE REACTIVES ==========
   
-  message("✅ graficas_data_loaders v2.11 inicializado")
-  message("   ✅ CORRECCIÓN v2.11: bindCache incluye estado_app en datos_anuales_completos")
-  message("   ✅ MANTIENE v2.10: Invalidar caché + hardcodear filtros en restablecido")
+  message("✅ graficas_data_loaders v2.12 inicializado")
+  message("   ✅ CORRECCIÓN v2.12: Helper extraer_col_sexo con fallback de nombres")
+  message("   ✅ CORRECCIÓN v2.12: Eliminado bindCache en datos_year_consulta")
+  message("   ✅ CORRECCIÓN v2.12: Diagnóstico de columnas extranjero en consola")
   
   return(list(
     datos_year_actual = datos_year_actual,

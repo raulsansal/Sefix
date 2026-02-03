@@ -1,6 +1,11 @@
 # server/datos_lne.R
 # Sistema de carga de datos de Lista Nominal Electoral (LNE) desde Firebase
-# Versión: 2.0 - FIREBASE STORAGE
+# Versión: 2.2 - CORRECCIÓN: Buscar padron_nacional_hombres en archivos pre-2020
+# Cambios vs v2.1:
+#   - Transformación legacy ahora busca padron_nacional_hombres (no padron_hombres)
+#   - Los archivos originales pre-2020 usan padron_nacional_hombres incluso para extranjero
+#   - Agregado diagnóstico de columnas disponibles antes de transformación
+# Fecha: 03 de febrero de 2026
 
 library(data.table)
 library(dplyr)
@@ -166,54 +171,154 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   }
   
   # ========== TRANSFORMACIÓN RESIDENTES EXTRANJERO (< 2020) ==========
+  # v2.2: Corregido para buscar padron_nacional_hombres (nombre real en archivos originales)
   
   if (año_archivo < 2020) {
     message("🔄 Procesando RESIDENTES EXTRANJERO para año ", año_archivo)
     
-    tiene_cabecera <- "cabecera_distrital" %in% colnames(dt)
-    tiene_municipio <- "nombre_municipio" %in% colnames(dt)
+    # Definir columnas esperadas de extranjero
+    cols_extranjero <- c("padron_extranjero", "lista_extranjero",
+                         "padron_extranjero_hombres", "padron_extranjero_mujeres",
+                         "lista_extranjero_hombres", "lista_extranjero_mujeres")
     
-    if (tiene_cabecera || tiene_municipio) {
-      filas_extranjero <- rep(FALSE, nrow(dt))
+    # ── DETECCIÓN: ¿El CSV ya tiene columnas de extranjero con datos? ──
+    # Esto ocurre cuando el CSV fue modificado manualmente para 2017-2019
+    tiene_cols_sexo_ext <- all(c("padron_extranjero_hombres", 
+                                 "padron_extranjero_mujeres") %in% colnames(dt))
+    
+    tiene_datos_extranjero <- tiene_cols_sexo_ext &&
+      sum(dt$padron_extranjero_hombres, na.rm = TRUE) > 0
+    
+    if (tiene_datos_extranjero) {
+      # ════════════════════════════════════════════════════════════════
+      # CASO A: Columnas ya pobladas desde el CSV modificado
+      # → No transformar, los datos vienen correctos del archivo
+      # ════════════════════════════════════════════════════════════════
+      message("   ℹ️ Año ", año_archivo, 
+              ": columnas de extranjero ya pobladas en CSV. Omitiendo transformación.")
       
-      if (tiene_cabecera) {
-        filas_extranjero <- filas_extranjero | grepl("RESIDENTES EXTRANJERO", dt$cabecera_distrital, ignore.case = TRUE)
+      # Solo asegurar que NO falte ninguna columna auxiliar
+      for (col in cols_extranjero) {
+        if (!col %in% colnames(dt)) {
+          dt[, (col) := NA_real_]
+          message("      ⚠️ Columna faltante creada como NA: ", col)
+        }
       }
       
-      if (tiene_municipio) {
-        filas_extranjero <- filas_extranjero | grepl("^RESIDENTES EXTRANJERO$", dt$nombre_municipio, ignore.case = TRUE)
-      }
+    } else {
+      # ════════════════════════════════════════════════════════════════
+      # CASO B: Transformación legacy mejorada
+      # → Extraer datos de filas mixtas de RESIDENTES EXTRANJERO
+      # ════════════════════════════════════════════════════════════════
+      message("   🔄 Año ", año_archivo, 
+              ": aplicando transformación legacy de extranjero.")
       
-      num_filas_extranjero <- sum(filas_extranjero)
+      # v2.2: Diagnóstico de columnas disponibles
+      cols_sexo_disponibles <- grep("hombres|mujeres", colnames(dt), value = TRUE)
+      message("      📋 Columnas de sexo disponibles: ", paste(cols_sexo_disponibles, collapse = ", "))
       
-      if (num_filas_extranjero > 0) {
-        message("   📍 Encontradas ", num_filas_extranjero, " filas de RESIDENTES EXTRANJERO")
+      tiene_cabecera <- "cabecera_distrital" %in% colnames(dt)
+      tiene_municipio <- "nombre_municipio" %in% colnames(dt)
+      
+      if (tiene_cabecera || tiene_municipio) {
+        filas_extranjero <- rep(FALSE, nrow(dt))
         
-        # Crear columnas de extranjero si no existen
-        cols_extranjero <- c("padron_extranjero", "lista_extranjero", 
-                             "padron_extranjero_hombres", "padron_extranjero_mujeres",
-                             "lista_extranjero_hombres", "lista_extranjero_mujeres")
+        if (tiene_cabecera) {
+          filas_extranjero <- filas_extranjero | 
+            grepl("RESIDENTES EXTRANJERO", dt$cabecera_distrital, ignore.case = TRUE)
+        }
         
-        for (col in cols_extranjero) {
-          if (!col %in% colnames(dt)) {
-            dt[, (col) := NA_real_]
+        if (tiene_municipio) {
+          filas_extranjero <- filas_extranjero | 
+            grepl("^RESIDENTES EXTRANJERO$", dt$nombre_municipio, ignore.case = TRUE)
+        }
+        
+        num_filas_extranjero <- sum(filas_extranjero)
+        
+        if (num_filas_extranjero > 0) {
+          message("      📍 Encontradas ", num_filas_extranjero, " filas de RESIDENTES EXTRANJERO")
+          
+          # Crear columnas de extranjero si no existen
+          for (col in cols_extranjero) {
+            if (!col %in% colnames(dt)) {
+              dt[, (col) := NA_real_]
+            }
           }
+          
+          idx_extranjero <- which(filas_extranjero)
+          
+          # ── Mover TOTALES: padron_nacional → padron_extranjero ──
+          if ("padron_nacional" %in% colnames(dt)) {
+            dt[idx_extranjero, padron_extranjero := padron_nacional]
+            dt[idx_extranjero, padron_nacional := 0]
+          }
+          
+          if ("lista_nacional" %in% colnames(dt)) {
+            dt[idx_extranjero, lista_extranjero := lista_nacional]
+            dt[idx_extranjero, lista_nacional := 0]
+          }
+          
+          # ══════════════════════════════════════════════════════════════
+          # v2.2 CORRECCIÓN CRÍTICA: Mover SEXO
+          # Los archivos originales pre-2020 usan "padron_nacional_hombres"
+          # (NO "padron_hombres") incluso para las filas de extranjero
+          # ══════════════════════════════════════════════════════════════
+          
+          # Intentar primero padron_nacional_hombres (archivos originales)
+          # Si no existe, intentar padron_hombres (por compatibilidad)
+          col_padron_h <- if ("padron_nacional_hombres" %in% colnames(dt)) {
+            "padron_nacional_hombres"
+          } else if ("padron_hombres" %in% colnames(dt)) {
+            "padron_hombres"
+          } else NULL
+          
+          col_padron_m <- if ("padron_nacional_mujeres" %in% colnames(dt)) {
+            "padron_nacional_mujeres"
+          } else if ("padron_mujeres" %in% colnames(dt)) {
+            "padron_mujeres"
+          } else NULL
+          
+          col_lista_h <- if ("lista_nacional_hombres" %in% colnames(dt)) {
+            "lista_nacional_hombres"
+          } else if ("lista_hombres" %in% colnames(dt)) {
+            "lista_hombres"
+          } else NULL
+          
+          col_lista_m <- if ("lista_nacional_mujeres" %in% colnames(dt)) {
+            "lista_nacional_mujeres"
+          } else if ("lista_mujeres" %in% colnames(dt)) {
+            "lista_mujeres"
+          } else NULL
+          
+          # Mover datos de sexo
+          if (!is.null(col_padron_h)) {
+            dt[idx_extranjero, padron_extranjero_hombres := get(col_padron_h)]
+            dt[idx_extranjero, (col_padron_h) := 0]
+            message("      ✅ Movido ", col_padron_h, " → padron_extranjero_hombres")
+          }
+          
+          if (!is.null(col_padron_m)) {
+            dt[idx_extranjero, padron_extranjero_mujeres := get(col_padron_m)]
+            dt[idx_extranjero, (col_padron_m) := 0]
+            message("      ✅ Movido ", col_padron_m, " → padron_extranjero_mujeres")
+          }
+          
+          if (!is.null(col_lista_h)) {
+            dt[idx_extranjero, lista_extranjero_hombres := get(col_lista_h)]
+            dt[idx_extranjero, (col_lista_h) := 0]
+            message("      ✅ Movido ", col_lista_h, " → lista_extranjero_hombres")
+          }
+          
+          if (!is.null(col_lista_m)) {
+            dt[idx_extranjero, lista_extranjero_mujeres := get(col_lista_m)]
+            dt[idx_extranjero, (col_lista_m) := 0]
+            message("      ✅ Movido ", col_lista_m, " → lista_extranjero_mujeres")
+          }
+          
+          message("      ✅ Transformación completada (totales + sexo)")
+        } else {
+          message("      ⚠️ No se encontraron filas de RESIDENTES EXTRANJERO")
         }
-        
-        idx_extranjero <- which(filas_extranjero)
-        
-        # Mover datos de nacional → extranjero
-        if ("padron_nacional" %in% colnames(dt)) {
-          dt[idx_extranjero, padron_extranjero := padron_nacional]
-          dt[idx_extranjero, padron_nacional := 0]
-        }
-        
-        if ("lista_nacional" %in% colnames(dt)) {
-          dt[idx_extranjero, lista_extranjero := lista_nacional]
-          dt[idx_extranjero, lista_nacional := 0]
-        }
-        
-        message("   ✅ Transformación completada")
       }
     }
   }
@@ -333,4 +438,4 @@ cargar_lne <- function(tipo_corte, fecha, dimension = "completo",
   return(resultado)
 }
 
-message("✅ datos_lne.R v2.0 cargado (Firebase Storage)")
+message("✅ datos_lne.R v2.2 cargado (Firebase Storage + corrección columnas sexo pre-2020)")

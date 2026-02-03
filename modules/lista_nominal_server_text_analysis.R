@@ -1,15 +1,15 @@
 # modules/lista_nominal_server_text_analysis.R
-# Versión: 3.7 - Advertencia nacional + reestructuración encabezado
-# Cambios vs v3.6:
-#   - Nueva advertencia para vista Nacional con distrito "RESIDENTES EN EL EXTRANJERO"
-#   - Encabezado OUTPUT 1: label "Alcance del análisis:" alineado a la izquierda
-#   - Subtítulo de alcance ahora alineado a la izquierda (era centrado)
-#   - Interlineado 16px entre año destacado y label de alcance
+# Versión: 3.8 - Validación consistencia temporal sexo predominante
+# Cambios vs v3.7:
+#   - sexo_predominante() ahora evalúa TODOS los registros del periodo (no solo el último)
+#   - Si predominio es constante: "mayor presencia constante de [sexo]."
+#   - Si predominio NO es constante: "mayor presencia de [sexo], la mayor parte del periodo."
+#   - Aplica en RAMA I (multi-anual) y RAMA II (intra-año)
 # Consume: datos_year_actual, datos_anuales_completos, datos_year_consulta,
 #          filtros_usuario, estado_app, anio_actual, anio_consultado,
 #          ambito_reactivo, texto_alcance
 # Genera:  3 bloques uiOutput en el sidebar derecho
-# Fecha:   01 de febrero de 2026
+# Fecha:   02 de febrero de 2026
 
 # ========== FUNCIÓN AUXILIAR: FORMATEAR FECHAS EN ESPAÑOL ==========
 if (!exists("formatear_fecha_es")) {
@@ -46,7 +46,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
                                                texto_alcance) {
   ns <- session$ns
   
-  message("\U0001f4dd Inicializando lista_nominal_server_text_analysis v3.7")
+  message("\U0001f4dd Inicializando lista_nominal_server_text_analysis v3.8")
   
   # ============================================================
   # HELPERS INTERNOS
@@ -84,12 +84,54 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     return(list(pct = round(pct, 2), texto = texto))
   }
   
-  # Determinar sexo predominante comparando hombres vs mujeres
-  sexo_predominante <- function(hombres, mujeres) {
-    if (is.na(hombres) || is.na(mujeres)) return("sin datos suficientes")
-    if (mujeres > hombres) return("mujeres")
-    if (hombres > mujeres) return("hombres")
-    return("ambos sexos por igual")
+  # ============================================================
+  # v3.8: Determinar sexo predominante evaluando consistencia temporal
+  # Recibe vectores completos de hombres y mujeres (todos los registros)
+  # Retorna: list(sexo = "mujeres"|"hombres"|"ambos sexos por igual"|"sin datos suficientes",
+  #               constante = TRUE|FALSE)
+  # ============================================================
+  sexo_predominante <- function(vec_hombres, vec_mujeres) {
+    # Caso: vectores de longitud 1 (compatibilidad legacy)
+    if (length(vec_hombres) == 1 && length(vec_mujeres) == 1) {
+      if (is.na(vec_hombres) || is.na(vec_mujeres)) {
+        return(list(sexo = "sin datos suficientes", constante = TRUE))
+      }
+      if (vec_mujeres > vec_hombres) return(list(sexo = "mujeres", constante = TRUE))
+      if (vec_hombres > vec_mujeres) return(list(sexo = "hombres", constante = TRUE))
+      return(list(sexo = "ambos sexos por igual", constante = TRUE))
+    }
+    
+    # Caso: vectores con múltiples registros — evaluar consistencia
+    # Filtrar pares donde ambos tengan datos válidos
+    validos <- !is.na(vec_hombres) & !is.na(vec_mujeres)
+    h_val <- vec_hombres[validos]
+    m_val <- vec_mujeres[validos]
+    
+    if (length(h_val) == 0) {
+      return(list(sexo = "sin datos suficientes", constante = TRUE))
+    }
+    
+    # Determinar predominio en cada registro
+    # +1 = mujeres, -1 = hombres, 0 = iguales
+    predominio <- sign(m_val - h_val)
+    
+    # Sexo predominante del último registro (para determinar cuál reportar)
+    ultimo_pred <- predominio[length(predominio)]
+    sexo_ultimo <- if (ultimo_pred > 0) "mujeres" else if (ultimo_pred < 0) "hombres" else "ambos sexos por igual"
+    
+    # Evaluar si el predominio fue constante en TODO el periodo
+    # Constante = todos los registros muestran el mismo sexo arriba
+    # (ignorando registros donde son iguales, que son raros y transicionales)
+    predominios_no_cero <- predominio[predominio != 0]
+    
+    if (length(predominios_no_cero) == 0) {
+      # Todos los registros son iguales — caso raro
+      return(list(sexo = "ambos sexos por igual", constante = TRUE))
+    }
+    
+    es_constante <- all(predominios_no_cero == predominios_no_cero[1])
+    
+    return(list(sexo = sexo_ultimo, constante = es_constante))
   }
   
   # Detectar si el usuario seleccionó un distrito de Residentes en el Extranjero
@@ -138,14 +180,9 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   }
   
   # Detectar si vista extranjero necesita advertencia
-  # Retorna: FALSE (sin advertencia) o TRUE (necesita seleccionar distrito RE)
-  # En vista Extranjero, cualquier distrito que NO sea "RESIDENTES EN EL EXTRANJERO"
-  # requiere que el usuario reconfigure su consulta
   necesita_advertencia_extranjero <- function(ambito, filtros) {
     if (ambito != "extranjero") return(FALSE)
-    # Si es Nacional (nivel país), no necesita advertencia
     if (filtros$entidad == "Nacional") return(FALSE)
-    # Si hay estado seleccionado: el distrito DEBE ser RE para ver datos
     if (filtros$distrito == "Todos" || !es_distrito_extranjero(filtros$distrito)) return(TRUE)
     return(FALSE)
   }
@@ -158,12 +195,8 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   )
   
   # Detectar si vista nacional necesita advertencia
-  # Retorna: FALSE (sin advertencia) o TRUE (tiene distrito RE en vista nacional)
-  # En vista Nacional, si el distrito es "RESIDENTES EN EL EXTRANJERO"
-  # los datos nacionales no aplican para ese distrito especial
   necesita_advertencia_nacional <- function(ambito, filtros) {
     if (ambito != "nacional") return(FALSE)
-    # Solo aplica si tiene un estado seleccionado con distrito RE
     if (filtros$entidad == "Nacional") return(FALSE)
     if (es_distrito_extranjero(filtros$distrito)) return(TRUE)
     return(FALSE)
@@ -177,39 +210,20 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   )
   
   # ============================================================
-  # ESTILOS INLINE v3.2 - Paleta azul marca, tipografía consistente
+  # ESTILOS INLINE v3.2
   # ============================================================
-  
-  # Contenedor base (+2px: 14→16)
   css_contenedor <- "font-size: 16px; line-height: 1.6; color: #333;"
-  
-  # Título principal <h3>: centrado (+2px: 16→18)
   css_titulo_h3 <- "text-align: center; margin: 0 0 2px 0; font-size: 18px; color: #2c3e50; font-weight: 600; line-height: 1.4;"
-  
-  # Año destacado: línea separada, centrado, con interlineado inferior (+2px: 18→20)
   css_year_highlight <- "display: block; text-align: center; color: #1a5276; font-weight: 700; font-size: 20px; margin-top: 4px; margin-bottom: 10px;"
-  
-  # Label "Alcance del análisis:" - alineado a la izquierda
   css_alcance_label <- "margin: 16px 0 2px 0; font-size: 14px; color: #555; font-weight: 600; text-align: left;"
-  
-  # Subtítulo de alcance - alineado a la izquierda (+2px: 12→14)
   css_alcance <- "text-align: left; margin: 0 0 0 0; font-size: 14px; color: #777; line-height: 1.4;"
-  
-  # Encabezados de sección <h4> (+2px: 15→17, margin-top 12→22 para separar del alcance)
   css_titulo_h4 <- "margin: 22px 0 6px 0; font-size: 17px; color: #2c3e50; font-weight: 600; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px;"
-  
-  # Párrafos de contenido (+2px: 13→15)
   css_parrafo <- "margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #333;"
-  
-  # Alertas (+2px: 13→15)
   css_alerta <- "text-align: center; color: #999; padding: 15px; font-style: italic; font-size: 15px;"
-  
-  # Advertencia extranjero (+2px: 12→14)
   css_advertencia <- "background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 10px; margin: 8px 0; font-size: 14px; color: #856404;"
   
   # ============================================================
   # OUTPUT 1: TÍTULO Y ALCANCE DEL ANÁLISIS
-  # Diseño: <h3> centrado con año destacado + label + subtítulo de alcance alineado left
   # ============================================================
   
   output$`text_analysis-titulo_lista` <- renderUI({
@@ -222,17 +236,10 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     
     message("\U0001f4dd [T\u00cdTULO] Renderizando en estado: ", estado_actual)
     
-    # Obtener año consultado
     anio_consul <- tryCatch(anio_consultado(), error = function(e) anio_actual())
-    
-    # Obtener ámbito
     ambito <- tryCatch(ambito_reactivo(), error = function(e) "nacional")
     cols <- cols_ambito(ambito)
-    
-    # Texto de vista según ámbito
     texto_vista <- paste0("Padr\u00f3n y Lista Nominal Electoral ", cols$etiqueta)
-    
-    # Texto de alcance (de texto_alcance reactive)
     alcance <- tryCatch(texto_alcance(), error = function(e) "")
     alcance_formateado <- gsub(" - ", " \u2013 ", alcance)
     
@@ -252,14 +259,12 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   
   # ============================================================
   # OUTPUT 2: RESUMEN GENERAL (SOLO año == anio_actual)
-  # Diseño: <h4> sin "a)", datos variables en <strong>
   # ============================================================
   
   output$`text_analysis-resumen_general_lista` <- renderUI({
     
     estado_actual <- estado_app()
     
-    # --- Estado inicial: mensaje de espera ---
     if (estado_actual == "inicial") {
       return(HTML(paste0(
         "<p style='", css_alerta, "'>",
@@ -267,7 +272,6 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       )))
     }
     
-    # --- Validar estado consultado ---
     if (estado_actual == "consultado") {
       req(input$btn_consultar > 0)
       message("\U0001f4dd [RESUMEN] Renderizando en estado CONSULTADO - Bot\u00f3n: ", input$btn_consultar)
@@ -275,7 +279,6 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       message("\U0001f4dd [RESUMEN] Renderizando en estado RESTABLECIDO")
     }
     
-    # --- Obtener año consultado y año actual ---
     anio_consul <- tryCatch(anio_consultado(), error = function(e) NULL)
     anio_act <- tryCatch(anio_actual(), error = function(e) NULL)
     
@@ -283,18 +286,15 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       return(HTML(paste0("<p style='", css_alerta, "'>Cargando datos...</p>")))
     }
     
-    # --- Si el año consultado NO es el año actual: NO mostrar resumen general ---
     if (anio_consul != anio_act) {
       message("\U0001f4dd [RESUMEN] A\u00f1o consultado (", anio_consul, ") != a\u00f1o actual (", anio_act, ") - Sin resumen general")
       return(NULL)
     }
     
-    # --- Obtener ámbito y filtros ---
     ambito <- tryCatch(ambito_reactivo(), error = function(e) "nacional")
     filtros <- tryCatch(filtros_usuario(), error = function(e) list(entidad = "Nacional", distrito = "Todos"))
     cols <- cols_ambito(ambito)
     
-    # --- Verificar advertencia para vista extranjero ---
     if (necesita_advertencia_extranjero(ambito, filtros)) {
       return(HTML(paste0(
         "<div style='", css_contenedor, "'>",
@@ -306,7 +306,6 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       )))
     }
     
-    # --- Verificar advertencia para vista nacional con distrito RE ---
     if (necesita_advertencia_nacional(ambito, filtros)) {
       return(HTML(paste0(
         "<div style='", css_contenedor, "'>",
@@ -318,18 +317,15 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       )))
     }
     
-    # --- Obtener datos del año actual ---
     datos <- tryCatch(datos_year_actual(), error = function(e) NULL)
     
     if (is.null(datos) || nrow(datos) == 0) {
       return(HTML(paste0("<p style='", css_alerta, "'>No hay datos disponibles.</p>")))
     }
     
-    # Último registro (mes más reciente)
     ultimo <- datos[nrow(datos), ]
     ultima_fecha <- ultimo$fecha
     
-    # Extraer valores según ámbito
     padron_val <- safe_val(datos, nrow(datos), cols$padron)
     lista_val  <- safe_val(datos, nrow(datos), cols$lista)
     
@@ -341,7 +337,6 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     mes_texto <- nombre_mes_es(ultima_fecha)
     anio_texto <- format(as.Date(ultima_fecha), "%Y")
     
-    # Construir texto según ámbito — datos variables en <strong>
     if (ambito == "extranjero") {
       texto_padron <- paste0(
         "Al mes de <strong>", mes_texto, " de ", anio_texto, "</strong>, ",
@@ -378,19 +373,17 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   
   # ============================================================
   # OUTPUT 3: EVOLUCIÓN TEMPORAL
-  # Diseño: <h4> sin "b)", datos variables en <strong>
+  # v3.8: Texto de sexo ahora evalúa consistencia temporal
   # ============================================================
   
   output$`text_analysis-comparacion_lista` <- renderUI({
     
     estado_actual <- estado_app()
     
-    # --- Estado inicial: no mostrar ---
     if (estado_actual == "inicial") {
       return(NULL)
     }
     
-    # --- Validar estado consultado ---
     if (estado_actual == "consultado") {
       req(input$btn_consultar > 0)
       message("\U0001f4dd [EVOLUCI\u00d3N] Renderizando en estado CONSULTADO")
@@ -398,7 +391,6 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       message("\U0001f4dd [EVOLUCI\u00d3N] Renderizando en estado RESTABLECIDO")
     }
     
-    # --- Obtener año consultado y año actual ---
     anio_consul <- tryCatch(anio_consultado(), error = function(e) NULL)
     anio_act <- tryCatch(anio_actual(), error = function(e) NULL)
     
@@ -406,12 +398,10 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       return(NULL)
     }
     
-    # --- Obtener ámbito y filtros ---
     ambito <- tryCatch(ambito_reactivo(), error = function(e) "nacional")
     filtros <- tryCatch(filtros_usuario(), error = function(e) list(entidad = "Nacional", distrito = "Todos"))
     cols <- cols_ambito(ambito)
     
-    # --- Verificar advertencia para vista extranjero ---
     if (necesita_advertencia_extranjero(ambito, filtros)) {
       return(HTML(paste0(
         "<div style='", css_contenedor, "'>",
@@ -423,7 +413,6 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       )))
     }
     
-    # --- Verificar advertencia para vista nacional con distrito RE ---
     if (necesita_advertencia_nacional(ambito, filtros)) {
       return(HTML(paste0(
         "<div style='", css_contenedor, "'>",
@@ -437,7 +426,6 @@ lista_nominal_server_text_analysis <- function(input, output, session,
     
     # ============================================================
     # RAMA I: Año consultado == año actual (gráficas 1, 2, 3)
-    # → Evolución multi-anual (2017 → último año) o (2020 → último año para extranjero)
     # ============================================================
     
     if (anio_consul == anio_act) {
@@ -453,8 +441,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
         )))
       }
       
-      # Para extranjero, los datos empiezan en 2020 (años previos tienen valor 0)
-      # Filtramos filas con datos reales > 0 para que el texto refleje el rango correcto
+      # Filtrar filas con datos reales > 0
       if (ambito == "extranjero") {
         datos_anuales_filtrado <- datos_anuales[!is.na(datos_anuales[[cols$padron]]) & datos_anuales[[cols$padron]] > 0, ]
         if (nrow(datos_anuales_filtrado) == 0) {
@@ -466,7 +453,6 @@ lista_nominal_server_text_analysis <- function(input, output, session,
           )))
         }
       } else {
-        # Nacional: también filtrar años con datos > 0 por robustez
         datos_anuales_filtrado <- datos_anuales[!is.na(datos_anuales[[cols$padron]]) & datos_anuales[[cols$padron]] > 0, ]
         if (nrow(datos_anuales_filtrado) == 0) {
           return(HTML(paste0(
@@ -479,36 +465,37 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       }
       
       # Primer y último año disponible
-      # Usar [[ ]] para evitar problemas de encoding con $
       col_anio <- if ("año" %in% colnames(datos_anuales_filtrado)) {
         "año"
       } else if ("a\u00f1o" %in% colnames(datos_anuales_filtrado)) {
         "a\u00f1o"
       } else {
-        colnames(datos_anuales_filtrado)[1]  # fallback: primera columna
+        colnames(datos_anuales_filtrado)[1]
       }
       
       primer_anio <- datos_anuales_filtrado[[col_anio]][1]
       ultimo_anio <- datos_anuales_filtrado[[col_anio]][nrow(datos_anuales_filtrado)]
       
-      # Valores de padrón: primero y último
       padron_primero <- safe_val(datos_anuales_filtrado, 1, cols$padron)
       padron_ultimo  <- safe_val(datos_anuales_filtrado, nrow(datos_anuales_filtrado), cols$padron)
       
-      # Valores de lista: primero y último
       lista_primero <- safe_val(datos_anuales_filtrado, 1, cols$lista)
       lista_ultimo  <- safe_val(datos_anuales_filtrado, nrow(datos_anuales_filtrado), cols$lista)
       
-      # Calcular variaciones
       var_padron <- calcular_variacion(padron_ultimo, padron_primero)
       var_lista  <- calcular_variacion(lista_ultimo, lista_primero)
       
-      # Sexo predominante (del último año)
-      hombres_ultimo <- safe_val(datos_anuales_filtrado, nrow(datos_anuales_filtrado), cols$padron_h)
-      mujeres_ultimo <- safe_val(datos_anuales_filtrado, nrow(datos_anuales_filtrado), cols$padron_m)
-      sexo_pred <- sexo_predominante(hombres_ultimo, mujeres_ultimo)
+      # v3.8: Sexo predominante — evaluar consistencia en TODO el periodo multi-anual
+      vec_hombres <- as.numeric(datos_anuales_filtrado[[cols$padron_h]])
+      vec_mujeres <- as.numeric(datos_anuales_filtrado[[cols$padron_m]])
+      resultado_sexo <- sexo_predominante(vec_hombres, vec_mujeres)
+      sexo_pred <- resultado_sexo$sexo
+      es_constante <- resultado_sexo$constante
       
-      # Construir texto según ámbito — datos variables en <strong>
+      # Frase de constancia: "constante" solo si fue consistente en todo el periodo
+      frase_constancia <- if (es_constante) "una mayor presencia constante de" else "una mayor presencia de"
+      frase_periodo <- if (!es_constante) ", la mayor parte del periodo." else "."
+      
       if (ambito == "extranjero") {
         texto_evolucion <- paste0(
           "Entre <strong>", primer_anio, "</strong> y <strong>", ultimo_anio, "</strong>",
@@ -520,8 +507,9 @@ lista_nominal_server_text_analysis <- function(input, output, session,
           "<strong>", fmt_pct(var_lista$pct), "</strong>."
         )
         texto_sexo <- paste0(
-          "La distribuci\u00f3n por sexo muestra una mayor presencia constante de ",
-          "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal de Residentes en el Extranjero."
+          "La distribuci\u00f3n por sexo muestra ", frase_constancia, " ",
+          "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal de Residentes en el Extranjero",
+          frase_periodo
         )
       } else {
         texto_evolucion <- paste0(
@@ -534,8 +522,9 @@ lista_nominal_server_text_analysis <- function(input, output, session,
           "<strong>", fmt_pct(var_lista$pct), "</strong>."
         )
         texto_sexo <- paste0(
-          "La distribuci\u00f3n por sexo muestra una mayor presencia constante de ",
-          "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal Electoral."
+          "La distribuci\u00f3n por sexo muestra ", frase_constancia, " ",
+          "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal Electoral",
+          frase_periodo
         )
       }
       
@@ -551,7 +540,6 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       
       # ============================================================
       # RAMA II: Año consultado != año actual (gráficas 4, 5)
-      # → Evolución intra-año (enero → diciembre del año consultado)
       # ============================================================
       
       datos_consulta <- tryCatch(datos_year_consulta(), error = function(e) NULL)
@@ -565,7 +553,6 @@ lista_nominal_server_text_analysis <- function(input, output, session,
         )))
       }
       
-      # Para extranjero, filtrar filas con datos válidos
       if (ambito == "extranjero") {
         datos_consulta_filtrado <- datos_consulta[!is.na(datos_consulta[[cols$padron]]) & datos_consulta[[cols$padron]] > 0, ]
         if (nrow(datos_consulta_filtrado) < 2) {
@@ -580,27 +567,28 @@ lista_nominal_server_text_analysis <- function(input, output, session,
         datos_consulta_filtrado <- datos_consulta
       }
       
-      # Primer y último registro del año consultado
       padron_primero <- safe_val(datos_consulta_filtrado, 1, cols$padron)
       padron_ultimo  <- safe_val(datos_consulta_filtrado, nrow(datos_consulta_filtrado), cols$padron)
       
       lista_primero <- safe_val(datos_consulta_filtrado, 1, cols$lista)
       lista_ultimo  <- safe_val(datos_consulta_filtrado, nrow(datos_consulta_filtrado), cols$lista)
       
-      # Calcular variaciones intra-año
       var_padron <- calcular_variacion(padron_ultimo, padron_primero)
       var_lista  <- calcular_variacion(lista_ultimo, lista_primero)
       
-      # Verbo en pasado para años anteriores
       verbo_padron <- if (!is.na(var_padron$pct) && var_padron$pct >= 0) "creci\u00f3" else "disminuy\u00f3"
       verbo_lista  <- if (!is.na(var_lista$pct) && var_lista$pct >= 0) "creci\u00f3" else "disminuy\u00f3"
       
-      # Sexo predominante (del último registro del año)
-      hombres_ultimo <- safe_val(datos_consulta_filtrado, nrow(datos_consulta_filtrado), cols$padron_h)
-      mujeres_ultimo <- safe_val(datos_consulta_filtrado, nrow(datos_consulta_filtrado), cols$padron_m)
-      sexo_pred <- sexo_predominante(hombres_ultimo, mujeres_ultimo)
+      # v3.8: Sexo predominante — evaluar consistencia en todo el año consultado
+      vec_hombres <- as.numeric(datos_consulta_filtrado[[cols$padron_h]])
+      vec_mujeres <- as.numeric(datos_consulta_filtrado[[cols$padron_m]])
+      resultado_sexo <- sexo_predominante(vec_hombres, vec_mujeres)
+      sexo_pred <- resultado_sexo$sexo
+      es_constante <- resultado_sexo$constante
       
-      # Construir texto según ámbito — datos variables en <strong>
+      frase_constancia <- if (es_constante) "una mayor presencia constante de" else "una mayor presencia de"
+      frase_periodo <- if (!es_constante) ", la mayor parte del periodo." else "."
+      
       if (ambito == "extranjero") {
         texto_evolucion <- paste0(
           "Entre <strong>enero</strong> y <strong>diciembre de ", anio_consul, "</strong>",
@@ -612,9 +600,10 @@ lista_nominal_server_text_analysis <- function(input, output, session,
           "<strong>", fmt_pct(abs(var_lista$pct)), "</strong>."
         )
         texto_sexo <- paste0(
-          "La distribuci\u00f3n por sexo muestra una mayor presencia constante de ",
+          "La distribuci\u00f3n por sexo muestra ", frase_constancia, " ",
           "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal Electoral ",
-          "de residentes en el extranjero."
+          "de residentes en el extranjero",
+          frase_periodo
         )
       } else {
         texto_evolucion <- paste0(
@@ -627,8 +616,9 @@ lista_nominal_server_text_analysis <- function(input, output, session,
           "<strong>", fmt_pct(abs(var_lista$pct)), "</strong>."
         )
         texto_sexo <- paste0(
-          "La distribuci\u00f3n por sexo muestra una mayor presencia constante de ",
-          "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal Electoral."
+          "La distribuci\u00f3n por sexo muestra ", frase_constancia, " ",
+          "<strong>", sexo_pred, "</strong> en el Padr\u00f3n y en la Lista Nominal Electoral",
+          frase_periodo
         )
       }
       
@@ -653,10 +643,11 @@ lista_nominal_server_text_analysis <- function(input, output, session,
   }) %>%
     bindEvent(estado_app(), input$btn_consultar, input$ambito_datos, ignoreNULL = FALSE, ignoreInit = FALSE)
   
-  message("\u2705 M\u00f3dulo lista_nominal_server_text_analysis v3.7 inicializado")
+  message("\u2705 M\u00f3dulo lista_nominal_server_text_analysis v3.8 inicializado")
   message("   \u2705 3 outputs principales: t\u00edtulo, resumen, evoluci\u00f3n temporal")
   message("   \u2705 Soporta \u00e1mbito nacional y extranjero")
   message("   \u2705 Rama I (a\u00f1o actual) y Rama II (a\u00f1o consultado)")
   message("   \u2705 Advertencias: extranjero (distrito no-RE) + nacional (distrito RE)")
   message("   \u2705 Encabezado: t\u00edtulo centrado + 'Alcance del an\u00e1lisis:' alineado left")
+  message("   \u2705 Sexo predominante: validaci\u00f3n de consistencia temporal (constante vs mayor parte)")
 }
