@@ -1,7 +1,10 @@
 /* ui/styles/styles.css */
-/* Versión: 1.1 - Agregado estilos para ocultar título DataTable durante carga */
+/* Versión: 2.0 - Solo estilos DESKTOP (móvil separado en mobile.css) */
 
-/* Restablecer márgenes y rellenos */
+/* ============================================================
+   RESET Y BASE
+   ============================================================ */
+
 * {
   margin: 0;
   padding: 0;
@@ -13,6 +16,10 @@ body {
   font-size: 16px;
   background-color: #F5F5F5;
 }
+
+/* ============================================================
+   HEADER
+   ============================================================ */
 
 .header {
   position: sticky;
@@ -26,7 +33,6 @@ body {
   align-items: center;
 }
 
-/* Estilos para el link dentro del titlePanel */
 .clickable-title {
   cursor: pointer;
   color: #F2F2F2;
@@ -39,42 +45,48 @@ body {
   opacity: 0.8;
 }
 
-/* Establecer el color de fondo de las pestañas */
+/* ============================================================
+   TABS
+   ============================================================ */
+
 .nav.nav-tabs {
   background-color: #E2E2E2;
   color: #FBFBFB;
 }
 
-/* Establecer el color de fondo de la pestaña activa */
 .nav.nav-tabs .active {
   background-color: #F8F8F8;
   border-color: #F8F8F8;
   color: #004062;
 }
 
+/* ============================================================
+   SIDEBAR Y PANELES
+   ============================================================ */
+
 .well {
   background-color: #CACACA;
 }
 
-/* Estilo para las opciones deshabilitadas en el radioButton */
 .disabled-option + span {
   opacity: .5;
   pointer-events: none;
 }
 
-/* Estilos específicos para versiones desktop */
 .desktop-only {
   display: block;
 }
 
-/* Estilos para el contenedor del gráfico de barras */
+/* ============================================================
+   GRÁFICOS Y CONTENEDORES
+   ============================================================ */
+
 .plot-container {
   width: 100% !important;
   height: 450px;
   padding: 0;
 }
 
-/* Estilo para el contenedor de título y gráfico de participación */
 .participacion-container {
   width: 100% !important;
   height: 500px;
@@ -84,7 +96,6 @@ body {
   justify-content: center;
 }
 
-/* Estilo específico para el gráfico de participación de Federales */
 #federales-main-participacion_plot {
   display: block;
   margin-left: 160px;
@@ -93,19 +104,16 @@ body {
   height: 432px !important;
 }
 
-/* Forzar altura del gráfico de barras de Federales */
 .shiny-plot-output#federales-main-grafico_barras {
   width: 100% !important;
   height: 450px !important;
 }
 
-/* Estilos para imágenes y gráficos */
 img, .shiny-plot-output {
   max-width: 100%;
   height: auto;
 }
 
-/* Forzar altura del gráfico de participación de Federales */
 .shiny-plot-output#federales-main-participacion_plot {
   height: 432px !important;
 }
@@ -124,31 +132,27 @@ img, .shiny-plot-output {
   height: 100%;
 }
 
-/* -------- DATATABLE: OCULTAR TÍTULO DURANTE CARGA -------- */
-/* v1.1: El título "Data Table" se oculta mientras el spinner está activo */
+/* ============================================================
+   DATATABLE
+   ============================================================ */
 
-/* Contenedor de la sección DataTable */
 .datatable-section {
   position: relative;
 }
 
-/* Título oculto por defecto durante la carga inicial */
 .datatable-section .datatable-title {
   opacity: 0;
   transition: opacity 0.4s ease-in-out;
 }
 
-/* Mostrar título cuando la tabla tiene contenido (clase agregada via JS o cuando hay datos) */
 .datatable-section.has-data .datatable-title {
   opacity: 1;
 }
 
-/* Alternativa: Mostrar título cuando el spinner ya no está presente */
 .datatable-section:not(:has(.shiny-spinner-placeholder)) .datatable-title {
   opacity: 1;
 }
 
-/* Fallback para navegadores que no soportan :has() - mostrar después de animación */
 @supports not selector(:has(*)) {
   .datatable-section .datatable-title {
     animation: fadeInTitle 0.5s ease-in-out 2s forwards;
@@ -160,33 +164,30 @@ img, .shiny-plot-output {
   }
 }
 
-/* -------- FIN DATATABLE OCULTAR TÍTULO -------- */
-
-/* Estilos para tablas */
 .dataTables_wrapper {
   font-size: 0.875em;
   margin-bottom: 50px !important;
   padding-bottom: 20px !important;
 }
 
-/* Espaciado adicional para los controles inferiores */
 .dataTables_info, 
 .dataTables_paginate {
   margin-bottom: 25px !important;
 }
 
-/* Espaciado para el caption (fuente) */
 .dataTables_wrapper caption {
   margin-bottom: 20px !important;
   padding-bottom: 15px !important;
 }
 
-/* Espaciado general para todos los elementos de paginación */
 .dataTables_wrapper .dataTables_paginate .paginate_button {
   margin-bottom: 10px !important;
 }
 
-/* Títulos de gráficos */
+/* ============================================================
+   TÍTULOS
+   ============================================================ */
+
 .main-panel h3 {
   font-size: 1.5em;
   color: #333;
@@ -194,9 +195,10 @@ img, .shiny-plot-output {
   text-align: center;
 }
 
-/* -------- SIDEBAR DERECHO -------- */
+/* ============================================================
+   SIDEBAR DERECHO
+   ============================================================ */
 
-/* Estilo general para el sidebar derecho */
 .sidebar-right {
   position: fixed;
   top: 4em;
@@ -214,12 +216,10 @@ img, .shiny-plot-output {
   overflow-x: hidden;
 }
 
-/* Sidebar oculto */
 .sidebar-right.hidden {
   transform: translateX(300px);
 }
 
-/* Contenedor para los botones de toggle */
 .toggle-container {
   position: fixed;
   top: 5px;
@@ -228,12 +228,10 @@ img, .shiny-plot-output {
   transition: right 0.3s ease;
 }
 
-/* Posición del toggle cuando el sidebar está oculto */
 .toggle-container.sidebar-hidden {
   right: 0;
 }
 
-/* Botón para ocultar/mostrar el sidebar */
 .toggle-sidebar-btn {
   background-color: #EE701D !important;
   color: white;
@@ -252,13 +250,15 @@ img, .shiny-plot-output {
   justify-content: center;
 }
 
-/* Efecto hover para el botón */
 .toggle-sidebar-btn:hover {
   color: white;
   background-color: #BF3601 !important;
 }
 
-/* Estilos para el panel de análisis en el sidebar derecho */
+/* ============================================================
+   SIDEBAR DERECHO - CONTENIDO
+   ============================================================ */
+
 .sidebar-right h3 {
   text-align: center; 
   font-size: 2rem; 
@@ -297,7 +297,6 @@ img, .shiny-plot-output {
   font-weight: normal;
 }
 
-/* Alerta para cuando no hay datos disponibles */
 .sidebar-alert {
   color: #721c24;
   background-color: #f8d7da;
@@ -307,19 +306,16 @@ img, .shiny-plot-output {
   margin-bottom: 15px;
 }
 
-/* Sección dentro del sidebar */
 .sidebar-section {
   margin-bottom: 20px;
   padding-bottom: 15px;
   border-bottom: 1px solid #e9ecef;
 }
 
-/* Último elemento sin borde inferior */
 .sidebar-section:last-child {
   border-bottom: none;
 }
 
-/* Estilo para la barra de desplazamiento */
 .sidebar-right::-webkit-scrollbar {
   width: 8px;
 }
@@ -336,4 +332,41 @@ img, .shiny-plot-output {
 
 .sidebar-right::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* ============================================================
+   TABLETS (768px - 1024px)
+   ============================================================ */
+
+@media screen and (min-width: 769px) and (max-width: 1024px) {
+  .sidebar-right {
+    width: 280px;
+  }
+  
+  .toggle-container {
+    right: 280px;
+  }
+  
+  .toggle-container.sidebar-hidden {
+    right: 0;
+  }
+  
+  .col-sm-4 {
+    width: 35% !important;
+  }
+  
+  .col-sm-8 {
+    width: 65% !important;
+  }
+}
+
+/* ============================================================
+   OCULTAR ELEMENTOS MOBILE EN DESKTOP
+   ============================================================ */
+
+.mobile-only,
+.mobile-fab-container,
+.mobile-overlay,
+.mobile-drawer-close {
+  display: none !important;
 }

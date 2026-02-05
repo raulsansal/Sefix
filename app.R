@@ -38,6 +38,7 @@ if (file.exists("firebase_loaders.R")) {
 source("server/partidos_mapping.R")
 source("server/datos.R")
 source("server/partidos_colores.R")
+source("utils_responsive.R")
 
 # Cargar módulo de LNE
 if (file.exists("utils_lne.R")) {
@@ -66,6 +67,7 @@ source("modules/lista_nominal_server.R")
 ui <- fluidPage(
   useShinyjs(),
   includeCSS("ui/styles/styles.css"),
+  includeCSS("ui/styles/mobile.css"),
   includeScript("ui/www/custom.js"),
   includeScript("ui/www/custom_select_input.js"),
   includeScript("ui/www/sidebar_toggle.js"),
@@ -141,6 +143,11 @@ ui <- fluidPage(
 
 # Definir la lógica del servidor (server)
 server <- function(input, output, session) {
+  plotly_config <- reactive({
+    width <- input$screen_width %||% 1200
+    get_plotly_config(width)
+  })
+  
   # Verificación mínima de dependencias críticas
   if(!exists("cargar_datos") || !exists("partidos_mapping") || !exists("partidos_colores")) {
     stop("Faltan dependencias críticas. Verifica que los archivos de servidor estén cargados correctamente.")
