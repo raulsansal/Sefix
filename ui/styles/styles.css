@@ -1,4 +1,5 @@
 /* ui/styles/styles.css */
+/* Versión: 1.1 - Agregado estilos para ocultar título DataTable durante carga */
 
 /* Restablecer márgenes y rellenos */
 * {
@@ -122,6 +123,44 @@ img, .shiny-plot-output {
   width: 100% !important;
   height: 100%;
 }
+
+/* -------- DATATABLE: OCULTAR TÍTULO DURANTE CARGA -------- */
+/* v1.1: El título "Data Table" se oculta mientras el spinner está activo */
+
+/* Contenedor de la sección DataTable */
+.datatable-section {
+  position: relative;
+}
+
+/* Título oculto por defecto durante la carga inicial */
+.datatable-section .datatable-title {
+  opacity: 0;
+  transition: opacity 0.4s ease-in-out;
+}
+
+/* Mostrar título cuando la tabla tiene contenido (clase agregada via JS o cuando hay datos) */
+.datatable-section.has-data .datatable-title {
+  opacity: 1;
+}
+
+/* Alternativa: Mostrar título cuando el spinner ya no está presente */
+.datatable-section:not(:has(.shiny-spinner-placeholder)) .datatable-title {
+  opacity: 1;
+}
+
+/* Fallback para navegadores que no soportan :has() - mostrar después de animación */
+@supports not selector(:has(*)) {
+  .datatable-section .datatable-title {
+    animation: fadeInTitle 0.5s ease-in-out 2s forwards;
+  }
+  
+  @keyframes fadeInTitle {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
+/* -------- FIN DATATABLE OCULTAR TÍTULO -------- */
 
 /* Estilos para tablas */
 .dataTables_wrapper {
@@ -298,4 +337,3 @@ img, .shiny-plot-output {
 .sidebar-right::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
-

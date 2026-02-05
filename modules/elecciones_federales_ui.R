@@ -1,4 +1,5 @@
 # modules/elecciones_federales_ui.R
+# Versión: 1.1 - Usar clase CSS datatable-section para ocultar título durante carga
 
 elecciones_federales_ui <- function(id) {
   ns <- NS(id)
@@ -64,11 +65,17 @@ elecciones_federales_ui <- function(id) {
           )
         ),
         
-        # DataTable
+        # DataTable - v1.1: Usar clase datatable-section para ocultar título durante carga
         fluidRow(
           column(12, 
-                 h3("Data Table", align = "center", style = "margin-top: 40px;"),
-                 DTOutput(ns("main-table_data"))
+                 div(
+                   class = "datatable-section",
+                   h3("Data Table", 
+                      align = "center", 
+                      style = "margin-top: 40px;",
+                      class = "datatable-title"),
+                   DTOutput(ns("main-table_data"))
+                 )
           )
         )
       )

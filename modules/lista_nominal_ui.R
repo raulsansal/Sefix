@@ -1,5 +1,8 @@
 # modules/lista_nominal_ui.R
-# Versión: 3.1 - CORRECCIÓN: Usar uiOutput dinámico en lugar de conditionalPanel hardcodeado
+# Versión: 3.2 - Usar clase CSS datatable-section para ocultar título durante carga
+# Cambios vs v3.1:
+#   - DataTable envuelto en div con clase "datatable-section"
+#   - Título h3 tiene clase "datatable-title" para control CSS
 
 lista_nominal_ui <- function(id) {
   ns <- NS(id)
@@ -127,14 +130,21 @@ lista_nominal_ui <- function(id) {
         ),
         
         # ========== DATATABLE (CON SPINNER) ==========
+        # v3.2: Usar clase datatable-section para ocultar título durante carga
         fluidRow(
           column(12, 
-                 h3("Data Table", align = "center", style = "margin-top: 40px;"),
-                 shinycssloaders::withSpinner(
-                   DTOutput(ns("main-table_data")),
-                   type = 6,
-                   color = "#44559B",
-                   size = 0.8
+                 div(
+                   class = "datatable-section",
+                   h3("Data Table", 
+                      align = "center", 
+                      style = "margin-top: 40px;",
+                      class = "datatable-title"),
+                   shinycssloaders::withSpinner(
+                     DTOutput(ns("main-table_data")),
+                     type = 6,
+                     color = "#44559B",
+                     size = 0.8
+                   )
                  )
           )
         )
