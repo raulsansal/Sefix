@@ -1,6 +1,6 @@
 # modules/lista_nominal_graficas/graficas_helpers.R
 # Funciones auxiliares para cálculos y proyecciones
-# Versión: 2.1 - CORRECCIÓN: Card condensada con tooltip hover para desglose
+# Versión: 2.2 - Card NB responsiva para móvil (60% reducción)
 
 # ========== FUNCIÓN: GENERAR TEXTO DE ALCANCE ==========
 
@@ -36,10 +36,11 @@ generar_texto_alcance <- function(input) {
   return(texto)
 }
 
-# ========== FUNCIÓN: CREAR CARD NO BINARIO ==========
-# ✅ v2.1: Card condensada + tooltip hover con desglose completo
+# ========== FUNCIÓN: CREAR CARD NO BINARIO - RESPONSIVA ==========
+# ✅ v2.2: Acepta parámetro screen_width para ajustar tamaño
 
-crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "mensual", año_consultado = NULL) {
+crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "mensual", 
+                                  año_consultado = NULL, screen_width = 1200) {
   
   resultado <- tryCatch({
     
@@ -48,23 +49,66 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
       return(NULL)
     }
     
+    # ========== DETECTAR DISPOSITIVO ==========
+    is_mobile <- screen_width <= 768
+    is_tablet <- screen_width > 768 && screen_width <= 1024
+    
+    # ========== CONFIGURACIÓN SEGÚN DISPOSITIVO ==========
+    if (is_mobile) {
+      # Móvil: 60% reducción
+      font_size_title <- 8
+      font_size_content <- 6
+      font_size_hint <- 5
+      border_width <- 1.5
+      border_pad <- 4
+      tooltip_font_size <- 8
+      pos_x <- 0.97
+      pos_y <- 0.97
+      x_anchor <- "right"
+      etiqueta_padron <- "P"
+      etiqueta_lista <- "L"
+      show_hint <- FALSE  # No mostrar hint en móvil (muy pequeño)
+    } else if (is_tablet) {
+      # Tablet: 30% reducción
+      font_size_title <- 10
+      font_size_content <- 8
+      font_size_hint <- 7
+      border_width <- 2
+      border_pad <- 6
+      tooltip_font_size <- 9
+      pos_x <- 0.08
+      pos_y <- 0.92
+      x_anchor <- "left"
+      etiqueta_padron <- if(ambito == "nacional") "Padrón" else "Padrón Ext."
+      etiqueta_lista <- if(ambito == "nacional") "Lista" else "Lista Ext."
+      show_hint <- TRUE
+    } else {
+      # Desktop: tamaño normal
+      font_size_title <- 12
+      font_size_content <- 10
+      font_size_hint <- 8
+      border_width <- 2.5
+      border_pad <- 8
+      tooltip_font_size <- 11
+      pos_x <- 0.08
+      pos_y <- 0.92
+      x_anchor <- "left"
+      etiqueta_padron <- if(ambito == "nacional") "Padrón Nacional" else "Padrón Extranjero"
+      etiqueta_lista <- if(ambito == "nacional") "Lista Nacional" else "Lista Extranjero"
+      show_hint <- TRUE
+    }
+    
     # ========== DETECTAR COLUMNAS DISPONIBLES ==========
     cols_disponibles <- colnames(datos)
     
-    # Posibles nombres de columnas NB
     if (ambito == "nacional") {
       posibles_padron <- c("padron_nacional_no_binario", "padron_no_binario", "padron_nb")
       posibles_lista <- c("lista_nacional_no_binario", "lista_no_binario", "lista_nb")
-      etiqueta_padron <- "Padrón Nacional"
-      etiqueta_lista <- "Lista Nacional"
     } else {
       posibles_padron <- c("padron_extranjero_no_binario", "padron_no_binario", "padron_nb")
       posibles_lista <- c("lista_extranjero_no_binario", "lista_no_binario", "lista_nb")
-      etiqueta_padron <- "Padrón Extranjero"
-      etiqueta_lista <- "Lista Extranjero"
     }
     
-    # Buscar primera columna que exista
     col_padron <- NULL
     for (col in posibles_padron) {
       if (col %in% cols_disponibles) {
@@ -81,7 +125,6 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
       }
     }
     
-    # Si no se encuentran columnas, retornar NULL
     if (is.null(col_padron) || is.null(col_lista)) {
       message("ℹ️ [card_nb] Columnas NB no disponibles para ", ambito)
       return(NULL)
@@ -93,8 +136,6 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
     
     # ========== CALCULAR TOTAL (ÚLTIMO PERÍODO CON DATOS) ==========
     datos_ordenados <- datos[order(datos$fecha), ]
-    
-    # Encontrar último período con datos > 0
     datos_con_casos <- datos_ordenados[datos_ordenados[[col_padron]] + datos_ordenados[[col_lista]] > 0, ]
     
     if (nrow(datos_con_casos) == 0) {
@@ -103,33 +144,30 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
     }
     
     ultima_fila <- datos_con_casos[nrow(datos_con_casos), ]
-    
     total_padron <- ultima_fila[[col_padron]]
     total_lista <- ultima_fila[[col_lista]]
     
-    # Determinar mes/año del último dato
+    # Período texto (formato según dispositivo)
     if (tipo_periodo == "mensual") {
-      periodo_texto <- format(ultima_fila$fecha, "%B %Y")  # "Diciembre 2024"
+      if (is_mobile) {
+        periodo_texto <- format(ultima_fila$fecha, "%b")  # "Dic"
+      } else {
+        periodo_texto <- format(ultima_fila$fecha, "%B %Y")  # "Diciembre 2024"
+      }
     } else {
-      periodo_texto <- format(ultima_fila$fecha, "%Y")  # "2024"
+      periodo_texto <- format(ultima_fila$fecha, "%Y")
     }
     
-    message("📊 [card_nb] Último período con datos: ", periodo_texto, " | P:", total_padron, " L:", total_lista)
+    message("📊 [card_nb] Dispositivo: ", 
+            if(is_mobile) "MÓVIL" else if(is_tablet) "TABLET" else "DESKTOP",
+            " | Período: ", periodo_texto, " | P:", total_padron, " L:", total_lista)
     
     # ========== PREPARAR DATOS PARA TOOLTIP ==========
-    
     if (tipo_periodo == "mensual") {
       datos$periodo <- format(datos$fecha, "%b")
       datos$periodo_orden <- as.integer(format(datos$fecha, "%m"))
-      
-      # Eliminar duplicados de mes (usar fecha más reciente)
-      fechas_unicas <- aggregate(
-        fecha ~ periodo,
-        data = datos,
-        FUN = max
-      )
+      fechas_unicas <- aggregate(fecha ~ periodo, data = datos, FUN = max)
       datos <- merge(datos, fechas_unicas, by = c("periodo", "fecha"))
-      
     } else {
       datos$periodo <- as.character(datos$año)
       datos$periodo_orden <- as.integer(datos$año)
@@ -138,123 +176,94 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
     datos$padron_nb <- datos[[col_padron]]
     datos$lista_nb <- datos[[col_lista]]
     
-    # ========== FILTRAR SOLO PERÍODOS CON CASOS ==========
     datos_con_casos <- datos[datos$padron_nb + datos$lista_nb > 0, ]
     
     if (nrow(datos_con_casos) == 0) {
-      message("ℹ️ [card_nb] Sin casos NB")
       return(NULL)
     }
     
-    # Ordenar
     datos_con_casos <- datos_con_casos[order(datos_con_casos$periodo_orden), ]
     
-    # ========== CREAR TABLA PARA TOOLTIP ==========
+    # ========== CONSTRUIR TEXTO DE CARD SEGÚN DISPOSITIVO ==========
+    
+    if (is_mobile) {
+      # Card ultra-compacta para móvil
+      texto_card <- paste0(
+        "<span style='color:#9B59B6; font-size:", font_size_title, "px; font-weight:bold'>⚧</span><br>",
+        "<span style='font-size:", font_size_content, "px'>",
+        etiqueta_padron, ":", total_padron, "<br>",
+        etiqueta_lista, ":", total_lista,
+        "</span>"
+      )
+    } else {
+      # Card normal para tablet/desktop
+      hint_text <- if(show_hint) {
+        paste0("<br><span style='font-size:", font_size_hint, "px; color:#888; font-style:italic'>",
+               "(Hover para desglose)</span>")
+      } else ""
+      
+      texto_card <- paste0(
+        "<b style='color:#9B59B6; font-size:", font_size_title, "px'>⚧ No Binario</b><br>",
+        "<span style='font-size:", font_size_content, "px; line-height:1.4'>",
+        "<b>", periodo_texto, "</b><br>",
+        etiqueta_padron, ": ", total_padron, "<br>",
+        etiqueta_lista, ": ", total_lista,
+        hint_text,
+        "</span>"
+      )
+    }
+    
+    # ========== CONSTRUIR TEXTO DE TOOLTIP ==========
     
     desglose <- datos_con_casos[, c("periodo", "padron_nb", "lista_nb")]
-    
-    # Construir filas de la tabla
     filas_tabla <- c()
+    
     for (i in 1:nrow(desglose)) {
       periodo <- desglose$periodo[i]
       padron <- desglose$padron_nb[i]
       lista <- desglose$lista_nb[i]
       
-      if (tipo_periodo == "mensual") {
-        # "Jan    25    21"
+      if (is_mobile) {
+        fila <- sprintf("%s P:%d L:%d", periodo, padron, lista)
+      } else if (tipo_periodo == "mensual") {
         fila <- sprintf("%-7s %4d  %4d", periodo, padron, lista)
       } else {
-        # "2023    80    75"
         fila <- sprintf("%4s  %4d  %4d", periodo, padron, lista)
       }
-      
       filas_tabla <- c(filas_tabla, fila)
     }
     
-    # Unir filas (sin total, valores ya son acumulativos)
     tabla_texto <- paste(filas_tabla, collapse = "\n")
     
-    # ========== CONSTRUIR TEXTO DE CARD CONDENSADA ==========
-    
-    texto_card <- paste0(
-      "<b style='color:#9B59B6; font-size:12px'>⚧ No Binario</b><br>",
-      "<span style='font-size:10px; line-height:1.5'>",
-      "<b>", periodo_texto, "</b><br>",
-      "<b>", etiqueta_padron, ": ", total_padron, "</b><br>",
-      "<b>", etiqueta_lista, ": ", total_lista, "</b><br>",
-      "<span style='font-size:8px; color:#666; font-style:italic'>",
-      "(Pase el mouse para ver desglose)",
-      "</span>",
-      "</span>"
-    )
-    
-    # ========== CONSTRUIR TEXTO DE TOOLTIP ==========
-    
-    if (tipo_periodo == "mensual") {
-      encabezado_tooltip <- "Desglose mensual"
-      header_tabla <- "Mes     Padrón  Lista"
+    if (is_mobile) {
+      texto_tooltip <- paste0(
+        "No Binario\n",
+        tabla_texto, "\n",
+        "(Tap para cerrar)"
+      )
     } else {
-      encabezado_tooltip <- "Desglose anual"
-      header_tabla <- "Año   Padrón  Lista"
+      encabezado_tooltip <- if(tipo_periodo == "mensual") "Desglose mensual" else "Desglose anual"
+      header_tabla <- if(tipo_periodo == "mensual") "Mes     Padrón  Lista" else "Año   Padrón  Lista"
+      
+      texto_tooltip <- paste0(
+        encabezado_tooltip, "\n",
+        strrep("─", 22), "\n",
+        header_tabla, "\n",
+        tabla_texto
+      )
     }
     
-    texto_tooltip <- paste0(
-      encabezado_tooltip, "\n",
-      strrep("─", 22), "\n",
-      header_tabla, "\n",
-      tabla_texto
-    )
-    
-    message("✅ [card_nb] Card creada con ", nrow(desglose), " períodos en tooltip")
-    
-    # ========== POSICIONAMIENTO INTELIGENTE ==========
-    
-    if (tipo_periodo == "anual") {
-      pos_x <- 0.08
-      pos_y <- 0.92
-    } else {
-      # Mensual: detectar tendencia
-      if (nrow(datos) >= 3) {
-        ultimos_3 <- tail(datos, 3)
-        
-        col_ref <- NULL
-        if ("lista_nacional" %in% colnames(ultimos_3)) {
-          col_ref <- "lista_nacional"
-        } else if ("lista_extranjero" %in% colnames(ultimos_3)) {
-          col_ref <- "lista_extranjero"
-        }
-        
-        if (!is.null(col_ref)) {
-          valores <- ultimos_3[[col_ref]][!is.na(ultimos_3[[col_ref]])]
-          if (length(valores) >= 2) {
-            pendiente <- valores[length(valores)] - valores[1]
-            pos_x <- if(pendiente > 0) 0.75 else 0.75
-            pos_y <- if(pendiente > 0) 0.15 else 0.85
-          } else {
-            pos_x <- 0.75
-            pos_y <- 0.85
-          }
-        } else {
-          pos_x <- 0.75
-          pos_y <- 0.85
-        }
-      } else {
-        pos_x <- 0.75
-        pos_y <- 0.85
-      }
-    }
-    
-    # ========== CREAR ANNOTATION CON HOVERTEXT ==========
+    # ========== CREAR ANNOTATION ==========
     
     annotation <- list(
       text = texto_card,
-      hovertext = texto_tooltip,  # ✅ v2.1: TOOLTIP
+      hovertext = texto_tooltip,
       hoverlabel = list(
         bgcolor = "rgba(255, 255, 255, 0.98)",
         bordercolor = "#9B59B6",
         font = list(
-          family = "Courier New, monospace",
-          size = 11,
+          family = if(is_mobile) "Arial, sans-serif" else "Courier New, monospace",
+          size = tooltip_font_size,
           color = "#333"
         )
       ),
@@ -262,21 +271,23 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
       y = pos_y,
       xref = "paper",
       yref = "paper",
-      xanchor = "left",
+      xanchor = x_anchor,
       yanchor = "top",
       showarrow = FALSE,
-      bgcolor = "rgba(255, 255, 255, 0.95)",
+      bgcolor = "rgba(255, 255, 255, 0.92)",
       bordercolor = "#9B59B6",
-      borderwidth = 2.5,
-      borderpad = 8,
+      borderwidth = border_width,
+      borderpad = border_pad,
       font = list(
-        size = 10,
+        size = font_size_content,
         color = "#333",
         family = "Arial, sans-serif"
-      )
+      ),
+      captureevents = TRUE  # Permite capturar clicks en móvil
     )
     
-    message("✅ [card_nb] Card creada - Hover habilitado")
+    message("✅ [card_nb] Card creada para ", 
+            if(is_mobile) "MÓVIL" else if(is_tablet) "TABLET" else "DESKTOP")
     return(annotation)
     
   }, error = function(e) {
@@ -443,9 +454,8 @@ tiene_datos_validos <- function(datos, columnas) {
   return(FALSE)
 }
 
-message("✅ graficas_helpers v2.1 cargado")
-message("   ✅ CORRECCIÓN: Card condensada con tooltip hover")
-message("   ✅ Solo muestra períodos con datos > 0")
-message("   ✅ Tooltip con desglose completo (sin total, valores acumulativos)")
-message("   ✅ Indicador visual: '(Pase el mouse para ver desglose)'")
-
+message("✅ graficas_helpers v2.2 cargado")
+message("   ✅ Card NB responsiva según screen_width")
+message("   ✅ Móvil: 60% reducción, posición esquina superior derecha")
+message("   ✅ Tablet: 30% reducción")
+message("   ✅ Desktop: tamaño normal")

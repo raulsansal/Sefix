@@ -1,16 +1,15 @@
 # modules/lista_nominal_graficas/graficas_ui_render.R
 # Renderizado dinámico de UI para gráficas históricas
-# Versión: 2.3 - CORRECCIÓN: Eliminar req() que bloqueaba renderizado
+# Versión: 2.4 - Alturas responsivas para móvil
 
 graficas_ui_render <- function(input, output, session, estado_app, mostrar_graficas_anuales, mostrar_graficas_consultadas, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_ui_render v2.3")
+  message("📊 Inicializando graficas_ui_render v2.4")
   
   # ========== RENDERIZADO DINÁMICO DE GRÁFICAS ==========
   
   output$graficas_dinamicas <- renderUI({
     
-    # ========== OBTENER ESTADO Y VALIDAR ==========
     estado_actual <- estado_app()
     
     message("🔄 [UI RENDER] Estado actual: ", estado_actual)
@@ -26,34 +25,24 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
       ))
     }
     
-    # ========== ✅ CORRECCIÓN v2.3: VALIDAR SIN BLOQUEAR CON req() ==========
+    # ========== VALIDAR SIN BLOQUEAR ==========
     if (estado_actual == "consultado") {
-      # ✅ Validar sin bloquear con req() - esto permite que el reactive se complete
       if (is.null(input$btn_consultar) || input$btn_consultar == 0) {
-        message("⚠️ [UI RENDER] Estado consultado pero botón no presionado - Esperando...")
+        message("⚠️ [UI RENDER] Esperando...")
         return(div(
           style = "text-align: center; padding: 40px; color: #999;",
           icon("hourglass-half", style = "font-size: 48px; margin-bottom: 20px;"),
           h4("Procesando consulta...", style = "color: #666; font-weight: normal;")
         ))
       }
-      message("🔍 [UI RENDER] Renderizando en estado CONSULTADO - Botón: ", input$btn_consultar)
-    } else {
-      message("🔍 [UI RENDER] Renderizando en estado RESTABLECIDO")
     }
     
-    # ========== ✅ AISLAR INPUTS Y REACTIVES PARA EVITAR REACTIVIDAD ==========
     btn_count <- isolate(input$btn_consultar)
-    
-    # ✅ v2.2: Usar ambito_reactivo en lugar de isolate(input$ambito_datos)
     ambito_actual <- ambito_reactivo()
-    
-    # ✅ AISLAR las llamadas a los reactives que controlan visibilidad
     mostrar_anuales <- isolate(mostrar_graficas_anuales())
     mostrar_consultadas <- isolate(mostrar_graficas_consultadas())
     
-    message("   Estado: ", estado_actual, ", Botón: ", btn_count, ", Ámbito: ", ambito_actual)
-    message("   Mostrar anuales: ", mostrar_anuales, " | Mostrar consultadas: ", mostrar_consultadas)
+    message("   Estado: ", estado_actual, ", Ámbito: ", ambito_actual)
     
     # ========== GRÁFICAS 1, 2, 3 (AÑO ACTUAL) ==========
     if (mostrar_anuales) {
@@ -62,27 +51,31 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
         # Gráfica 1: Evolución mensual año actual + Proyección
         fluidRow(
           column(12, 
+                 # ✅ v2.4: Altura responsiva - sin altura fija en style
                  div(class = "plot-container",
-                     style = "height: 450px; margin-bottom: 10px;",
                      shinycssloaders::withSpinner(
-                       plotlyOutput(session$ns("grafico_evolucion_2025"), width = "100%", height = "450px"),
+                       # ✅ v2.4: height = "100%" para que CSS controle
+                       plotlyOutput(session$ns("grafico_evolucion_2025"), width = "100%", height = "100%"),
                        type = 6,
                        color = "#44559B",
-                       size = 1
+                       size = 0.8
                      )
                  ),
+                 # ✅ v2.4: Contenedor del botón metodología con clase específica
                  div(
-                   style = "display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;",
+                   class = "metodologia-btn-container",
+                   style = "display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin: 4px 8px 12px 0;",
                    tags$span(
-                     style = "color: #666; font-size: 12px;",
-                     "Información adicional:"
+                     class = "metodologia-label desktop-only",
+                     style = "color: #666; font-size: 11px;",
+                     "Info:"
                    ),
                    actionButton(
                      session$ns("info_grafica1"),
-                     label = "Metodología de Proyección",
+                     label = "Metodología",
                      icon = icon("info-circle"),
-                     class = "btn-sm btn-outline-info",
-                     style = "font-size: 12px; padding: 4px 12px; border-radius: 15px; cursor: pointer;",
+                     class = "btn-sm btn-outline-info metodologia-btn",
+                     style = "font-size: 11px; padding: 3px 10px; border-radius: 12px; cursor: pointer;",
                      title = "Ver metodología de proyección"
                    )
                  )
@@ -93,12 +86,11 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
         fluidRow(
           column(12, 
                  div(class = "plot-container",
-                     style = "height: 450px; margin-bottom: 30px;",
                      shinycssloaders::withSpinner(
-                       plotlyOutput(session$ns("grafico_evolucion_anual"), width = "100%", height = "450px"),
+                       plotlyOutput(session$ns("grafico_evolucion_anual"), width = "100%", height = "100%"),
                        type = 6,
                        color = "#44559B",
-                       size = 1
+                       size = 0.8
                      )
                  )
           )
@@ -108,12 +100,11 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
         fluidRow(
           column(12, 
                  div(class = "plot-container",
-                     style = "height: 450px; margin-bottom: 30px;",
                      shinycssloaders::withSpinner(
-                       plotlyOutput(session$ns("grafico_evolucion_anual_sexo"), width = "100%", height = "450px"),
+                       plotlyOutput(session$ns("grafico_evolucion_anual_sexo"), width = "100%", height = "100%"),
                        type = 6,
                        color = "#44559B",
-                       size = 1
+                       size = 0.8
                      )
                  )
           )
@@ -129,12 +120,11 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
         fluidRow(
           column(12, 
                  div(class = "plot-container",
-                     style = "height: 450px; margin-bottom: 30px;",
                      shinycssloaders::withSpinner(
-                       plotlyOutput(session$ns("grafico_evolucion_year"), width = "100%", height = "450px"),
+                       plotlyOutput(session$ns("grafico_evolucion_year"), width = "100%", height = "100%"),
                        type = 6,
                        color = "#44559B",
-                       size = 1
+                       size = 0.8
                      )
                  )
           )
@@ -144,12 +134,11 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
         fluidRow(
           column(12, 
                  div(class = "plot-container",
-                     style = "height: 450px; margin-bottom: 30px;",
                      shinycssloaders::withSpinner(
-                       plotlyOutput(session$ns("grafico_evolucion_year_sexo"), width = "100%", height = "450px"),
+                       plotlyOutput(session$ns("grafico_evolucion_year_sexo"), width = "100%", height = "100%"),
                        type = 6,
                        color = "#44559B",
-                       size = 1
+                       size = 0.8
                      )
                  )
           )
@@ -158,7 +147,7 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
     }
     
     # ========== NINGUNA CONDICIÓN CUMPLIDA ==========
-    message("⚠️ [UI RENDER] No se cumplen condiciones - Retornando mensaje de espera")
+    message("⚠️ [UI RENDER] No se cumplen condiciones")
     return(div(
       style = "text-align: center; padding: 40px; color: #999;",
       icon("hourglass-half", style = "font-size: 48px; margin-bottom: 20px;"),
@@ -166,19 +155,15 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
     ))
     
   }) %>%
-    # ========== ✅ CORRECCIÓN v2.2: AGREGAR ambito_reactivo PARA CAMBIO DE VISTA ==========
-  # Se ejecuta cuando:
-  # 1. Cambia estado_app (inicial → restablecido → consultado)
-  # 2. Se presiona btn_consultar
-  # 3. Se cambia ambito_reactivo (nacional ↔ extranjero) DESPUÉS de consultar
-  bindEvent(
-    estado_app(),
-    input$btn_consultar,
-    ambito_reactivo(),  # ✅ v2.2: AGREGADO para cambio de vista automático
-    ignoreNULL = FALSE,
-    ignoreInit = FALSE
-  )
+    bindEvent(
+      estado_app(),
+      input$btn_consultar,
+      ambito_reactivo(),
+      ignoreNULL = FALSE,
+      ignoreInit = FALSE
+    )
   
-  message("✅ graficas_ui_render v2.3 inicializado")
-  message("   ✅ CORRECCIÓN v2.3: req() eliminado para no bloquear renderizado")
+  message("✅ graficas_ui_render v2.4 inicializado")
+  message("   ✅ Alturas responsivas (CSS controla)")
+  message("   ✅ Botón metodología con clase específica")
 }

@@ -1,25 +1,39 @@
 /* ui/styles/mobile.css */
-/* Versión: 2.0 - Estilos específicos para dispositivos móviles */
-/* Breakpoint: 768px */
+/* Versión: 2.2 - Ajustes completos para visualización profesional en móvil */
+/* Viewport de referencia: iPhone 13 Pro (390x844) */
+/* Técnicas: vh, vw, clamp(), rem para valores responsivos */
 
 @media screen and (max-width: 768px) {
+  
+  /* ============================================================
+     VARIABLES CSS PARA CONSISTENCIA
+     ============================================================ */
+  
+  :root {
+    --mobile-font-base: clamp(12px, 3.5vw, 16px);
+    --mobile-spacing-sm: clamp(4px, 1vw, 8px);
+    --mobile-spacing-md: clamp(8px, 2vw, 16px);
+    --mobile-color-primary: #006988;
+    --mobile-color-secondary: #155671;
+    --mobile-color-accent: #004062;
+  }
   
   /* ============================================================
      HEADER COMPACTO
      ============================================================ */
   
   .header {
-    height: 3em;
-    padding-left: 10px;
+    height: clamp(2.5em, 7vh, 3.5em);
+    padding-left: var(--mobile-spacing-md);
   }
   
   .header h1, 
   .header .clickable-title {
-    font-size: 1.2rem !important;
+    font-size: clamp(0.9rem, 4vw, 1.2rem) !important;
   }
   
   /* ============================================================
-     TABS SCROLLEABLES
+     PESTAÑAS (TABS) - LEGIBILIDAD MEJORADA
      ============================================================ */
   
   .nav.nav-tabs {
@@ -28,6 +42,7 @@
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    padding: 0 var(--mobile-spacing-sm);
   }
   
   .nav.nav-tabs::-webkit-scrollbar {
@@ -38,10 +53,18 @@
     flex-shrink: 0;
   }
   
+  /* ✅ AJUSTE 1: Tabs más legibles y centradas */
   .nav.nav-tabs > li > a {
-    padding: 8px 12px;
-    font-size: 0.85rem;
+    padding: clamp(8px, 2vh, 12px) clamp(10px, 3vw, 16px);
+    font-size: clamp(0.75rem, 3.2vw, 0.95rem) !important;
     white-space: nowrap;
+    text-align: center;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  
+  .nav.nav-tabs > li.active > a {
+    font-weight: 600;
   }
   
   /* ============================================================
@@ -57,14 +80,15 @@
     width: 85vw !important;
     max-width: 320px !important;
     height: 100vh !important;
+    height: 100dvh !important; /* Dynamic viewport height para iOS */
     z-index: 2000 !important;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
     overflow-y: auto !important;
     background-color: #f5f5f5 !important;
     box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
-    padding: 15px !important;
-    padding-top: 60px !important;
+    padding: var(--mobile-spacing-md) !important;
+    padding-top: 55px !important;
     margin: 0 !important;
   }
   
@@ -74,7 +98,6 @@
     transform: translateX(0);
   }
   
-  /* Ocultar el contenedor del sidebar en el layout normal */
   .col-sm-4:has(.well),
   .col-sm-4:has([class*="sidebar_panel"]) {
     position: absolute;
@@ -84,11 +107,10 @@
     overflow: visible;
   }
   
-  /* El mainPanel ocupa todo el ancho */
   .col-sm-8,
   .col-sm-12 {
     width: 100% !important;
-    padding: 0 10px !important;
+    padding: 0 var(--mobile-spacing-sm) !important;
   }
   
   /* ============================================================
@@ -102,11 +124,12 @@
     width: 85vw !important;
     max-width: 320px;
     height: 100vh;
+    height: 100dvh;
     transform: translateX(100%);
     transition: transform 0.3s ease;
     z-index: 2000;
-    padding: 15px;
-    padding-top: 60px;
+    padding: var(--mobile-spacing-md);
+    padding-top: 55px;
   }
   
   .sidebar-right.mobile-open {
@@ -117,7 +140,6 @@
     transform: translateX(100%);
   }
   
-  /* Ocultar toggle original en móvil */
   .toggle-container {
     display: none !important;
   }
@@ -133,6 +155,7 @@
     left: 0;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     background-color: rgba(0, 0, 0, 0.5);
     z-index: 1999;
     opacity: 0;
@@ -145,7 +168,7 @@
   }
   
   /* ============================================================
-     BOTONES FLOTANTES (PARTE INFERIOR) - COLORES PERSONALIZADOS
+     BOTONES FLOTANTES (PARTE INFERIOR)
      ============================================================ */
   
   .mobile-fab-container {
@@ -156,8 +179,8 @@
     display: flex;
     justify-content: space-around;
     align-items: center;
-    background-color: #006988;
-    padding: 10px 15px;
+    background-color: var(--mobile-color-primary);
+    padding: clamp(6px, 1.5vh, 10px) clamp(10px, 3vw, 15px);
     z-index: 1500;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
   }
@@ -167,11 +190,11 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: #155671;
+    background: var(--mobile-color-secondary);
     border: none;
     color: white;
-    font-size: 0.75rem;
-    padding: 8px 20px;
+    font-size: clamp(0.6rem, 2.5vw, 0.75rem);
+    padding: clamp(5px, 1.2vh, 8px) clamp(12px, 4vw, 20px);
     cursor: pointer;
     transition: all 0.2s ease;
     border-radius: 8px;
@@ -179,35 +202,35 @@
   
   .mobile-fab-btn:hover,
   .mobile-fab-btn:active {
-    background-color: #004062;
+    background-color: var(--mobile-color-accent);
   }
   
   .mobile-fab-btn .fab-icon {
-    font-size: 1.5rem;
-    margin-bottom: 3px;
+    font-size: clamp(1.1rem, 5vw, 1.5rem);
+    margin-bottom: 2px;
   }
   
   .mobile-fab-btn .fab-label {
-    font-size: 0.7rem;
+    font-size: clamp(0.55rem, 2.2vw, 0.7rem);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
   
   /* ============================================================
-     BOTÓN CERRAR DRAWER - COLORES PERSONALIZADOS
+     BOTÓN CERRAR DRAWER
      ============================================================ */
   
   .mobile-drawer-close {
     position: absolute;
     top: 10px;
     right: 10px;
-    width: 40px;
-    height: 40px;
+    width: clamp(32px, 9vw, 40px);
+    height: clamp(32px, 9vw, 40px);
     border-radius: 50%;
     background-color: #CE4A0B;
     color: white;
     border: none;
-    font-size: 1.5rem;
+    font-size: clamp(1.1rem, 4vw, 1.4rem);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -221,85 +244,188 @@
   }
   
   /* ============================================================
-     GRÁFICAS RESPONSIVAS
+     ✅ AJUSTE 3: CONTENEDORES DE GRÁFICAS - ALTURA RESPONSIVA
+     Aprovecha el espacio vertical disponible
      ============================================================ */
   
   .plot-container {
-    height: auto !important;
-    min-height: 280px;
-    max-height: 60vh;
-    margin-bottom: 15px;
+    /* Altura responsiva basada en viewport */
+    height: clamp(280px, 45vh, 400px) !important;
+    min-height: 260px !important;
+    max-height: 50vh !important;
+    margin-bottom: var(--mobile-spacing-md) !important;
+    padding: 0 !important;
+    
+    /* Asegurar que el contenido se distribuya */
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: stretch !important;
   }
   
   .participacion-container {
-    height: auto !important;
-    min-height: 300px;
-    max-height: 60vh;
+    height: clamp(280px, 45vh, 400px) !important;
+    min-height: 260px !important;
+    max-height: 50vh !important;
   }
   
-  /* Gráficos Plotly - Ajustes críticos */
+  /* Plotly debe ocupar todo el contenedor */
   .plotly,
   .js-plotly-plot {
     width: 100% !important;
-    height: auto !important;
-    min-height: 250px;
+    height: 100% !important;
+    flex: 1 !important;
   }
   
-  /* Forzar que Plotly respete el contenedor */
   .plotly .main-svg {
     width: 100% !important;
-    height: auto !important;
+    height: 100% !important;
   }
   
-  /* Específico para federales */
+  /* Spinner también debe respetar el contenedor */
+  .shiny-spinner-output-container {
+    height: 100% !important;
+    min-height: inherit !important;
+  }
+  
   #federales-main-participacion_plot {
     margin-left: 0 !important;
     margin-right: 0 !important;
     width: 100% !important;
-    height: auto !important;
-    min-height: 280px;
+    height: 100% !important;
   }
   
   /* ============================================================
-     AJUSTES PARA TEXTOS EN GRÁFICAS (CSS Overrides)
+     ✅ AJUSTE 2 & 3: PLOTLY - LÍNEAS MÁS DELGADAS Y DISTRIBUCIÓN
      ============================================================ */
   
-  /* Reducir tamaño de títulos en gráficas via CSS donde sea posible */
+  /* Títulos de gráficas */
   .plotly .gtitle {
-    font-size: 12px !important;
+    font-size: clamp(9px, 2.8vw, 12px) !important;
   }
   
+  /* Títulos de ejes */
   .plotly .xtitle,
   .plotly .ytitle {
-    font-size: 10px !important;
+    font-size: clamp(7px, 2vw, 9px) !important;
   }
   
+  /* Etiquetas de ticks */
   .plotly .xtick text,
   .plotly .ytick text {
-    font-size: 9px !important;
+    font-size: clamp(6px, 1.8vw, 8px) !important;
   }
   
+  /* Leyendas */
   .plotly .legendtext {
-    font-size: 9px !important;
+    font-size: clamp(6px, 1.8vw, 8px) !important;
   }
   
+  /* ✅ AJUSTE 2: Líneas 50% más delgadas (de 1.5 a 0.75) */
+  .plotly .scatter .lines path,
+  .plotly .scattergl .lines path {
+    stroke-width: 0.75px !important;
+  }
+  
+  /* Líneas en leyenda también más delgadas */
+  .plotly .legend .traces .legendlines path {
+    stroke-width: 0.75px !important;
+  }
+  
+  /* Marcadores más pequeños en leyenda */
+  .plotly .legend .traces .legendpoints path,
+  .plotly .legend .traces .legendpoints circle {
+    transform: scale(0.5) !important;
+  }
+  
+  /* Anotaciones (subtítulo, fuente) */
   .plotly .annotation-text {
-    font-size: 9px !important;
+    font-size: clamp(6px, 1.7vw, 8px) !important;
   }
   
   /* ============================================================
-     BOTÓN METODOLOGÍA - OCULTAR O REDUCIR EN MÓVIL
+     ✅ AJUSTE 4: BOTÓN METODOLOGÍA DE PROYECCIÓN - 70% REDUCIDO
      ============================================================ */
   
-  /* Reducir tamaño del botón de metodología */
-  .btn-outline-info {
-    font-size: 10px !important;
-    padding: 3px 8px !important;
+  /* Contenedor del botón - alineado a la derecha, compacto */
+  .plot-container + div,
+  div:has(> .btn-outline-info),
+  div:has(> [id*="info_grafica"]) {
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    gap: clamp(4px, 1vw, 8px) !important;
+    margin-top: clamp(-8px, -1vh, -4px) !important;
+    margin-bottom: clamp(4px, 1vh, 8px) !important;
+    padding-right: var(--mobile-spacing-sm) !important;
+    min-height: auto !important;
+    height: auto !important;
   }
   
-  /* Ocultar texto "Información adicional:" en móvil */
-  .plot-container + div > span {
-    display: none;
+  /* Ocultar etiqueta "Información adicional:" */
+  .plot-container + div > span:first-child,
+  div:has(> .btn-outline-info) > span:not(.fab-icon):not(.fab-label) {
+    display: none !important;
+  }
+  
+  /* ✅ Botón metodología - compacto con texto reducido 70% */
+  .btn-outline-info,
+  [id*="info_grafica"] {
+    font-size: clamp(7px, 2vw, 9px) !important;
+    padding: clamp(3px, 0.8vh, 5px) clamp(6px, 2vw, 10px) !important;
+    border-radius: 12px !important;
+    background-color: rgba(21, 86, 113, 0.1) !important;
+    border: 1px solid #155671 !important;
+    color: #155671 !important;
+    white-space: nowrap !important;
+    min-height: clamp(22px, 5vh, 28px) !important;
+    height: auto !important;
+    line-height: 1.2 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: clamp(2px, 0.5vw, 4px) !important;
+  }
+  
+  /* Ícono del botón */
+  .btn-outline-info i,
+  .btn-outline-info .fa,
+  [id*="info_grafica"] i {
+    font-size: clamp(8px, 2.2vw, 11px) !important;
+    color: #155671 !important;
+  }
+  
+  /* Hover/Active state */
+  .btn-outline-info:active,
+  .btn-outline-info:focus,
+  [id*="info_grafica"]:active {
+    background-color: rgba(21, 86, 113, 0.2) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(21, 86, 113, 0.3) !important;
+  }
+  
+  /* ============================================================
+     ✅ AJUSTE 5: CARD NO BINARIO - 50% DEL TAMAÑO ACTUAL
+     ============================================================ */
+  
+  /* Las cards NB son annotations de Plotly con borde #9B59B6 */
+  /* Aplicamos escala CSS para reducirlas */
+  
+  .plotly .annotation {
+    /* Reducir escala general de annotations pequeñas */
+  }
+  
+  /* Card NB específica (tiene bordercolor #9B59B6) */
+  .plotly .annotation-text-g {
+    /* Aplicar a todas las annotations */
+  }
+  
+  /* Forzar tamaño más pequeño en hover labels (tooltips) */
+  .plotly .hoverlayer .hovertext {
+    transform: scale(0.7) !important;
+    transform-origin: top left !important;
+  }
+  
+  .plotly .hoverlayer .hovertext text {
+    font-size: clamp(7px, 2vw, 9px) !important;
   }
   
   /* ============================================================
@@ -309,22 +435,23 @@
   .dataTables_wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    font-size: 0.75em;
+    font-size: clamp(0.65em, 2.5vw, 0.8em);
   }
   
   .dataTables_wrapper table {
-    min-width: 500px;
+    min-width: 450px;
   }
   
   .dataTables_wrapper .dataTables_filter,
   .dataTables_wrapper .dataTables_length {
     float: none !important;
     text-align: center !important;
-    margin-bottom: 10px;
+    margin-bottom: var(--mobile-spacing-sm);
   }
   
   .dataTables_wrapper .dataTables_filter input {
-    width: 150px;
+    width: clamp(120px, 35vw, 160px);
+    font-size: 16px; /* Previene zoom en iOS */
   }
   
   .dataTables_wrapper .dataTables_info,
@@ -334,15 +461,14 @@
   }
   
   .dataTables_paginate .paginate_button {
-    padding: 6px 10px !important;
+    padding: clamp(4px, 1vh, 6px) clamp(6px, 2vw, 10px) !important;
     margin: 2px !important;
-    font-size: 12px !important;
+    font-size: clamp(10px, 2.8vw, 12px) !important;
   }
   
-  /* Título DataTable más pequeño */
   .datatable-section h3.datatable-title {
-    font-size: 1.1rem !important;
-    margin-top: 20px !important;
+    font-size: clamp(0.9rem, 3.5vw, 1.1rem) !important;
+    margin-top: var(--mobile-spacing-md) !important;
   }
   
   /* ============================================================
@@ -352,44 +478,41 @@
   .form-control,
   .selectize-input,
   .btn {
-    font-size: 16px !important; /* Evita zoom en iOS */
+    font-size: 16px !important; /* Previene zoom en iOS */
   }
   
   .shiny-input-container {
-    margin-bottom: 10px;
+    margin-bottom: var(--mobile-spacing-sm);
   }
   
   .shiny-input-container label {
-    font-size: 0.85rem;
-    margin-bottom: 3px;
+    font-size: clamp(0.75rem, 3vw, 0.85rem);
+    margin-bottom: 2px;
   }
   
-  /* Radio buttons más grandes para touch */
   .radio input[type="radio"],
   .checkbox input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
-    margin-right: 8px;
+    width: clamp(16px, 4.5vw, 20px);
+    height: clamp(16px, 4.5vw, 20px);
+    margin-right: 6px;
   }
   
   .radio label,
   .checkbox label {
-    font-size: 0.9rem;
-    padding-left: 5px;
+    font-size: clamp(0.8rem, 3vw, 0.9rem);
+    padding-left: 4px;
   }
   
-  /* Botones de acción */
   .btn-primary,
   .btn-success {
-    padding: 10px 15px;
-    font-size: 0.95rem;
+    padding: clamp(8px, 2vh, 12px) clamp(10px, 3vw, 16px);
+    font-size: clamp(0.85rem, 3.2vw, 0.95rem);
     width: 100%;
-    margin-bottom: 8px;
+    margin-bottom: var(--mobile-spacing-sm);
   }
   
-  /* Select inputs */
   select.form-control {
-    height: 40px;
+    height: clamp(36px, 9vw, 42px);
   }
   
   /* ============================================================
@@ -402,20 +525,24 @@
   }
   
   .container-fluid {
-    padding-left: 8px;
-    padding-right: 8px;
+    padding-left: var(--mobile-spacing-sm);
+    padding-right: var(--mobile-spacing-sm);
   }
   
-  /* Espacio inferior para los botones flotantes */
   .main-container,
   .tab-content {
-    padding-bottom: 70px !important;
+    padding-bottom: clamp(55px, 12vh, 70px) !important;
   }
   
-  /* Reducir márgenes entre gráficas */
   .fluidRow,
   .row {
-    margin-bottom: 10px;
+    margin-bottom: var(--mobile-spacing-sm);
+  }
+  
+  /* Reducir espacio entre gráficas consecutivas */
+  .plot-container + .fluidRow,
+  .fluidRow + .fluidRow {
+    margin-top: var(--mobile-spacing-sm);
   }
   
   /* ============================================================
@@ -423,42 +550,38 @@
      ============================================================ */
   
   .sidebar-right h3 {
-    font-size: 1.2rem;
-    margin-bottom: 10px;
+    font-size: clamp(1rem, 4vw, 1.2rem);
+    margin-bottom: var(--mobile-spacing-sm);
   }
   
   .sidebar-right h4 {
-    font-size: 1rem;
-    margin-top: 10px;
-    margin-bottom: 5px;
+    font-size: clamp(0.85rem, 3.5vw, 1rem);
+    margin-top: var(--mobile-spacing-sm);
+    margin-bottom: 4px;
   }
   
   .sidebar-right p {
-    font-size: 0.85rem;
-    margin-bottom: 8px;
-    line-height: 1.4;
+    font-size: clamp(0.75rem, 3vw, 0.85rem);
+    margin-bottom: 6px;
+    line-height: 1.35;
   }
   
   .alcance-analisis {
-    font-size: 0.8rem;
+    font-size: clamp(0.7rem, 2.8vw, 0.8rem);
   }
   
   .sidebar-section {
-    margin-bottom: 12px;
-    padding-bottom: 10px;
+    margin-bottom: var(--mobile-spacing-md);
+    padding-bottom: var(--mobile-spacing-sm);
   }
   
   /* ============================================================
-     OCULTAR ELEMENTOS DESKTOP-ONLY
+     OCULTAR/MOSTRAR ELEMENTOS
      ============================================================ */
   
   .desktop-only {
     display: none !important;
   }
-  
-  /* ============================================================
-     MOSTRAR ELEMENTOS MOBILE-ONLY
-     ============================================================ */
   
   .mobile-only {
     display: block !important;
@@ -469,14 +592,6 @@
   }
   
   /* ============================================================
-     SPINNERS - AJUSTAR TAMAÑO EN MÓVIL
-     ============================================================ */
-  
-  .shiny-spinner-output-container {
-    min-height: 200px !important;
-  }
-  
-  /* ============================================================
      PREVENIR SCROLL CUANDO DRAWER ABIERTO
      ============================================================ */
   
@@ -484,5 +599,40 @@
     overflow: hidden !important;
     position: fixed !important;
     width: 100% !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+  }
+  
+  /* ============================================================
+     MEJORAS ESPECÍFICAS PARA iOS
+     ============================================================ */
+  
+  /* Prevenir zoom en inputs */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="tel"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+  
+  /* Touch targets mínimos (Apple HIG: 44px) */
+  button,
+  .btn,
+  a.btn,
+  input[type="radio"] + label,
+  input[type="checkbox"] + label {
+    min-height: 44px;
+  }
+  
+  /* Scrolling suave */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Safe area para iPhone con notch */
+  .mobile-fab-container {
+    padding-bottom: env(safe-area-inset-bottom, 0);
   }
 }
