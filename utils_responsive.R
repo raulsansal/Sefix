@@ -1,26 +1,28 @@
 # utils_responsive.R
 # Utilidades para gráficas responsivas en Shiny/Plotly
-# Versión: 2.1
-# Fecha: 06 de febrero de 2026
-# Cambios v2.1:
-#   - Líneas 50% más delgadas (0.75px en móvil)
-#   - Marcadores 50% más pequeños
-#   - Mejor distribución vertical de elementos
-#   - Card NB 50% más pequeña
+# Versión: 2.3
+# Cambios v2.3:
+#   - Card NB más pequeña con textos reducidos
+#   - Posición de fuente dinámica según número de leyendas
+#   - hovermode = 'closest' en móvil para tap
 
 # ============================================================
 # CONFIGURACIÓN RESPONSIVE PARA PLOTLY
 # ============================================================
 
-get_plotly_config <- function(screen_width = 1200) {
+get_plotly_config <- function(screen_width = 1200, num_legend_items = 2) {
   
   is_mobile <- screen_width <= 768
   is_tablet <- screen_width > 768 && screen_width <= 1024
   
+  # Calcular offset para leyendas adicionales
+  # Cada par de leyendas extra necesita más espacio
+  legend_rows <- ceiling(num_legend_items / 2)
+  legend_offset <- max(0, (legend_rows - 1) * 0.06)
+  
   if (is_mobile) {
-    # ========== CONFIGURACIÓN MÓVIL - v2.1 OPTIMIZADA ==========
     config <- list(
-      # Tamaños de fuente (proporcionales al viewport)
+      # Tamaños de fuente
       title_size = 10,
       subtitle_size = 8,
       axis_title_size = 7,
@@ -29,54 +31,44 @@ get_plotly_config <- function(screen_width = 1200) {
       annotation_size = 6,
       source_size = 5,
       
-      # ========== MÁRGENES - DISTRIBUIR MEJOR EL ESPACIO ==========
-      # Reducidos para dar más espacio al área de la gráfica
-      # y distribuir mejor los elementos
-      margin_top = 55,         # Espacio para título + subtítulo
-      margin_bottom = 70,      # Espacio para leyenda + fuente
-      margin_left = 40,        # Espacio para eje Y
-      margin_right = 10,       # Mínimo a la derecha
+      # Márgenes - ajustados dinámicamente
+      margin_top = 55,
+      margin_bottom = 75 + (legend_offset * 60),  # Más espacio para leyendas
+      margin_left = 40,
+      margin_right = 10,
       
-      # Altura sugerida (se sobrescribe por CSS, pero útil para cálculos)
       height = 280,
       
-      # ========== POSICIONAMIENTO VERTICAL ==========
-      # Título en y=1.0 (arriba del plot area)
-      # Subtítulo inmediatamente debajo del título
-      subtitle_y = 1.04,       # Cerca del título
-      
-      # Leyenda debajo del área de gráfica
-      legend_y = -0.18,        # Reducido para acercar al gráfico
+      # Posiciones verticales - dinámicas según leyendas
+      subtitle_y = 1.04,
+      legend_y = -0.18 - (legend_offset * 0.3),
       legend_orientation = "h",
+      source_y = -0.34 - (legend_offset * 1.2),  # ✅ Siempre debajo de leyendas
       
-      # Fuente con espaciado uniforme debajo de leyenda
-      source_y = -0.32,        # ~0.14 debajo de la leyenda (mismo espacio)
-      
-      # ========== ✅ LÍNEAS Y MARCADORES - 50% MÁS DELGADOS ==========
-      line_width = 0.75,       # Era 1.5, ahora 50% más delgado
-      marker_size = 2.5,       # Era 4-5, ahora 50% más pequeño
-      
-      # Proyecciones (líneas punteadas) aún más delgadas
+      # Líneas y marcadores delgados
+      line_width = 0.75,
+      marker_size = 2.5,
       projection_line_width = 0.5,
       projection_marker_size = 2,
       
-      # ========== ✅ CARD NB - 50% MÁS PEQUEÑA ==========
-      card_nb_font_size = 5,           # Era 7, ahora más pequeño
-      card_nb_title_size = 6,          # Era 8
-      card_nb_border_width = 1,        # Era 1.5
-      card_nb_padding = 2,             # Era 4
-      card_nb_scale = 0.5,             # 50% del tamaño original
+      # ✅ Card NB más pequeña
+      card_nb_font_size = 3,
+      card_nb_title_size = 4,
+      card_nb_border_width = 0.5,
+      card_nb_padding = 1,
       
-      # Elementos opcionales
       show_metodologia_btn = TRUE,
       show_card_nb = TRUE,
+      hoverlabel_font_size = 7,
       
-      # Hover/Tooltip
-      hoverlabel_font_size = 8
+      # ✅ En móvil usar 'closest' para mejor interacción táctil
+      hovermode = 'closest'
     )
     
   } else if (is_tablet) {
-    # ========== CONFIGURACIÓN TABLET ==========
+    
+    legend_offset_tablet <- max(0, (legend_rows - 1) * 0.05)
+    
     config <- list(
       title_size = 14,
       subtitle_size = 11,
@@ -87,35 +79,35 @@ get_plotly_config <- function(screen_width = 1200) {
       source_size = 8,
       
       margin_top = 85,
-      margin_bottom = 100,
+      margin_bottom = 110 + (legend_offset_tablet * 50),
       margin_left = 60,
       margin_right = 30,
       
       height = 350,
       
       subtitle_y = 1.07,
-      legend_y = -0.20,
+      legend_y = -0.20 - (legend_offset_tablet * 0.25),
       legend_orientation = "h",
-      source_y = -0.35,
+      source_y = -0.38 - (legend_offset_tablet * 0.8),
       
       line_width = 1.5,
       marker_size = 5,
       projection_line_width = 1.0,
       projection_marker_size = 4,
       
-      card_nb_font_size = 8,
-      card_nb_title_size = 9,
-      card_nb_border_width = 1.5,
-      card_nb_padding = 5,
-      card_nb_scale = 0.7,
+      card_nb_font_size = 6,
+      card_nb_title_size = 7,
+      card_nb_border_width = 1,
+      card_nb_padding = 3,
       
       show_metodologia_btn = TRUE,
       show_card_nb = TRUE,
-      hoverlabel_font_size = 10
+      hoverlabel_font_size = 9,
+      hovermode = 'x unified'
     )
     
   } else {
-    # ========== CONFIGURACIÓN DESKTOP ==========
+    # Desktop
     config <- list(
       title_size = 18,
       subtitle_size = 13,
@@ -146,19 +138,19 @@ get_plotly_config <- function(screen_width = 1200) {
       card_nb_title_size = 12,
       card_nb_border_width = 2.5,
       card_nb_padding = 8,
-      card_nb_scale = 1.0,
       
       show_metodologia_btn = TRUE,
       show_card_nb = TRUE,
-      hoverlabel_font_size = 12
+      hoverlabel_font_size = 12,
+      hovermode = 'x unified'
     )
   }
   
-  # Información de dispositivo
   config$is_mobile <- is_mobile
   config$is_tablet <- is_tablet
   config$is_desktop <- !is_mobile && !is_tablet
   config$screen_width <- screen_width
+  config$num_legend_items <- num_legend_items
   
   return(config)
 }
@@ -175,7 +167,7 @@ create_responsive_layout <- function(p, config, title, subtitle = NULL, show_sou
   
   annotations_list <- list()
   
-  # Subtítulo (alcance) - cerca del título
+  # Subtítulo
   if (!is.null(subtitle) && nchar(subtitle) > 0) {
     annotations_list[[length(annotations_list) + 1]] <- list(
       text = subtitle,
@@ -195,7 +187,7 @@ create_responsive_layout <- function(p, config, title, subtitle = NULL, show_sou
     )
   }
   
-  # Fuente - espaciado uniforme respecto a leyenda
+  # Fuente
   if (show_source) {
     annotations_list[[length(annotations_list) + 1]] <- list(
       text = source_text,
@@ -215,13 +207,10 @@ create_responsive_layout <- function(p, config, title, subtitle = NULL, show_sou
     )
   }
   
-  # Anotaciones extra (card NB, etc.)
+  # Anotaciones extra (incluyendo card NB)
   if (length(extra_annotations) > 0) {
     for (ann in extra_annotations) {
       if (!is.null(ann)) {
-        if (!is.null(ann$font)) {
-          ann$font$size <- config$annotation_size
-        }
         annotations_list[[length(annotations_list) + 1]] <- ann
       }
     }
@@ -276,7 +265,7 @@ create_responsive_layout <- function(p, config, title, subtitle = NULL, show_sou
       l = config$margin_left, 
       r = config$margin_right
     ),
-    hovermode = 'x unified',
+    hovermode = config$hovermode,
     hoverlabel = list(
       font = list(size = config$hoverlabel_font_size)
     ),
@@ -284,7 +273,7 @@ create_responsive_layout <- function(p, config, title, subtitle = NULL, show_sou
     autosize = TRUE
   )
   
-  # Configuración de Plotly según dispositivo
+  # Configuración según dispositivo
   if (config$is_mobile) {
     p <- p %>% plotly::config(
       displayModeBar = FALSE,
@@ -304,7 +293,7 @@ create_responsive_layout <- function(p, config, title, subtitle = NULL, show_sou
 
 
 # ============================================================
-# FUNCIÓN PARA CREAR TRAZAS CON ESTILO RESPONSIVO
+# FUNCIÓN PARA CREAR TRAZAS RESPONSIVAS
 # ============================================================
 
 add_responsive_trace <- function(p, data, x, y, name, color, config, 
@@ -314,8 +303,8 @@ add_responsive_trace <- function(p, data, x, y, name, color, config,
   lw <- if (is_projection) config$projection_line_width else config$line_width
   ms <- if (is_projection) config$projection_marker_size else config$marker_size
   
-  # En móvil, usar solo líneas (sin marcadores) para mayor claridad
-  mode <- if (config$is_mobile && !is_projection) "lines" else "lines+markers"
+  # En móvil, solo líneas para mayor claridad
+  mode <- if (config$is_mobile) "lines" else "lines+markers"
   
   p %>% add_trace(
     data = data,
@@ -343,7 +332,7 @@ add_responsive_trace <- function(p, data, x, y, name, color, config,
 
 
 # ============================================================
-# JAVASCRIPT PARA DETECTAR ANCHO DE PANTALLA
+# JAVASCRIPT PARA DETECTAR ANCHO
 # ============================================================
 
 get_screen_width_js <- function() {
@@ -372,10 +361,8 @@ get_screen_width_js <- function() {
 }
 
 
-message("✅ utils_responsive.R v2.1 cargado")
-message("   📱 Ajustes móvil v2.1:")
-message("      - Líneas 50% más delgadas (0.75px)")
-message("      - Marcadores 50% más pequeños (2.5px)")
-message("      - Mejor distribución vertical")
-message("      - Card NB 50% más pequeña")
-message("      - Márgenes optimizados para aprovechar espacio")
+message("✅ utils_responsive.R v2.3 cargado")
+message("   📱 Ajustes:")
+message("      - source_y dinámico según número de leyendas")
+message("      - Card NB más pequeña")
+message("      - hovermode='closest' en móvil")

@@ -65,11 +65,6 @@ graficas_ui_render <- function(input, output, session, estado_app, mostrar_grafi
                  div(
                    class = "metodologia-btn-container",
                    style = "display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin: 4px 8px 12px 0;",
-                   tags$span(
-                     class = "metodologia-label desktop-only",
-                     style = "color: #666; font-size: 11px;",
-                     "Info:"
-                   ),
                    actionButton(
                      session$ns("info_grafica1"),
                      label = "Metodología",

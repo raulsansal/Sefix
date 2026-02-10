@@ -1,6 +1,9 @@
 // ui/www/sidebar_toggle.js
-// Versión: 2.0 - Soporte completo para móvil con drawers y botones flotantes
-// Compatible con desktop (sin cambios en funcionalidad existente)
+// Versión: 3.0 - Barra inferior móvil con 4 botones
+// Cambios v3.0:
+//   - 4 botones: FILTROS, RESTAURAR, PROYECCIÓN, ANÁLISIS
+//   - RESTAURAR: replica funcionalidad de "Restablecer consulta" del sidebar
+//   - PROYECCIÓN: abre modal de metodología (reemplaza botón entre gráficas)
 
 $(document).ready(function() {
   
@@ -13,19 +16,15 @@ $(document).ready(function() {
   }
   
   // ============================================================
-  // INICIALIZACIÓN DESKTOP (código original corregido)
+  // INICIALIZACIÓN DESKTOP (código original)
   // ============================================================
   
   $(".sidebar-right").each(function() {
     var sidebarId = $(this).attr("id");
-    // Encontrar el botón de toggle asociado a este sidebar
     var toggleBtn = $("[data-sidebar-id='" + sidebarId + "']");
     var toggleContainer = toggleBtn.closest(".toggle-container");
     
-    // Configurar texto inicial
     toggleBtn.text(">>");
-    
-    // Asociar el contenedor del toggle con el sidebar
     toggleContainer.attr("data-for-sidebar", sidebarId);
   });
   
@@ -34,7 +33,6 @@ $(document).ready(function() {
   // ============================================================
   
   $(document).on("click", ".toggle-sidebar-btn", function() {
-    // Solo ejecutar en desktop
     if (isMobile()) return;
     
     var sidebarId = $(this).attr("data-sidebar-id");
@@ -53,11 +51,10 @@ $(document).ready(function() {
   });
   
   // ============================================================
-  // SISTEMA MÓVIL - INICIALIZACIÓN
+  // SISTEMA MÓVIL - INICIALIZACIÓN v3.0
   // ============================================================
   
   function initMobileUI() {
-    // Solo inicializar si estamos en móvil
     if (!isMobile()) {
       // Limpiar UI móvil si existe
       $(".mobile-fab-container").remove();
@@ -76,12 +73,24 @@ $(document).ready(function() {
       $("body").append('<div class="mobile-overlay"></div>');
     }
     
-    // Crear botones flotantes con iconos Unicode
+    // ✅ v3.0: Crear 4 botones flotantes
     var fabContainer = $('<div class="mobile-fab-container">' +
+      // 1. FILTROS
       '<button class="mobile-fab-btn" id="mobile-btn-filters">' +
         '<span class="fab-icon">⚙️</span>' +
         '<span class="fab-label">Filtros</span>' +
       '</button>' +
+      // 2. RESTAURAR (nuevo)
+      '<button class="mobile-fab-btn" id="mobile-btn-restore">' +
+        '<span class="fab-icon">🔄</span>' +
+        '<span class="fab-label">Restaurar</span>' +
+      '</button>' +
+      // 3. PROYECCIÓN (nuevo - reemplaza Metodología)
+      '<button class="mobile-fab-btn" id="mobile-btn-projection">' +
+        '<span class="fab-icon">ℹ️</span>' +
+        '<span class="fab-label">Proyección</span>' +
+      '</button>' +
+      // 4. ANÁLISIS
       '<button class="mobile-fab-btn" id="mobile-btn-analysis">' +
         '<span class="fab-icon">📊</span>' +
         '<span class="fab-label">Análisis</span>' +
@@ -93,7 +102,7 @@ $(document).ready(function() {
     // Agregar botones de cerrar a los drawers
     addCloseButtons();
     
-    console.log("✅ UI móvil inicializada");
+    console.log("✅ UI móvil v3.0 inicializada (4 botones)");
   }
   
   // ============================================================
@@ -120,19 +129,50 @@ $(document).ready(function() {
   // MANEJADORES MÓVILES
   // ============================================================
   
-  // Abrir filtros (sidebar izquierdo)
+  // 1. Abrir filtros (sidebar izquierdo)
   $(document).on("click", "#mobile-btn-filters", function() {
     var sidebar = $(".well").first();
     if (sidebar.length === 0) {
-      // Buscar por clase que contenga "sidebar_panel"
       sidebar = $("[class*='sidebar_panel']").first();
     }
     openMobileDrawer(sidebar, "left");
   });
   
-  // Abrir análisis (sidebar derecho)
+  // 2. ✅ v3.0: RESTAURAR - Simula click en botón "Restablecer consulta"
+  $(document).on("click", "#mobile-btn-restore", function() {
+    // Buscar el botón de restablecer por ID que termina en "reset_config"
+    var resetBtn = $("[id$='-reset_config'], [id$='reset_config']").first();
+    
+    if (resetBtn.length > 0) {
+      // Simular click en el botón original
+      resetBtn.trigger("click");
+      console.log("🔄 Botón Restaurar: click simulado en", resetBtn.attr("id"));
+      
+      // Mostrar feedback visual
+      showMobileToast("Consulta restablecida");
+    } else {
+      console.warn("⚠️ No se encontró el botón de restablecer");
+      showMobileToast("No disponible en esta vista");
+    }
+  });
+  
+  // 3. ✅ v3.0: PROYECCIÓN - Abre modal de metodología
+  $(document).on("click", "#mobile-btn-projection", function() {
+    // Buscar el botón de metodología por ID que termina en "info_grafica1"
+    var metodologiaBtn = $("[id$='-info_grafica1'], [id$='info_grafica1']").first();
+    
+    if (metodologiaBtn.length > 0) {
+      // Simular click en el botón original
+      metodologiaBtn.trigger("click");
+      console.log("ℹ️ Botón Proyección: click simulado en", metodologiaBtn.attr("id"));
+    } else {
+      console.warn("⚠️ No se encontró el botón de metodología");
+      showMobileToast("No disponible en esta vista");
+    }
+  });
+  
+  // 4. Abrir análisis (sidebar derecho)
   $(document).on("click", "#mobile-btn-analysis", function() {
-    // Encontrar el sidebar derecho visible o el primero disponible
     var sidebar = $(".sidebar-right:visible").first();
     if (sidebar.length === 0) {
       sidebar = $(".sidebar-right").first();
@@ -156,6 +196,31 @@ $(document).ready(function() {
       closeMobileDrawers();
     }
   });
+  
+  // ============================================================
+  // ✅ v3.0: TOAST PARA FEEDBACK VISUAL
+  // ============================================================
+  
+  function showMobileToast(message) {
+    // Remover toast existente
+    $(".mobile-toast").remove();
+    
+    var toast = $('<div class="mobile-toast">' + message + '</div>');
+    $("body").append(toast);
+    
+    // Mostrar con animación
+    setTimeout(function() {
+      toast.addClass("show");
+    }, 10);
+    
+    // Ocultar después de 2 segundos
+    setTimeout(function() {
+      toast.removeClass("show");
+      setTimeout(function() {
+        toast.remove();
+      }, 300);
+    }, 2000);
+  }
   
   // ============================================================
   // FUNCIONES DE DRAWER
@@ -202,7 +267,7 @@ $(document).ready(function() {
   }
   
   // ============================================================
-  // RESIZE HANDLER - CAMBIO ENTRE MÓVIL Y DESKTOP
+  // RESIZE HANDLER
   // ============================================================
   
   var resizeTimeout;
@@ -216,6 +281,7 @@ $(document).ready(function() {
         $(".mobile-fab-container").remove();
         $(".mobile-overlay").remove();
         $(".mobile-drawer-close").remove();
+        $(".mobile-toast").remove();
         closeMobileDrawers();
         
         // Restaurar estado desktop de sidebars
@@ -223,7 +289,6 @@ $(document).ready(function() {
         $(".well").removeClass("mobile-open");
       }
       
-      // Forzar resize de gráficos Plotly
       triggerPlotlyResize();
     }, 250);
   });
@@ -249,10 +314,8 @@ $(document).ready(function() {
   // INICIALIZACIÓN
   // ============================================================
   
-  // Inicializar UI móvil si es necesario
   initMobileUI();
   
-  // Re-inicializar cuando Shiny termina de renderizar
   $(document).on("shiny:sessioninitialized", function() {
     setTimeout(function() {
       if (isMobile()) {
@@ -261,15 +324,13 @@ $(document).ready(function() {
     }, 500);
   });
   
-  // Re-inicializar cuando cambia de tab
   $(document).on("shown.bs.tab", function() {
     if (isMobile()) {
       addCloseButtons();
       closeMobileDrawers();
     }
-    // Resize gráficos después de cambiar tab
     setTimeout(triggerPlotlyResize, 300);
   });
   
-  console.log("✅ sidebar_toggle.js v2.0 cargado (con soporte móvil)");
+  console.log("✅ sidebar_toggle.js v3.0 cargado (4 botones móviles)");
 });

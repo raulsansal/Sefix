@@ -1,11 +1,12 @@
 # modules/lista_nominal_server_main.R
-# Versión: 3.7 - CORRECCIÓN CRÍTICA: Observer separado para botón restablecer
-# Coordinador principal que integra los módulos de gráficas y tablas
+# Versión: 3.8 - Handler para botón de descarga móvil (download_csv_mobile)
+# Cambios vs v3.7:
+#   - Nuevo output$download_csv_mobile que replica funcionalidad de output$download_csv
 
 lista_nominal_server_main <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   ns <- session$ns
   
-  message("📊 Inicializando lista_nominal_server_main v3.7")
+  message("📊 Inicializando lista_nominal_server_main v3.8")
   
   # ========== CARGAR HELPERS PARA TEXTO DE ALCANCE ==========
   source("modules/lista_nominal_graficas/graficas_helpers.R", local = TRUE)
@@ -305,89 +306,108 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       ignoreInit = FALSE
     )
   
-  # ========== DESCARGA CSV ==========
+  # ========== FUNCIÓN AUXILIAR PARA PREPARAR DATOS CSV ==========
+  # ✅ v3.8: Función compartida para ambos botones de descarga
+  
+  preparar_datos_csv <- function() {
+    datos <- datos_columnas()
+    req(is.list(datos), !is.null(datos$datos))
+    
+    df <- datos$datos
+    req(is.data.frame(df), nrow(df) > 0)
+    
+    df$año <- input$year
+    ambito <- input$ambito_datos %||% "nacional"
+    
+    columnas_base <- c("año", "nombre_entidad")
+    
+    if ("cabecera_distrital" %in% colnames(df)) {
+      columnas_base <- c(columnas_base, "cabecera_distrital")
+    }
+    if ("nombre_municipio" %in% colnames(df)) {
+      columnas_base <- c(columnas_base, "nombre_municipio")
+    }
+    if ("seccion" %in% colnames(df)) {
+      columnas_base <- c(columnas_base, "seccion")
+    }
+    
+    columnas_datos <- c()
+    
+    if (ambito == "nacional") {
+      if ("padron_nacional" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional")
+      if ("padron_nacional_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_hombres")
+      if ("padron_nacional_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_mujeres")
+      if ("padron_nacional_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_no_binario")
+      if ("lista_nacional" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional")
+      if ("lista_nacional_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_hombres")
+      if ("lista_nacional_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_mujeres")
+      if ("lista_nacional_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_no_binario")
+    } else {
+      if ("padron_extranjero" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero")
+      if ("padron_extranjero_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_hombres")
+      if ("padron_extranjero_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_mujeres")
+      if ("padron_extranjero_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_no_binario")
+      if ("lista_extranjero" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero")
+      if ("lista_extranjero_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_hombres")
+      if ("lista_extranjero_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_mujeres")
+      if ("lista_extranjero_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_no_binario")
+    }
+    
+    columnas_seleccionadas <- c(columnas_base, columnas_datos)
+    datos_tabla <- df[, columnas_seleccionadas, drop = FALSE]
+    
+    nombres_columnas <- sapply(columnas_seleccionadas, function(col) {
+      if (col %in% names(etiquetas_mapeo_tabla)) {
+        etiquetas_mapeo_tabla[[col]]
+      } else {
+        nombre_limpio <- gsub("_", " ", col)
+        nombre_limpio <- tools::toTitleCase(nombre_limpio)
+        nombre_limpio
+      }
+    })
+    
+    colnames(datos_tabla) <- nombres_columnas
+    
+    list(
+      datos = datos_tabla,
+      ambito = ambito
+    )
+  }
+  
+  # ========== FUNCIÓN AUXILIAR PARA GENERAR NOMBRE ARCHIVO ==========
+  
+  generar_nombre_archivo <- function() {
+    tipo <- if (input$tipo_corte == "historico") "historico" else "semanal"
+    
+    fecha <- ultima_fecha_disponible()
+    fecha_str <- if (!is.null(fecha)) {
+      format(fecha, "%Y%m%d")
+    } else {
+      format(Sys.Date(), "%Y%m%d")
+    }
+    
+    entidad_str <- gsub(" ", "_", input$entidad %||% "Nacional")
+    ambito_str <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
+      "Extranjero"
+    } else {
+      "Nacional"
+    }
+    
+    paste0("lista_nominal_", tipo, "_", fecha_str, "_", ambito_str, "_", entidad_str, ".csv")
+  }
+  
+  # ========== DESCARGA CSV (BOTÓN ORIGINAL EN SIDEBAR) ==========
   
   output$download_csv <- downloadHandler(
     filename = function() {
-      tipo <- if (input$tipo_corte == "historico") "historico" else "semanal"
-      
-      fecha <- ultima_fecha_disponible()
-      fecha_str <- if (!is.null(fecha)) {
-        format(fecha, "%Y%m%d")
-      } else {
-        format(Sys.Date(), "%Y%m%d")
-      }
-      
-      entidad_str <- gsub(" ", "_", input$entidad %||% "Nacional")
-      ambito_str <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
-        "Extranjero"
-      } else {
-        "Nacional"
-      }
-      
-      nombre_archivo <- paste0("lista_nominal_", tipo, "_", fecha_str, "_", ambito_str, "_", entidad_str, ".csv")
-      message("📥 [DESCARGA CSV] Nombre archivo: ", nombre_archivo)
-      
-      return(nombre_archivo)
+      nombre <- generar_nombre_archivo()
+      message("📥 [DESCARGA CSV] Nombre archivo: ", nombre)
+      return(nombre)
     },
     content = function(file) {
-      datos <- datos_columnas()
-      req(is.list(datos), !is.null(datos$datos))
-      
-      df <- datos$datos
-      req(is.data.frame(df), nrow(df) > 0)
-      
-      df$año <- input$year
-      ambito <- input$ambito_datos %||% "nacional"
-      
-      columnas_base <- c("año", "nombre_entidad")
-      
-      if ("cabecera_distrital" %in% colnames(df)) {
-        columnas_base <- c(columnas_base, "cabecera_distrital")
-      }
-      if ("nombre_municipio" %in% colnames(df)) {
-        columnas_base <- c(columnas_base, "nombre_municipio")
-      }
-      if ("seccion" %in% colnames(df)) {
-        columnas_base <- c(columnas_base, "seccion")
-      }
-      
-      columnas_datos <- c()
-      
-      if (ambito == "nacional") {
-        if ("padron_nacional" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional")
-        if ("padron_nacional_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_hombres")
-        if ("padron_nacional_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_mujeres")
-        if ("padron_nacional_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_no_binario")
-        if ("lista_nacional" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional")
-        if ("lista_nacional_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_hombres")
-        if ("lista_nacional_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_mujeres")
-        if ("lista_nacional_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_no_binario")
-      } else {
-        if ("padron_extranjero" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero")
-        if ("padron_extranjero_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_hombres")
-        if ("padron_extranjero_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_mujeres")
-        if ("padron_extranjero_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_no_binario")
-        if ("lista_extranjero" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero")
-        if ("lista_extranjero_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_hombres")
-        if ("lista_extranjero_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_mujeres")
-        if ("lista_extranjero_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_no_binario")
-      }
-      
-      columnas_seleccionadas <- c(columnas_base, columnas_datos)
-      datos_tabla <- df[, columnas_seleccionadas, drop = FALSE]
-      
-      nombres_columnas <- sapply(columnas_seleccionadas, function(col) {
-        if (col %in% names(etiquetas_mapeo_tabla)) {
-          etiquetas_mapeo_tabla[[col]]
-        } else {
-          nombre_limpio <- gsub("_", " ", col)
-          nombre_limpio <- tools::toTitleCase(nombre_limpio)
-          nombre_limpio
-        }
-      })
-      
-      colnames(datos_tabla) <- nombres_columnas
+      resultado <- preparar_datos_csv()
+      datos_tabla <- resultado$datos
+      ambito <- resultado$ambito
       
       message("📥 [DESCARGA CSV] Preparando ", nrow(datos_tabla), " filas para descarga")
       message("📥 [DESCARGA CSV] Columnas exportadas: ", paste(colnames(datos_tabla), collapse = ", "))
@@ -414,8 +434,44 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     }
   )
   
+  # ========== ✅ v3.8: DESCARGA CSV MÓVIL (BOTÓN DEBAJO DEL DATATABLE) ==========
+  
+  output$download_csv_mobile <- downloadHandler(
+    filename = function() {
+      nombre <- generar_nombre_archivo()
+      message("📥 [DESCARGA CSV MÓVIL] Nombre archivo: ", nombre)
+      return(nombre)
+    },
+    content = function(file) {
+      resultado <- preparar_datos_csv()
+      datos_tabla <- resultado$datos
+      ambito <- resultado$ambito
+      
+      message("📥 [DESCARGA CSV MÓVIL] Preparando ", nrow(datos_tabla), " filas para descarga")
+      
+      alcance_info <- texto_alcance()
+      ambito_display <- if (ambito == "extranjero") "Extranjero" else "Nacional"
+      
+      writeLines(c(
+        paste0("# Ámbito: ", ambito_display),
+        paste0("# ", alcance_info),
+        "# Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
+        ""
+      ), file)
+      
+      write.table(datos_tabla, file, 
+                  append = TRUE,
+                  sep = ",", 
+                  row.names = FALSE, 
+                  fileEncoding = "UTF-8", 
+                  quote = TRUE,
+                  na = "")
+      
+      message("✅ [DESCARGA CSV MÓVIL] Archivo generado exitosamente")
+    }
+  )
+  
   # ========== ✅ v3.7: BOTÓN RESTABLECER - OBSERVER SEPARADO ==========
-  # Este observer NO afecta a los reactives de datos porque solo actualiza inputs
   
   observeEvent(input$reset_config, {
     message("🔄 [RESTABLECER MAIN] Botón presionado - Actualizando inputs adicionales...")
@@ -442,5 +498,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     message("✅ [RESTABLECER MAIN] Inputs adicionales actualizados correctamente")
   })
   
-  message("✅ Módulo lista_nominal_server_main v3.7 inicializado")
+  message("✅ Módulo lista_nominal_server_main v3.8 inicializado")
+  message("   ✅ v3.8: Handler para download_csv_mobile agregado")
 }

@@ -1,8 +1,9 @@
 # modules/lista_nominal_ui.R
-# Versión: 3.2 - Usar clase CSS datatable-section para ocultar título durante carga
-# Cambios vs v3.1:
-#   - DataTable envuelto en div con clase "datatable-section"
-#   - Título h3 tiene clase "datatable-title" para control CSS
+# Versión: 3.3 - Botón Descargar CSV duplicado para móvil (debajo del DataTable)
+# Cambios vs v3.2:
+#   - Nuevo botón download_csv_mobile debajo del DataTable
+#   - Clase "mobile-only" para que solo aparezca en móvil
+#   - El botón original en sidebar se mantiene con clase "desktop-only"
 
 lista_nominal_ui <- function(id) {
   ns <- NS(id)
@@ -147,7 +148,25 @@ lista_nominal_ui <- function(id) {
                    )
                  )
           )
+        ),
+        
+        # ========== ✅ v3.3: BOTÓN DESCARGAR CSV PARA MÓVIL ==========
+        # Solo visible en móvil, debajo del DataTable
+        fluidRow(
+          column(12,
+                 div(
+                   class = "mobile-download-container mobile-only",
+                   style = "margin-top: 20px; margin-bottom: 80px; padding: 0 10px;",
+                   downloadButton(
+                     ns("download_csv_mobile"), 
+                     "Descargar CSV", 
+                     class = "btn-primary mobile-download-btn",
+                     style = "width: 100%; font-size: 16px; padding: 12px; font-weight: bold;"
+                   )
+                 )
+          )
         )
+        # ========== FIN BOTÓN DESCARGAR CSV MÓVIL ==========
       )
     ),
     

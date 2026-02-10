@@ -1,12 +1,11 @@
 /* ui/styles/mobile.css */
-/* Versión: 2.2 - Ajustes completos para visualización profesional en móvil */
+/* Versión: 3.1 - Modal mejorado y botón descarga móvil */
 /* Viewport de referencia: iPhone 13 Pro (390x844) */
-/* Técnicas: vh, vw, clamp(), rem para valores responsivos */
 
 @media screen and (max-width: 768px) {
   
   /* ============================================================
-     VARIABLES CSS PARA CONSISTENCIA
+     VARIABLES CSS
      ============================================================ */
   
   :root {
@@ -33,7 +32,7 @@
   }
   
   /* ============================================================
-     PESTAÑAS (TABS) - LEGIBILIDAD MEJORADA
+     PESTAÑAS (TABS)
      ============================================================ */
   
   .nav.nav-tabs {
@@ -53,7 +52,6 @@
     flex-shrink: 0;
   }
   
-  /* ✅ AJUSTE 1: Tabs más legibles y centradas */
   .nav.nav-tabs > li > a {
     padding: clamp(8px, 2vh, 12px) clamp(10px, 3vw, 16px);
     font-size: clamp(0.75rem, 3.2vw, 0.95rem) !important;
@@ -80,7 +78,7 @@
     width: 85vw !important;
     max-width: 320px !important;
     height: 100vh !important;
-    height: 100dvh !important; /* Dynamic viewport height para iOS */
+    height: 100dvh !important;
     z-index: 2000 !important;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
@@ -168,7 +166,7 @@
   }
   
   /* ============================================================
-     BOTONES FLOTANTES (PARTE INFERIOR)
+     BOTONES FLOTANTES (4 BOTONES)
      ============================================================ */
   
   .mobile-fab-container {
@@ -177,10 +175,11 @@
     left: 0;
     right: 0;
     display: flex;
-    justify-content: space-around;
+    justify-content: space-evenly;
     align-items: center;
     background-color: var(--mobile-color-primary);
-    padding: clamp(6px, 1.5vh, 10px) clamp(10px, 3vw, 15px);
+    padding: clamp(4px, 1vh, 8px) clamp(4px, 1vw, 8px);
+    padding-bottom: calc(clamp(4px, 1vh, 8px) + env(safe-area-inset-bottom, 0px));
     z-index: 1500;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
   }
@@ -193,11 +192,12 @@
     background: var(--mobile-color-secondary);
     border: none;
     color: white;
-    font-size: clamp(0.6rem, 2.5vw, 0.75rem);
-    padding: clamp(5px, 1.2vh, 8px) clamp(12px, 4vw, 20px);
+    font-size: clamp(0.55rem, 2.2vw, 0.7rem);
+    padding: clamp(4px, 1vh, 6px) clamp(8px, 2.5vw, 12px);
     cursor: pointer;
     transition: all 0.2s ease;
-    border-radius: 8px;
+    border-radius: 6px;
+    min-width: 60px;
   }
   
   .mobile-fab-btn:hover,
@@ -206,14 +206,40 @@
   }
   
   .mobile-fab-btn .fab-icon {
-    font-size: clamp(1.1rem, 5vw, 1.5rem);
-    margin-bottom: 2px;
+    font-size: clamp(0.9rem, 4vw, 1.2rem);
+    margin-bottom: 1px;
   }
   
   .mobile-fab-btn .fab-label {
-    font-size: clamp(0.55rem, 2.2vw, 0.7rem);
+    font-size: clamp(0.5rem, 2vw, 0.6rem);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  
+  /* ============================================================
+     TOAST PARA FEEDBACK VISUAL
+     ============================================================ */
+  
+  .mobile-toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background-color: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    z-index: 3000;
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+  }
+  
+  .mobile-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
   }
   
   /* ============================================================
@@ -244,19 +270,15 @@
   }
   
   /* ============================================================
-     ✅ AJUSTE 3: CONTENEDORES DE GRÁFICAS - ALTURA RESPONSIVA
-     Aprovecha el espacio vertical disponible
+     CONTENEDORES DE GRÁFICAS
      ============================================================ */
   
   .plot-container {
-    /* Altura responsiva basada en viewport */
     height: clamp(280px, 45vh, 400px) !important;
     min-height: 260px !important;
     max-height: 50vh !important;
     margin-bottom: var(--mobile-spacing-md) !important;
     padding: 0 !important;
-    
-    /* Asegurar que el contenido se distribuya */
     display: flex !important;
     flex-direction: column !important;
     justify-content: stretch !important;
@@ -268,7 +290,6 @@
     max-height: 50vh !important;
   }
   
-  /* Plotly debe ocupar todo el contenedor */
   .plotly,
   .js-plotly-plot {
     width: 100% !important;
@@ -281,228 +302,445 @@
     height: 100% !important;
   }
   
-  /* Spinner también debe respetar el contenedor */
   .shiny-spinner-output-container {
     height: 100% !important;
     min-height: inherit !important;
   }
-  
+
   #federales-main-participacion_plot {
     margin-left: 0 !important;
     margin-right: 0 !important;
     width: 100% !important;
     height: 100% !important;
   }
-  
+
   /* ============================================================
-     ✅ AJUSTE 2 & 3: PLOTLY - LÍNEAS MÁS DELGADAS Y DISTRIBUCIÓN
+     PLOTLY - TEXTOS Y ELEMENTOS
      ============================================================ */
-  
-  /* Títulos de gráficas */
+
   .plotly .gtitle {
     font-size: clamp(9px, 2.8vw, 12px) !important;
   }
-  
-  /* Títulos de ejes */
+
   .plotly .xtitle,
   .plotly .ytitle {
     font-size: clamp(7px, 2vw, 9px) !important;
   }
-  
-  /* Etiquetas de ticks */
+
   .plotly .xtick text,
   .plotly .ytick text {
     font-size: clamp(6px, 1.8vw, 8px) !important;
   }
-  
-  /* Leyendas */
+
   .plotly .legendtext {
     font-size: clamp(6px, 1.8vw, 8px) !important;
   }
-  
-  /* ✅ AJUSTE 2: Líneas 50% más delgadas (de 1.5 a 0.75) */
+
   .plotly .scatter .lines path,
   .plotly .scattergl .lines path {
     stroke-width: 0.75px !important;
   }
-  
-  /* Líneas en leyenda también más delgadas */
+
   .plotly .legend .traces .legendlines path {
-    stroke-width: 0.75px !important;
+    stroke-width: 0.5px !important;
   }
-  
-  /* Marcadores más pequeños en leyenda */
+
+  .plotly .scatter .points path,
+  .plotly .scattergl .points path {
+    transform: scale(0.4) !important;
+  }
+
   .plotly .legend .traces .legendpoints path,
   .plotly .legend .traces .legendpoints circle {
     transform: scale(0.5) !important;
   }
-  
-  /* Anotaciones (subtítulo, fuente) */
+
   .plotly .annotation-text {
-    font-size: clamp(6px, 1.7vw, 8px) !important;
+    font-size: clamp(5px, 1.5vw, 7px) !important;
   }
-  
+
   /* ============================================================
-     ✅ AJUSTE 4: BOTÓN METODOLOGÍA DE PROYECCIÓN - 70% REDUCIDO
+     OCULTAR BOTÓN METODOLOGÍA ORIGINAL EN MÓVIL
      ============================================================ */
-  
-  /* Contenedor del botón - alineado a la derecha, compacto */
-  .plot-container + div,
-  div:has(> .btn-outline-info),
-  div:has(> [id*="info_grafica"]) {
-    display: flex !important;
-    justify-content: flex-end !important;
-    align-items: center !important;
-    gap: clamp(4px, 1vw, 8px) !important;
-    margin-top: clamp(-8px, -1vh, -4px) !important;
-    margin-bottom: clamp(4px, 1vh, 8px) !important;
-    padding-right: var(--mobile-spacing-sm) !important;
-    min-height: auto !important;
-    height: auto !important;
-  }
-  
-  /* Ocultar etiqueta "Información adicional:" */
-  .plot-container + div > span:first-child,
-  div:has(> .btn-outline-info) > span:not(.fab-icon):not(.fab-label) {
+
+  .metodologia-btn-container {
     display: none !important;
   }
-  
-  /* ✅ Botón metodología - compacto con texto reducido 70% */
-  .btn-outline-info,
-  [id*="info_grafica"] {
-    font-size: clamp(7px, 2vw, 9px) !important;
-    padding: clamp(3px, 0.8vh, 5px) clamp(6px, 2vw, 10px) !important;
+
+  .plot-container + div:has(.btn-outline-info),
+  div:has(> .btn-outline-info):not(.mobile-fab-container),
+  div:has(> [id*="info_grafica"]):not(.mobile-fab-container) {
+    display: none !important;
+  }
+
+  /* ============================================================
+     MODAL DE METODOLOGÍA - OPTIMIZADO PARA MÓVIL
+     ============================================================ */
+
+  .modal {
+    z-index: 2500 !important;
+  }
+
+  .modal-backdrop {
+    z-index: 2499 !important;
+  }
+
+  .modal-dialog {
+    margin: 10px auto !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100vh - 100px) !important;
+  }
+
+  .modal-content {
+    max-height: calc(100vh - 100px) !important;
+    display: flex;
+    flex-direction: column;
     border-radius: 12px !important;
-    background-color: rgba(21, 86, 113, 0.1) !important;
-    border: 1px solid #155671 !important;
-    color: #155671 !important;
-    white-space: nowrap !important;
-    min-height: clamp(22px, 5vh, 28px) !important;
-    height: auto !important;
-    line-height: 1.2 !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: clamp(2px, 0.5vw, 4px) !important;
   }
-  
-  /* Ícono del botón */
-  .btn-outline-info i,
-  .btn-outline-info .fa,
-  [id*="info_grafica"] i {
-    font-size: clamp(8px, 2.2vw, 11px) !important;
-    color: #155671 !important;
+
+  .modal-header {
+    padding: 12px 15px !important;
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
   }
-  
-  /* Hover/Active state */
-  .btn-outline-info:active,
-  .btn-outline-info:focus,
-  [id*="info_grafica"]:active {
-    background-color: rgba(21, 86, 113, 0.2) !important;
-    outline: none !important;
-    box-shadow: 0 0 0 2px rgba(21, 86, 113, 0.3) !important;
+
+  .modal-header .modal-title {
+    font-size: 16px !important;
   }
-  
+
+  .modal-header .close,
+  .modal-header .modal-close-x {
+    font-size: 28px !important;
+    padding: 0 !important;
+    margin: -5px -5px 0 0 !important;
+    opacity: 0.7;
+  }
+
+  .modal-header .close:hover,
+  .modal-header .modal-close-x:hover {
+    opacity: 1;
+  }
+
+  .modal-body {
+    padding: 12px 15px !important;
+    overflow-y: auto !important;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-metodologia-content {
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+  }
+
+  .modal-metodologia-content h5 {
+    font-size: 14px !important;
+    margin-top: 10px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .modal-metodologia-content p {
+    margin-bottom: 8px !important;
+  }
+
+  .modal-metodologia-content ol,
+  .modal-metodologia-content ul {
+    margin-bottom: 8px !important;
+    padding-left: 20px !important;
+  }
+
+  .modal-metodologia-content li {
+    margin-bottom: 3px !important;
+  }
+
+  .modal-footer {
+    padding: 10px 15px !important;
+    border-top: 1px solid #dee2e6;
+    flex-shrink: 0;
+    justify-content: center !important;
+  }
+
+  /* Botón CERRAR con color azul */
+  .modal-footer .btn-default,
+  .modal-footer .btn[data-dismiss="modal"] {
+    background-color: #006988 !important;
+    border-color: #006988 !important;
+    color: white !important;
+    font-weight: bold !important;
+    padding: 10px 40px !important;
+    font-size: 14px !important;
+    border-radius: 6px !important;
+  }
+
+  .modal-footer .btn-default:hover,
+  .modal-footer .btn-default:active,
+  .modal-footer .btn[data-dismiss="modal"]:hover {
+    background-color: #005570 !important;
+    border-color: #005570 !important;
+  }
+
   /* ============================================================
-     ✅ AJUSTE 5: CARD NO BINARIO - 50% DEL TAMAÑO ACTUAL
+     BOTÓN DESCARGAR CSV MÓVIL
      ============================================================ */
-  
-  /* Las cards NB son annotations de Plotly con borde #9B59B6 */
-  /* Aplicamos escala CSS para reducirlas */
-  
-  .plotly .annotation {
-    /* Reducir escala general de annotations pequeñas */
+
+  .mobile-download-container {
+    margin-top: 20px !important;
+    margin-bottom: 80px !important;
+    padding: 0 10px !important;
   }
-  
-  /* Card NB específica (tiene bordercolor #9B59B6) */
-  .plotly .annotation-text-g {
-    /* Aplicar a todas las annotations */
+
+  .mobile-download-btn {
+    width: 100% !important;
+    font-size: 16px !important;
+    padding: 14px 20px !important;
+    font-weight: bold !important;
+    background-color: #006988 !important;
+    border-color: #006988 !important;
+    border-radius: 8px !important;
   }
-  
-  /* Forzar tamaño más pequeño en hover labels (tooltips) */
-  .plotly .hoverlayer .hovertext {
-    transform: scale(0.7) !important;
-    transform-origin: top left !important;
+
+  .mobile-download-btn:hover,
+  .mobile-download-btn:active {
+    background-color: #005570 !important;
+    border-color: #005570 !important;
   }
-  
-  .plotly .hoverlayer .hovertext text {
-    font-size: clamp(7px, 2vw, 9px) !important;
-  }
-  
+
   /* ============================================================
-     DATATABLE SCROLLEABLE HORIZONTAL
+     CLASES DE VISIBILIDAD
      ============================================================ */
-  
+
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: block !important;
+  }
+
+  .mobile-fab-container {
+    display: flex !important;
+  }
+
+  /* ============================================================
+     DATATABLE
+     ============================================================ */
+
+  .datatable-section {
+    width: 100% !important;
+    padding: 0 var(--mobile-spacing-sm) !important;
+    margin-top: clamp(15px, 4vh, 25px) !important;
+  }
+
+  .datatable-section h3,
+  .datatable-section h3.datatable-title,
+  .datatable-section > h3,
+  h3.datatable-title {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    font-size: clamp(1rem, 4vw, 1.2rem) !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    margin: 0 0 clamp(10px, 2.5vh, 15px) 0 !important;
+    padding: 0 !important;
+    color: #333 !important;
+  }
+
+  .datatable-section:has(.dataTables_wrapper table tbody tr) h3,
+  .datatable-section:has(.dataTables_wrapper table tbody tr) h3.datatable-title,
+  .dataTables_wrapper:not(:empty) ~ h3,
+  .datatable-section:has(.dataTable) h3 {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  .dataTables_wrapper + h3.datatable-title,
+  .dataTables_wrapper ~ h3.datatable-title {
+    display: none !important;
+  }
+
   .dataTables_wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    font-size: clamp(0.65em, 2.5vw, 0.8em);
+    font-size: clamp(0.7em, 2.8vw, 0.85em);
+    width: 100% !important;
   }
-  
-  .dataTables_wrapper table {
-    min-width: 450px;
+
+  .dataTables_wrapper .row:first-child,
+  .dataTables_wrapper > .row:first-of-type,
+  .dataTables_wrapper > div:first-child:has(.dataTables_length),
+  .dataTables_wrapper > div:has(.dataTables_length):has(.dataTables_filter) {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: clamp(8px, 2vw, 15px) !important;
+    margin-bottom: clamp(8px, 2vh, 12px) !important;
+    padding: 0 2px !important;
+    width: 100% !important;
   }
-  
-  .dataTables_wrapper .dataTables_filter,
-  .dataTables_wrapper .dataTables_length {
+
+  .dataTables_wrapper .row .col-sm-6,
+  .dataTables_wrapper .row .col-sm-12,
+  .dataTables_wrapper .row [class*="col-"] {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    padding: 0 !important;
     float: none !important;
-    text-align: center !important;
-    margin-bottom: var(--mobile-spacing-sm);
   }
-  
+
+  .dataTables_wrapper .dataTables_length,
+  .dataTables_length {
+    float: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    order: 1 !important;
+    text-align: left !important;
+    width: auto !important;
+  }
+
+  .dataTables_wrapper .dataTables_filter,
+  .dataTables_filter {
+    float: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    order: 2 !important;
+    text-align: right !important;
+    width: auto !important;
+  }
+
+  .dataTables_wrapper .dataTables_length label,
+  .dataTables_wrapper .dataTables_filter label {
+    font-size: clamp(9px, 2.5vw, 11px) !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+    white-space: nowrap !important;
+  }
+
+  .dataTables_wrapper .dataTables_length select {
+    font-size: 16px !important;
+    padding: 2px 4px !important;
+    height: auto !important;
+    min-height: 26px !important;
+    margin: 0 3px !important;
+    width: auto !important;
+  }
+
   .dataTables_wrapper .dataTables_filter input {
-    width: clamp(120px, 35vw, 160px);
-    font-size: 16px; /* Previene zoom en iOS */
+    width: clamp(80px, 22vw, 110px) !important;
+    font-size: 16px !important;
+    padding: 3px 6px !important;
+    height: auto !important;
+    min-height: 26px !important;
+    margin-left: 3px !important;
   }
-  
-  .dataTables_wrapper .dataTables_info,
+
+  .dataTables_wrapper caption,
+  .dataTable caption,
+  table.dataTable caption {
+    caption-side: top !important;
+    text-align: left !important;
+    padding: clamp(4px, 1vh, 8px) 0 !important;
+    margin-bottom: clamp(4px, 1vh, 8px) !important;
+    font-size: clamp(8px, 2.2vw, 10px) !important;
+    color: #555 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .dataTables_wrapper caption *,
+  .dataTable caption *,
+  table.dataTable caption * {
+    display: inline !important;
+    white-space: nowrap !important;
+  }
+
+  .dataTables_wrapper caption > div,
+  .dataTable caption > div {
+    display: inline !important;
+    white-space: nowrap !important;
+  }
+
+  .dataTables_wrapper caption > div + div::before,
+  .dataTable caption > div + div::before {
+    content: " - " !important;
+  }
+
+  .dataTables_wrapper table,
+  table.dataTable {
+    min-width: 450px;
+    width: 100% !important;
+  }
+
+  .dataTables_wrapper .dataTables_info {
+    float: none !important;
+    text-align: left !important;
+    font-size: clamp(9px, 2.5vw, 11px) !important;
+    margin-top: clamp(8px, 2vh, 12px) !important;
+    padding: 0 !important;
+  }
+
   .dataTables_wrapper .dataTables_paginate {
     float: none !important;
     text-align: center !important;
+    margin-top: clamp(8px, 2vh, 12px) !important;
   }
-  
+
   .dataTables_paginate .paginate_button {
     padding: clamp(4px, 1vh, 6px) clamp(6px, 2vw, 10px) !important;
     margin: 2px !important;
     font-size: clamp(10px, 2.8vw, 12px) !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
   }
-  
-  .datatable-section h3.datatable-title {
-    font-size: clamp(0.9rem, 3.5vw, 1.1rem) !important;
-    margin-top: var(--mobile-spacing-md) !important;
-  }
-  
+
   /* ============================================================
      FORMULARIOS Y CONTROLES
      ============================================================ */
-  
+
   .form-control,
   .selectize-input,
   .btn {
-    font-size: 16px !important; /* Previene zoom en iOS */
+    font-size: 16px !important;
   }
-  
+
   .shiny-input-container {
     margin-bottom: var(--mobile-spacing-sm);
   }
-  
+
   .shiny-input-container label {
     font-size: clamp(0.75rem, 3vw, 0.85rem);
     margin-bottom: 2px;
   }
-  
+
   .radio input[type="radio"],
   .checkbox input[type="checkbox"] {
     width: clamp(16px, 4.5vw, 20px);
     height: clamp(16px, 4.5vw, 20px);
     margin-right: 6px;
   }
-  
+
   .radio label,
   .checkbox label {
     font-size: clamp(0.8rem, 3vw, 0.9rem);
     padding-left: 4px;
   }
-  
+
   .btn-primary,
   .btn-success {
     padding: clamp(8px, 2vh, 12px) clamp(10px, 3vw, 16px);
@@ -510,91 +748,74 @@
     width: 100%;
     margin-bottom: var(--mobile-spacing-sm);
   }
-  
+
   select.form-control {
     height: clamp(36px, 9vw, 42px);
   }
-  
+
   /* ============================================================
-     AJUSTES DE ESPACIADO
+     ESPACIADO GENERAL
      ============================================================ */
-  
+
   .row {
     margin-left: 0;
     margin-right: 0;
   }
-  
+
   .container-fluid {
     padding-left: var(--mobile-spacing-sm);
     padding-right: var(--mobile-spacing-sm);
   }
-  
+
   .main-container,
   .tab-content {
     padding-bottom: clamp(55px, 12vh, 70px) !important;
   }
-  
+
   .fluidRow,
   .row {
     margin-bottom: var(--mobile-spacing-sm);
   }
-  
-  /* Reducir espacio entre gráficas consecutivas */
+
   .plot-container + .fluidRow,
   .fluidRow + .fluidRow {
     margin-top: var(--mobile-spacing-sm);
   }
-  
+
   /* ============================================================
-     SIDEBAR DERECHO - CONTENIDO MÓVIL
+     SIDEBAR DERECHO - CONTENIDO
      ============================================================ */
-  
+
   .sidebar-right h3 {
     font-size: clamp(1rem, 4vw, 1.2rem);
     margin-bottom: var(--mobile-spacing-sm);
   }
-  
+
   .sidebar-right h4 {
     font-size: clamp(0.85rem, 3.5vw, 1rem);
     margin-top: var(--mobile-spacing-sm);
     margin-bottom: 4px;
   }
-  
+
   .sidebar-right p {
     font-size: clamp(0.75rem, 3vw, 0.85rem);
     margin-bottom: 6px;
     line-height: 1.35;
   }
-  
+
   .alcance-analisis {
     font-size: clamp(0.7rem, 2.8vw, 0.8rem);
   }
-  
+
   .sidebar-section {
     margin-bottom: var(--mobile-spacing-md);
     padding-bottom: var(--mobile-spacing-sm);
   }
-  
+
   /* ============================================================
-     OCULTAR/MOSTRAR ELEMENTOS
+     PREVENCIÓN DE SCROLL
      ============================================================ */
-  
-  .desktop-only {
-    display: none !important;
-  }
-  
-  .mobile-only {
-    display: block !important;
-  }
-  
-  .mobile-fab-container {
-    display: flex !important;
-  }
-  
-  /* ============================================================
-     PREVENIR SCROLL CUANDO DRAWER ABIERTO
-     ============================================================ */
-  
+
   body.mobile-drawer-open {
     overflow: hidden !important;
     position: fixed !important;
@@ -602,12 +823,11 @@
     height: 100vh !important;
     height: 100dvh !important;
   }
-  
+
   /* ============================================================
-     MEJORAS ESPECÍFICAS PARA iOS
+     iOS ESPECÍFICO
      ============================================================ */
-  
-  /* Prevenir zoom en inputs */
+
   input[type="text"],
   input[type="number"],
   input[type="email"],
@@ -616,8 +836,7 @@
   textarea {
     font-size: 16px !important;
   }
-  
-  /* Touch targets mínimos (Apple HIG: 44px) */
+
   button,
   .btn,
   a.btn,
@@ -625,14 +844,14 @@
   input[type="checkbox"] + label {
     min-height: 44px;
   }
-  
-  /* Scrolling suave */
+
+  .btn-outline-info,
+  [id*="info_grafica"],
+  .metodologia-btn {
+    min-height: auto !important;
+  }
+
   * {
     -webkit-overflow-scrolling: touch;
-  }
-  
-  /* Safe area para iPhone con notch */
-  .mobile-fab-container {
-    padding-bottom: env(safe-area-inset-bottom, 0);
   }
 }

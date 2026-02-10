@@ -1,5 +1,9 @@
 // ui/www/custom.js
-// Versión: 2.0 - Con detección de ancho de pantalla para gráficas responsivas
+// Versión: 2.2 - Limpieza: eliminado código de abreviaturas de leyendas
+// Cambios v2.2:
+//   - ELIMINADO: legendTextMap, shortenPlotlyLegends, restorePlotlyLegends
+//   - ELIMINADO: Toda la lógica de modificación de leyendas post-render
+//   - Las leyendas ahora se muestran tal como vienen del servidor R
 
 // ============================================================
 // DETECCIÓN DE ANCHO DE PANTALLA PARA SHINY
@@ -59,7 +63,6 @@ function resizePlotlyGraphs(selector) {
     var plotlyDiv = this;
     if (plotlyDiv && typeof Plotly !== 'undefined' && plotlyDiv.data) {
       try {
-        // Usar relayout para mejor rendimiento en móvil
         Plotly.relayout(plotlyDiv, {
           'xaxis.autorange': true,
           'yaxis.autorange': true
@@ -74,7 +77,6 @@ function resizePlotlyGraphs(selector) {
 
 // Forzar resize de gráficos de Plotly para mantener responsividad
 $(document).on('shiny:connected', function() {
-  // Esperar a que los gráficos se rendericen inicialmente
   setTimeout(function() {
     resizePlotlyGraphs();
   }, 1000);
@@ -124,10 +126,7 @@ function isTouchDevice() {
 // Mejorar interacción táctil con selectize
 $(document).on('shiny:connected', function() {
   if (isTouchDevice()) {
-    // Agregar clase para estilos específicos de touch
     $('body').addClass('touch-device');
-    
-    // Mejorar el tamaño de los elementos clickeables
     $('.selectize-input').css('min-height', '44px');
     $('.btn').css('min-height', '44px');
   }
@@ -157,21 +156,20 @@ if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
 
 // ============================================================
 // AJUSTE DINÁMICO DE PLOTLY PARA MÓVIL
+// (Sin modificación de leyendas - v2.2)
 // ============================================================
 
-// Función para ajustar configuración de Plotly después del renderizado
 function adjustPlotlyForMobile() {
   if (window.innerWidth <= 768) {
     $('.plotly, .js-plotly-plot').each(function() {
       var plotlyDiv = this;
       if (plotlyDiv && typeof Plotly !== 'undefined' && plotlyDiv.layout) {
         try {
-          // Ajustar layout para móvil
           var updates = {
             'title.font.size': 12,
             'xaxis.tickfont.size': 8,
             'yaxis.tickfont.size': 8,
-            'legend.font.size': 8,
+            'legend.font.size': 7,
             'margin.t': 80,
             'margin.b': 100,
             'margin.l': 50,
@@ -199,4 +197,17 @@ $(document).on('shown.bs.tab', function() {
   setTimeout(adjustPlotlyForMobile, 600);
 });
 
-console.log('✅ custom.js v2.0 cargado (con detección de ancho de pantalla)');
+// Ejecutar al redimensionar ventana
+$(window).on('resize', function() {
+  clearTimeout(window.adjustTimer);
+  window.adjustTimer = setTimeout(function() {
+    adjustPlotlyForMobile();
+  }, 300);
+});
+
+// Ejecutar al cargar página
+$(document).ready(function() {
+  setTimeout(adjustPlotlyForMobile, 1500);
+});
+
+console.log('✅ custom.js v2.2 cargado (sin modificación de leyendas)');

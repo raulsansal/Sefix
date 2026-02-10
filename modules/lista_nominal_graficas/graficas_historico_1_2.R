@@ -1,11 +1,15 @@
 # modules/lista_nominal_graficas/graficas_historico_1_2.R
 # Gráficas históricas 1 y 2: Proyección mensual y Evolución anual
-# Versión: 2.7 - CORRECCIÓN: Usar ambito_reactivo para cambio de vista automático
+# Versión: 2.12 - Ajuste posición Fuente en gráficas con 4 trazas (y=-0.60)
+# Basado en v2.7 original
+# Cambio v2.12:
+#   - Gráfica 1 (4 trazas): Fuente en y = -0.60 (más abajo para dar espacio a leyendas en 2 líneas)
+#   - Gráfica 2 (2 trazas): Fuente en y = -0.35 (sin cambios)
 
 graficas_historico_1_2 <- function(input, output, session, datos_year_actual, datos_anuales_completos, 
                                    anio_actual, texto_alcance, estado_app, mostrar_graficas_anuales, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_historico_1_2 v2.7")
+  message("📊 Inicializando graficas_historico_1_2 v2.12")
   
   # ========== GRÁFICA 1: EVOLUCIÓN MENSUAL AÑO ACTUAL + PROYECCIÓN ==========
   
@@ -159,6 +163,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       etiquetas_meses <- format(fechas_completas_eje, "%b")
       
       # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      # ✅ v2.12: Fuente en y = -0.60 para gráficas con 4 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -171,7 +176,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.35,
+          x = 0.5, y = -0.60,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -322,6 +327,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       etiquetas_meses <- format(fechas_completas_eje, "%b")
       
       # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      # ✅ v2.12: Fuente en y = -0.60 para gráficas con 4 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -334,7 +340,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.35,
+          x = 0.5, y = -0.60,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -481,6 +487,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       )
       
       # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      # ✅ v2.12: Gráfica 2 tiene solo 2 trazas - Fuente en y = -0.35 (sin cambios)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -573,6 +580,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       )
       
       # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      # ✅ v2.12: Gráfica 2 tiene solo 2 trazas - Fuente en y = -0.35 (sin cambios)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -624,99 +632,104 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       ignoreInit = FALSE
     )
   
-  # ========== MODAL: INFORMACIÓN METODOLOGÍA GRÁFICA 1 ==========
+  # ========== ✅ v2.13: MODAL METODOLOGÍA MEJORADO ==========
   
   observeEvent(input$info_grafica1, {
     showModal(modalDialog(
+      # ✅ v2.13: Título con botón X integrado
       title = tags$div(
-        style = "color: #003E66; font-weight: bold; font-size: 18px;",
-        icon("chart-line"), " Metodología de Proyección"
+        style = "display: flex; justify-content: space-between; align-items: center; width: 100%;",
+        tags$span(
+          style = "color: #003E66; font-weight: bold; font-size: 18px;",
+          icon("chart-line"), " Metodología de Proyección"
+        ),
+        # Botón X para cerrar (esquina superior derecha)
+        tags$button(
+          type = "button",
+          class = "close modal-close-x",
+          `data-dismiss` = "modal",
+          `aria-label` = "Cerrar",
+          style = "font-size: 24px; font-weight: bold; color: #666; opacity: 0.8; border: none; background: transparent; cursor: pointer; padding: 0; margin: -10px -5px 0 0;",
+          HTML("&times;")
+        )
       ),
+      # ✅ v2.13: Contenido con clase para control CSS
       tags$div(
-        style = "font-size: 14px; line-height: 1.8;",
+        class = "modal-metodologia-content",
+        style = "font-size: 14px; line-height: 1.6;",
+        
         tags$h5(
-          style = "color: #44559B; font-weight: bold; margin-top: 15px;",
+          style = "color: #44559B; font-weight: bold; margin-top: 10px;",
           "¿Cómo se calcula la proyección?"
         ),
         tags$p(
-          "La proyección mostrada en esta gráfica utiliza un ", 
+          "La proyección utiliza un ", 
           tags$strong("modelo de tasa de crecimiento mensual promedio"), 
-          " basado en los datos históricos disponibles del año en curso."
+          " basado en los datos históricos del año en curso."
         ),
+        
         tags$h5(
-          style = "color: #44559B; font-weight: bold; margin-top: 15px;",
+          style = "color: #44559B; font-weight: bold; margin-top: 12px;",
           "Pasos del cálculo:"
         ),
         tags$ol(
-          style = "padding-left: 20px;",
-          tags$li(tags$strong("Datos base:"), " Se toman todos los cortes mensuales disponibles del año actual (último día de cada mes)."),
-          tags$li(tags$strong("Tasa de crecimiento:"), " Se calcula la tasa de crecimiento mensual promedio entre el primer y último mes disponible."),
-          tags$li(tags$strong("Proyección:"), " Se aplica esta tasa a los meses restantes hasta diciembre del año en curso."),
-          tags$li(tags$strong("Fechas proyectadas:"), " Cada proyección corresponde al último día del mes respectivo (ej: 30/sep, 31/oct, 30/nov, 31/dic)."),
-          tags$li(tags$strong("Visualización:"), " Las líneas punteadas representan los valores proyectados.")
+          style = "padding-left: 18px; margin-bottom: 10px;",
+          tags$li(tags$strong("Datos base:"), " Cortes mensuales del año actual."),
+          tags$li(tags$strong("Tasa de crecimiento:"), " Promedio mensual entre primer y último mes."),
+          tags$li(tags$strong("Proyección:"), " Se aplica la tasa hasta diciembre."),
+          tags$li(tags$strong("Visualización:"), " Líneas punteadas = valores proyectados.")
         ),
+        
         tags$h5(
-          style = "color: #44559B; font-weight: bold; margin-top: 15px;",
-          "Fórmula aplicada:"
+          style = "color: #44559B; font-weight: bold; margin-top: 12px;",
+          "Fórmula:"
         ),
         tags$div(
-          style = "background-color: #f8f9fa; padding: 15px; border-left: 4px solid #003E66; margin: 10px 0; font-family: 'Courier New', monospace;",
-          tags$code("Tasa mensual = (Valor final / Valor inicial)^(1 / (n-1)) - 1"),
+          style = "background-color: #f8f9fa; padding: 10px; border-left: 3px solid #003E66; margin: 8px 0; font-family: monospace; font-size: 11px;",
+          tags$code("Tasa = (Valor_final / Valor_inicial)^(1/(n-1)) - 1"),
           tags$br(),
-          tags$code("Valor proyectado(mes i) = Último valor × (1 + tasa)^i"),
-          tags$br(),
-          tags$code("Fecha proyectada(mes i) = Último día del mes i")
+          tags$code("Proyección(i) = Último_valor × (1 + tasa)^i")
         ),
+        
         tags$h5(
-          style = "color: #44559B; font-weight: bold; margin-top: 15px;",
-          icon("calculator"), " Ejemplo de cálculo:"
-        ),
-        tags$div(
-          style = "background-color: #f0f8ff; padding: 12px; border-radius: 5px; margin: 10px 0;",
-          tags$p(
-            style = "margin: 5px 0;",
-            tags$strong("Supongamos:"), " Lista Nominal enero = 95,000,000 | agosto = 97,500,000"
-          ),
-          tags$p(
-            style = "margin: 5px 0;",
-            "Tasa mensual = (97,500,000 / 95,000,000)^(1/7) - 1 = 0.378% mensual"
-          ),
-          tags$p(
-            style = "margin: 5px 0;",
-            "Proyección septiembre (30/sep) = 97,500,000 × (1.00378)^1 = 97,868,550"
-          ),
-          tags$p(
-            style = "margin: 5px 0;",
-            "Proyección octubre (31/oct) = 97,500,000 × (1.00378)^2 = 98,239,019"
-          )
-        ),
-        tags$h5(
-          style = "color: #AE0E35; font-weight: bold; margin-top: 15px;",
-          icon("exclamation-triangle"), " Consideraciones importantes:"
+          style = "color: #AE0E35; font-weight: bold; margin-top: 12px;",
+          icon("exclamation-triangle"), " Consideraciones:"
         ),
         tags$ul(
-          style = "padding-left: 20px;",
-          tags$li("La proyección asume un ", tags$strong("crecimiento constante"), " basado en tendencias históricas del año."),
-          tags$li("Es una ", tags$strong("estimación estadística"), " y puede variar con respecto a los valores reales."),
-          tags$li("Se proyecta hasta ", tags$strong("diciembre del año en curso"), " únicamente."),
-          tags$li("Las fechas proyectadas corresponden al ", tags$strong("último día de cada mes"), " para mantener consistencia con los datos históricos del INE."),
-          tags$li("Se recomienda ", tags$strong("actualizar regularmente"), " con los datos oficiales del INE conforme se publiquen."),
-          tags$li("Los valores proyectados se distinguen visualmente con ", tags$strong("líneas punteadas"), ".")
+          style = "padding-left: 18px; margin-bottom: 10px;",
+          tags$li("Asume crecimiento ", tags$strong("constante"), "."),
+          tags$li("Es una ", tags$strong("estimación estadística"), "."),
+          tags$li("Proyecta hasta ", tags$strong("diciembre"), " del año."),
+          tags$li("Los datos oficiales del INE prevalecen.")
         ),
-        tags$hr(style = "margin: 20px 0;"),
+        
+        tags$hr(style = "margin: 12px 0;"),
         tags$p(
-          style = "font-size: 12px; color: #666; text-align: center;",
-          icon("info-circle"), " Esta proyección es una herramienta de referencia y análisis. ",
-          "Los datos oficiales son publicados mensualmente por el INE y prevalecen sobre cualquier estimación."
+          style = "font-size: 11px; color: #666; text-align: center; margin-bottom: 0;",
+          icon("info-circle"), " Esta es una herramienta de referencia. ",
+          "Los datos oficiales son los publicados por el INE."
         )
       ),
-      easyClose = TRUE,
+      
+      easyClose = TRUE,  # ✅ Cerrar al hacer clic fuera del modal
       fade = TRUE,
-      size = "l",
-      footer = modalButton("Cerrar")
+      size = "m",  # ✅ v2.13: Tamaño mediano para mejor visualización en móvil
+      
+      # ✅ v2.13: Botón CERRAR con color azul
+      footer = tags$div(
+        style = "text-align: center;",
+        modalButton(
+          label = "Cerrar",
+          icon = NULL
+        ) %>% tagAppendAttributes(
+          style = "background-color: #006988; border-color: #006988; color: white; font-weight: bold; padding: 8px 30px;"
+        )
+      )
     ))
   })
   
-  message("✅ graficas_historico_1_2 v2.7 inicializado")
-  message("   ✅ CORRECCIÓN: ambito_reactivo usado para cambio de vista automático")
+  message("✅ graficas_historico_1_2 v2.12 inicializado")
+  message("   ✅ v2.12: Fuente en y=-0.60 para gráficas con 4 trazas")
+  message("   ✅ v2.12: Fuente en y=-0.35 para gráficas con 2 trazas (sin cambios)")
+  message("   ✅ v2.13: Modal con botón X, color azul, easyClose")
 }
