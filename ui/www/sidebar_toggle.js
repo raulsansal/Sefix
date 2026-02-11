@@ -1,10 +1,10 @@
 // ui/www/sidebar_toggle.js
-// Versión: 3.3 - Overlay robusto para cerrar sidebar al tocar fuera
-// Cambios v3.3:
-//   - Overlay completamente reescrito con detección táctil mejorada
-//   - Listener global en document para capturar toques fuera del sidebar
+// Versión: 3.4 - Botón descarga robusto + prevención de teclado mejorada
+// Cambios v3.4:
+//   - Detección de datos en DataTable completamente reescrita
+//   - Múltiples selectores para encontrar el DataTable
+//   - Prevención de teclado: blur inmediato + readonly proactivo
 //   - Debug mejorado para diagnóstico
-//   - Sin botón X (cierre por overlay o botones de acción)
 
 $(document).ready(function() {
   
@@ -21,7 +21,6 @@ $(document).ready(function() {
   // ============================================================
   
   var drawerOpenTime = 0;
-  var overlayClickEnabled = false;
   
   // ============================================================
   // INICIALIZACIÓN DESKTOP (código original)
@@ -59,12 +58,11 @@ $(document).ready(function() {
   });
   
   // ============================================================
-  // SISTEMA MÓVIL - INICIALIZACIÓN v3.3
+  // SISTEMA MÓVIL - INICIALIZACIÓN v3.4
   // ============================================================
   
   function initMobileUI() {
     if (!isMobile()) {
-      // Limpiar UI móvil si existe
       $(".mobile-fab-container").remove();
       $(".mobile-overlay").remove();
       $(".well, [class*='sidebar_panel']").removeClass("mobile-open");
@@ -72,15 +70,12 @@ $(document).ready(function() {
       return;
     }
     
-    // Evitar duplicados
     if ($(".mobile-fab-container").length > 0) return;
     
-    // ✅ v3.3: Crear overlay como primer hijo del body para máxima prioridad
-    $(".mobile-overlay").remove(); // Limpiar cualquier overlay existente
+    $(".mobile-overlay").remove();
     var overlay = $('<div class="mobile-overlay" id="mobile-overlay-main"></div>');
     $("body").prepend(overlay);
     
-    // Crear 4 botones flotantes
     var fabContainer = $('<div class="mobile-fab-container">' +
       '<button class="mobile-fab-btn" id="mobile-btn-filters" type="button">' +
         '<span class="fab-icon">⚙️</span>' +
@@ -88,7 +83,7 @@ $(document).ready(function() {
       '</button>' +
       '<button class="mobile-fab-btn" id="mobile-btn-restore" type="button">' +
         '<span class="fab-icon">🔄</span>' +
-        '<span class="fab-label">Restablecer</span>' +
+        '<span class="fab-label">Restabecer</span>' +
       '</button>' +
       '<button class="mobile-fab-btn" id="mobile-btn-projection" type="button">' +
         '<span class="fab-icon">ℹ️</span>' +
@@ -102,122 +97,176 @@ $(document).ready(function() {
     
     $("body").append(fabContainer);
     
-    // Configurar listeners
     setupSidebarAutoClose();
     setupDownloadButtonVisibility();
-    preventKeyboardOnSelects();
-    
-    // ✅ v3.3: Configurar overlay click handler
     setupOverlayClickHandler();
     
-    console.log("✅ UI móvil v3.3 inicializada");
+    // ✅ v3.4: Prevención de teclado mejorada
+    preventKeyboardOnSelects();
+    
+    console.log("✅ UI móvil v3.4 inicializada");
   }
   
   // ============================================================
-  // ✅ v3.3: OVERLAY CLICK HANDLER - COMPLETAMENTE REESCRITO
-  // ============================================================
-  
-  function setupOverlayClickHandler() {
-    var overlay = $("#mobile-overlay-main");
-    
-    if (overlay.length === 0) {
-      console.error("❌ Overlay no encontrado");
-      return;
-    }
-    
-    // Remover handlers previos
-    overlay.off("click touchstart touchend");
-    
-    // ✅ Usar touchstart para mejor respuesta en móvil
-    overlay.on("touchstart", function(e) {
-      if (!isDrawerOpen()) return;
-      
-      // Verificar tiempo mínimo de apertura
-      if (Date.now() - drawerOpenTime < 300) return;
-      
-      console.log("👆 Touch en overlay detectado");
-      e.preventDefault();
-      e.stopPropagation();
-      closeMobileDrawers();
-    });
-    
-    // ✅ También manejar click para dispositivos híbridos
-    overlay.on("click", function(e) {
-      if (!isDrawerOpen()) return;
-      
-      // Verificar tiempo mínimo de apertura
-      if (Date.now() - drawerOpenTime < 300) return;
-      
-      console.log("🖱️ Click en overlay detectado");
-      e.preventDefault();
-      e.stopPropagation();
-      closeMobileDrawers();
-    });
-    
-    console.log("✅ Overlay click handler configurado");
-  }
-  
-  // ============================================================
-  // ✅ v3.3: MÉTODO ALTERNATIVO - DETECCIÓN GLOBAL DE TOQUES
-  // Si el toque no está dentro de un drawer abierto, cerrar
-  // ============================================================
-  
-  $(document).on("touchstart", function(e) {
-    if (!isMobile() || !isDrawerOpen()) return;
-    
-    // Verificar tiempo mínimo
-    if (Date.now() - drawerOpenTime < 300) return;
-    
-    var $target = $(e.target);
-    
-    // Si el toque está dentro de un drawer abierto, no cerrar
-    if ($target.closest(".mobile-open").length > 0) {
-      return;
-    }
-    
-    // Si el toque está en los botones FAB, no cerrar
-    if ($target.closest(".mobile-fab-container").length > 0) {
-      return;
-    }
-    
-    // Si el toque está en un modal, no cerrar
-    if ($target.closest(".modal").length > 0) {
-      return;
-    }
-    
-    // Si llegamos aquí, el toque está fuera del sidebar - cerrar
-    console.log("👆 Toque fuera del sidebar - cerrando");
-    closeMobileDrawers();
-  });
-  
-  // ============================================================
-  // PREVENIR TECLADO EN SELECTINPUTS
+  // ✅ v3.4: PREVENCIÓN DE TECLADO - COMPLETAMENTE REESCRITA
   // ============================================================
   
   function preventKeyboardOnSelects() {
-    $(document).on("focus", ".selectize-input input", function(e) {
-      $(this).attr("readonly", "readonly");
-      $(this).attr("inputmode", "none");
+    if (!isMobile()) return;
+    
+    // ============================================
+    // ESTRATEGIA 1: Aplicar readonly ANTES del focus
+    // ============================================
+    
+    function makeSelectizeReadonly() {
+      // Buscar todos los inputs dentro de selectize y hacerlos readonly
+      $(".selectize-input input").each(function() {
+        $(this).attr("readonly", "readonly");
+        $(this).attr("inputmode", "none");
+        $(this).attr("autocomplete", "off");
+        $(this).attr("autocorrect", "off");
+        $(this).attr("autocapitalize", "off");
+        $(this).attr("spellcheck", "false");
+        // CSS para prevenir selección
+        $(this).css({
+          "caret-color": "transparent",
+          "-webkit-user-select": "none",
+          "user-select": "none"
+        });
+      });
+      
+      // Para selects nativos
+      $(".well select, [class*='sidebar_panel'] select").each(function() {
+        $(this).attr("inputmode", "none");
+      });
+    }
+    
+    // Aplicar inmediatamente
+    makeSelectizeReadonly();
+    
+    // Aplicar después de que Shiny inicialice
+    setTimeout(makeSelectizeReadonly, 500);
+    setTimeout(makeSelectizeReadonly, 1000);
+    setTimeout(makeSelectizeReadonly, 2000);
+    
+    // ============================================
+    // ESTRATEGIA 2: Interceptar mousedown/touchstart
+    // ============================================
+    
+    $(document).on("mousedown touchstart", ".selectize-input", function(e) {
+      // Hacer readonly antes de que el input reciba focus
+      $(this).find("input").attr("readonly", "readonly").attr("inputmode", "none");
     });
     
-    $(".well select, [class*='sidebar_panel'] select").each(function() {
-      $(this).attr("inputmode", "none");
+    // ============================================
+    // ESTRATEGIA 3: Blur inmediato si recibe focus
+    // ============================================
+    
+    $(document).on("focus", ".selectize-input input", function(e) {
+      var $input = $(this);
+      
+      // Asegurar que tenga readonly
+      $input.attr("readonly", "readonly");
+      $input.attr("inputmode", "none");
+      
+      // Blur inmediato para cerrar teclado si se abrió
+      setTimeout(function() {
+        // Solo hacer blur si el teclado virtual podría estar abierto
+        // Verificamos que no haya un dropdown abierto que necesite el input
+        var $selectize = $input.closest(".selectize-control");
+        var isDropdownOpen = $selectize.find(".selectize-dropdown").is(":visible");
+        
+        if (!isDropdownOpen) {
+          $input.blur();
+        }
+      }, 50);
     });
+    
+    // ============================================
+    // ESTRATEGIA 4: Observar cambios en el DOM
+    // ============================================
     
     var observer = new MutationObserver(function(mutations) {
+      var needsUpdate = false;
+      
       mutations.forEach(function(mutation) {
         if (mutation.addedNodes.length) {
-          $(mutation.addedNodes).find(".selectize-input input").attr("readonly", "readonly");
-          $(mutation.addedNodes).find("select").attr("inputmode", "none");
+          $(mutation.addedNodes).each(function() {
+            if ($(this).find(".selectize-input").length > 0 || 
+                $(this).hasClass("selectize-input")) {
+              needsUpdate = true;
+            }
+          });
         }
       });
+      
+      if (needsUpdate) {
+        setTimeout(makeSelectizeReadonly, 100);
+      }
     });
     
     observer.observe(document.body, {
       childList: true,
       subtree: true
     });
+    
+    // ============================================
+    // ESTRATEGIA 5: Evento de Shiny
+    // ============================================
+    
+    $(document).on("shiny:inputchanged shiny:value", function() {
+      setTimeout(makeSelectizeReadonly, 100);
+    });
+    
+    console.log("✅ Prevención de teclado v3.4 configurada");
   }
+  
+  // ============================================================
+  // OVERLAY CLICK HANDLER
+  // ============================================================
+  
+  function setupOverlayClickHandler() {
+    var overlay = $("#mobile-overlay-main");
+    
+    if (overlay.length === 0) return;
+    
+    overlay.off("click touchstart touchend");
+    
+    overlay.on("touchstart", function(e) {
+      if (!isDrawerOpen()) return;
+      if (Date.now() - drawerOpenTime < 300) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      closeMobileDrawers();
+    });
+    
+    overlay.on("click", function(e) {
+      if (!isDrawerOpen()) return;
+      if (Date.now() - drawerOpenTime < 300) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      closeMobileDrawers();
+    });
+  }
+  
+  // ============================================================
+  // DETECCIÓN GLOBAL DE TOQUES FUERA DEL SIDEBAR
+  // ============================================================
+  
+  $(document).on("touchstart", function(e) {
+    if (!isMobile() || !isDrawerOpen()) return;
+    if (Date.now() - drawerOpenTime < 300) return;
+    
+    var $target = $(e.target);
+    
+    if ($target.closest(".mobile-open").length > 0) return;
+    if ($target.closest(".mobile-fab-container").length > 0) return;
+    if ($target.closest(".modal").length > 0) return;
+    
+    closeMobileDrawers();
+  });
   
   // ============================================================
   // CONFIGURAR CIERRE AUTOMÁTICO DEL SIDEBAR POR BOTONES
@@ -238,9 +287,6 @@ $(document).ready(function() {
     closeButtonSelectors.forEach(function(selector) {
       $(document).on("click.sidebarAutoClose", selector, function(e) {
         if (isMobile() && isDrawerOpen()) {
-          var buttonId = $(this).attr("id") || "unknown";
-          console.log("🔘 Botón de acción presionado:", buttonId);
-          
           setTimeout(function() {
             closeMobileDrawers();
           }, 150);
@@ -260,45 +306,188 @@ $(document).ready(function() {
   }
   
   // ============================================================
-  // CONFIGURAR VISIBILIDAD DEL BOTÓN DESCARGA
+  // ✅ v3.4: VISIBILIDAD DEL BOTÓN DESCARGA - COMPLETAMENTE REESCRITA
   // ============================================================
   
   function setupDownloadButtonVisibility() {
+    // Ocultar inicialmente
     $(".mobile-download-container").addClass("hidden-until-ready");
     
+    // ============================================
+    // FUNCIÓN DE DETECCIÓN ROBUSTA
+    // ============================================
+    
     function checkForData() {
-      var $rows = $(".dataTables_wrapper table tbody tr");
       var hasRealData = false;
+      var debugInfo = [];
       
-      if ($rows.length > 0) {
-        var firstCellText = $rows.first().find("td").first().text().trim();
-        hasRealData = firstCellText && 
-                      !firstCellText.includes("Configure") &&
-                      !firstCellText.includes("No hay datos") &&
-                      !firstCellText.includes("Mensaje");
+      // ============================================
+      // MÉTODO 1: Buscar DataTable por múltiples selectores
+      // ============================================
+      
+      var $dataTable = null;
+      var selectors = [
+        ".dataTables_wrapper table.dataTable tbody tr",
+        ".dataTables_wrapper tbody tr",
+        "table.dataTable tbody tr",
+        "#DataTables_Table_0 tbody tr",
+        "[id*='table_data'] tbody tr",
+        "[id*='main-table_data'] tbody tr"
+      ];
+      
+      for (var i = 0; i < selectors.length; i++) {
+        var $found = $(selectors[i]);
+        if ($found.length > 0) {
+          $dataTable = $found;
+          debugInfo.push("Selector encontrado: " + selectors[i] + " (" + $found.length + " filas)");
+          break;
+        }
       }
       
-      if (hasRealData) {
-        $(".mobile-download-container").removeClass("hidden-until-ready");
-      } else {
-        $(".mobile-download-container").addClass("hidden-until-ready");
+      if (!$dataTable || $dataTable.length === 0) {
+        debugInfo.push("No se encontró DataTable");
+        updateButtonVisibility(false, debugInfo);
+        return false;
       }
       
+      // ============================================
+      // MÉTODO 2: Verificar contenido de las celdas
+      // ============================================
+      
+      var $firstRow = $dataTable.first();
+      var $cells = $firstRow.find("td");
+      
+      if ($cells.length === 0) {
+        debugInfo.push("No se encontraron celdas (td)");
+        updateButtonVisibility(false, debugInfo);
+        return false;
+      }
+      
+      // Obtener texto de la primera celda
+      var firstCellText = $cells.first().text().trim().toLowerCase();
+      debugInfo.push("Primera celda: '" + firstCellText.substring(0, 50) + "'");
+      
+      // Lista de textos que indican "sin datos"
+      var noDataTexts = [
+        "configure",
+        "no hay datos",
+        "mensaje",
+        "sin datos",
+        "no data",
+        "loading",
+        "cargando",
+        "esperando"
+      ];
+      
+      // Verificar si es un mensaje de "sin datos"
+      var isNoDataMessage = noDataTexts.some(function(text) {
+        return firstCellText.includes(text);
+      });
+      
+      if (isNoDataMessage) {
+        debugInfo.push("Detectado mensaje de 'sin datos'");
+        updateButtonVisibility(false, debugInfo);
+        return false;
+      }
+      
+      // ============================================
+      // MÉTODO 3: Verificar que hay múltiples celdas con contenido
+      // ============================================
+      
+      var cellsWithContent = 0;
+      $cells.each(function() {
+        var text = $(this).text().trim();
+        if (text && text.length > 0) {
+          cellsWithContent++;
+        }
+      });
+      
+      debugInfo.push("Celdas con contenido: " + cellsWithContent);
+      
+      // Si hay al menos 2 celdas con contenido, consideramos que hay datos
+      hasRealData = cellsWithContent >= 2;
+      
+      // ============================================
+      // MÉTODO 4: Verificar número total de filas
+      // ============================================
+      
+      var totalRows = $dataTable.length;
+      debugInfo.push("Total de filas: " + totalRows);
+      
+      // Si solo hay 1 fila y tiene pocas celdas, probablemente es un mensaje
+      if (totalRows === 1 && cellsWithContent < 3) {
+        hasRealData = false;
+        debugInfo.push("Solo 1 fila con pocas celdas - probablemente mensaje");
+      }
+      
+      updateButtonVisibility(hasRealData, debugInfo);
       return hasRealData;
     }
     
+    // ============================================
+    // ACTUALIZAR VISIBILIDAD DEL BOTÓN
+    // ============================================
+    
+    function updateButtonVisibility(show, debugInfo) {
+      var $container = $(".mobile-download-container");
+      
+      if ($container.length === 0) {
+        console.log("⚠️ Contenedor de botón descarga no encontrado");
+        return;
+      }
+      
+      if (show) {
+        $container.removeClass("hidden-until-ready");
+        console.log("✅ Botón descarga VISIBLE", debugInfo);
+      } else {
+        $container.addClass("hidden-until-ready");
+        // Solo loguear ocasionalmente para no saturar la consola
+        if (Math.random() < 0.1) {
+          console.log("⏳ Botón descarga OCULTO", debugInfo);
+        }
+      }
+    }
+    
+    // ============================================
+    // EJECUTAR VERIFICACIONES
+    // ============================================
+    
+    // Verificación periódica cada 500ms
     setInterval(checkForData, 500);
     
+    // Verificar después de eventos de Shiny
     $(document).on("shiny:value", function(event) {
-      if (event.name && event.name.includes("table_data")) {
-        setTimeout(checkForData, 300);
-        setTimeout(checkForData, 600);
-        setTimeout(checkForData, 1000);
+      if (event.name) {
+        var name = event.name.toLowerCase();
+        if (name.includes("table") || name.includes("data") || name.includes("main")) {
+          console.log("📊 Evento shiny:value detectado:", event.name);
+          // Verificar múltiples veces después del evento
+          setTimeout(checkForData, 200);
+          setTimeout(checkForData, 500);
+          setTimeout(checkForData, 1000);
+          setTimeout(checkForData, 1500);
+          setTimeout(checkForData, 2000);
+        }
       }
     });
     
+    // Verificar cuando el DataTable se redibuja
+    $(document).on("draw.dt", function() {
+      console.log("📊 Evento draw.dt detectado");
+      setTimeout(checkForData, 100);
+      setTimeout(checkForData, 300);
+      setTimeout(checkForData, 500);
+    });
+    
+    // Verificar al inicio con delays progresivos
+    setTimeout(checkForData, 500);
     setTimeout(checkForData, 1000);
+    setTimeout(checkForData, 1500);
     setTimeout(checkForData, 2000);
+    setTimeout(checkForData, 3000);
+    setTimeout(checkForData, 5000);
+    
+    console.log("✅ Visibilidad de botón descarga v3.4 configurada");
   }
   
   // ============================================================
@@ -320,7 +509,6 @@ $(document).ready(function() {
     
     if (resetBtn.length > 0) {
       resetBtn.trigger("click");
-      console.log("🔄 Botón Restaurar: click simulado");
       showMobileToast("Consulta restablecida");
     } else {
       showMobileToast("No disponible en esta vista");
@@ -333,7 +521,6 @@ $(document).ready(function() {
     
     if (metodologiaBtn.length > 0) {
       metodologiaBtn.trigger("click");
-      console.log("ℹ️ Botón Proyección: click simulado");
     } else {
       showMobileToast("No disponible en esta vista");
     }
@@ -354,7 +541,6 @@ $(document).ready(function() {
   
   $(document).on("keydown", function(e) {
     if (e.key === "Escape" && isMobile() && isDrawerOpen()) {
-      console.log("⌨️ Cerrando drawer con Escape");
       closeMobileDrawers();
     }
   });
@@ -386,52 +572,28 @@ $(document).ready(function() {
   // ============================================================
   
   function openMobileDrawer(drawer, direction) {
-    if (!drawer || drawer.length === 0) {
-      console.warn("Drawer no encontrado");
-      return;
-    }
+    if (!drawer || drawer.length === 0) return;
     
-    // Cerrar cualquier drawer abierto primero
     closeMobileDrawers();
     
-    // Pequeño delay para asegurar que el cierre se complete
     setTimeout(function() {
-      // Registrar tiempo de apertura
       drawerOpenTime = Date.now();
-      
-      // Agregar clase para abrir
       drawer.addClass("mobile-open");
-      
-      // Mostrar overlay
       $(".mobile-overlay").addClass("active");
-      
-      // Prevenir scroll del body
       $("body").addClass("mobile-drawer-open");
-      
-      console.log("📂 Drawer abierto: " + direction + " (tiempo: " + drawerOpenTime + ")");
     }, 50);
   }
   
   function closeMobileDrawers() {
-    // Cerrar todos los drawers
     $(".mobile-open").removeClass("mobile-open");
     $(".sidebar-right").removeClass("mobile-open");
     $(".well").removeClass("mobile-open");
     $("[class*='sidebar_panel']").removeClass("mobile-open");
-    
-    // Ocultar overlay
     $(".mobile-overlay").removeClass("active");
-    
-    // Restaurar scroll del body
     $("body").removeClass("mobile-drawer-open");
-    
-    // Reset del tiempo
     drawerOpenTime = 0;
-    
-    console.log("📂 Drawers cerrados");
   }
   
-  // Exponer función globalmente
   window.closeMobileDrawers = closeMobileDrawers;
   window.isDrawerOpen = isDrawerOpen;
   
@@ -450,7 +612,6 @@ $(document).ready(function() {
         $(".mobile-overlay").remove();
         $(".mobile-toast").remove();
         closeMobileDrawers();
-        
         $(".sidebar-right").removeClass("mobile-open hidden");
         $(".well").removeClass("mobile-open");
       }
@@ -484,6 +645,8 @@ $(document).ready(function() {
     setTimeout(function() {
       if (isMobile()) {
         initMobileUI();
+        // Re-aplicar prevención de teclado después de que Shiny esté listo
+        preventKeyboardOnSelects();
       }
     }, 500);
   });
@@ -491,11 +654,11 @@ $(document).ready(function() {
   $(document).on("shown.bs.tab", function() {
     if (isMobile()) {
       setupSidebarAutoClose();
-      preventKeyboardOnSelects();
       setupOverlayClickHandler();
+      preventKeyboardOnSelects();
     }
     setTimeout(triggerPlotlyResize, 300);
   });
   
-  console.log("✅ sidebar_toggle.js v3.3 cargado");
+  console.log("✅ sidebar_toggle.js v3.4 cargado");
 });

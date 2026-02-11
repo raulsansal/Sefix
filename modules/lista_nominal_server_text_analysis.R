@@ -494,7 +494,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       
       # Frase de constancia: "constante" solo si fue consistente en todo el periodo
       frase_constancia <- if (es_constante) "una mayor presencia constante de" else "una mayor presencia de"
-      frase_periodo <- if (!es_constante) ", la mayor parte del periodo." else "."
+      frase_periodo <- if (!es_constante) " la mayor parte del periodo." else "."
       
       if (ambito == "extranjero") {
         texto_evolucion <- paste0(
@@ -587,7 +587,7 @@ lista_nominal_server_text_analysis <- function(input, output, session,
       es_constante <- resultado_sexo$constante
       
       frase_constancia <- if (es_constante) "una mayor presencia constante de" else "una mayor presencia de"
-      frase_periodo <- if (!es_constante) ", la mayor parte del periodo." else "."
+      frase_periodo <- if (!es_constante) " la mayor parte del periodo." else "."
       
       if (ambito == "extranjero") {
         texto_evolucion <- paste0(
