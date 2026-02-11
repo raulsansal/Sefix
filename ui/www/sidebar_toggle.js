@@ -1,9 +1,10 @@
 // ui/www/sidebar_toggle.js
-// Versión: 3.0 - Barra inferior móvil con 4 botones
-// Cambios v3.0:
-//   - 4 botones: FILTROS, RESTAURAR, PROYECCIÓN, ANÁLISIS
-//   - RESTAURAR: replica funcionalidad de "Restablecer consulta" del sidebar
-//   - PROYECCIÓN: abre modal de metodología (reemplaza botón entre gráficas)
+// Versión: 3.3 - Overlay robusto para cerrar sidebar al tocar fuera
+// Cambios v3.3:
+//   - Overlay completamente reescrito con detección táctil mejorada
+//   - Listener global en document para capturar toques fuera del sidebar
+//   - Debug mejorado para diagnóstico
+//   - Sin botón X (cierre por overlay o botones de acción)
 
 $(document).ready(function() {
   
@@ -14,6 +15,13 @@ $(document).ready(function() {
   function isMobile() {
     return window.innerWidth <= 768;
   }
+  
+  // ============================================================
+  // CONTROL DE ESTADO DEL DRAWER
+  // ============================================================
+  
+  var drawerOpenTime = 0;
+  var overlayClickEnabled = false;
   
   // ============================================================
   // INICIALIZACIÓN DESKTOP (código original)
@@ -51,7 +59,7 @@ $(document).ready(function() {
   });
   
   // ============================================================
-  // SISTEMA MÓVIL - INICIALIZACIÓN v3.0
+  // SISTEMA MÓVIL - INICIALIZACIÓN v3.3
   // ============================================================
   
   function initMobileUI() {
@@ -59,7 +67,6 @@ $(document).ready(function() {
       // Limpiar UI móvil si existe
       $(".mobile-fab-container").remove();
       $(".mobile-overlay").remove();
-      $(".mobile-drawer-close").remove();
       $(".well, [class*='sidebar_panel']").removeClass("mobile-open");
       $(".sidebar-right").removeClass("mobile-open");
       return;
@@ -68,30 +75,26 @@ $(document).ready(function() {
     // Evitar duplicados
     if ($(".mobile-fab-container").length > 0) return;
     
-    // Crear overlay
-    if ($(".mobile-overlay").length === 0) {
-      $("body").append('<div class="mobile-overlay"></div>');
-    }
+    // ✅ v3.3: Crear overlay como primer hijo del body para máxima prioridad
+    $(".mobile-overlay").remove(); // Limpiar cualquier overlay existente
+    var overlay = $('<div class="mobile-overlay" id="mobile-overlay-main"></div>');
+    $("body").prepend(overlay);
     
-    // ✅ v3.0: Crear 4 botones flotantes
+    // Crear 4 botones flotantes
     var fabContainer = $('<div class="mobile-fab-container">' +
-      // 1. FILTROS
-      '<button class="mobile-fab-btn" id="mobile-btn-filters">' +
+      '<button class="mobile-fab-btn" id="mobile-btn-filters" type="button">' +
         '<span class="fab-icon">⚙️</span>' +
         '<span class="fab-label">Filtros</span>' +
       '</button>' +
-      // 2. RESTAURAR (nuevo)
-      '<button class="mobile-fab-btn" id="mobile-btn-restore">' +
+      '<button class="mobile-fab-btn" id="mobile-btn-restore" type="button">' +
         '<span class="fab-icon">🔄</span>' +
-        '<span class="fab-label">Restaurar</span>' +
+        '<span class="fab-label">Restablecer</span>' +
       '</button>' +
-      // 3. PROYECCIÓN (nuevo - reemplaza Metodología)
-      '<button class="mobile-fab-btn" id="mobile-btn-projection">' +
+      '<button class="mobile-fab-btn" id="mobile-btn-projection" type="button">' +
         '<span class="fab-icon">ℹ️</span>' +
         '<span class="fab-label">Proyección</span>' +
       '</button>' +
-      // 4. ANÁLISIS
-      '<button class="mobile-fab-btn" id="mobile-btn-analysis">' +
+      '<button class="mobile-fab-btn" id="mobile-btn-analysis" type="button">' +
         '<span class="fab-icon">📊</span>' +
         '<span class="fab-label">Análisis</span>' +
       '</button>' +
@@ -99,38 +102,211 @@ $(document).ready(function() {
     
     $("body").append(fabContainer);
     
-    // Agregar botones de cerrar a los drawers
-    addCloseButtons();
+    // Configurar listeners
+    setupSidebarAutoClose();
+    setupDownloadButtonVisibility();
+    preventKeyboardOnSelects();
     
-    console.log("✅ UI móvil v3.0 inicializada (4 botones)");
+    // ✅ v3.3: Configurar overlay click handler
+    setupOverlayClickHandler();
+    
+    console.log("✅ UI móvil v3.3 inicializada");
   }
   
   // ============================================================
-  // AGREGAR BOTONES DE CERRAR A DRAWERS
+  // ✅ v3.3: OVERLAY CLICK HANDLER - COMPLETAMENTE REESCRITO
   // ============================================================
   
-  function addCloseButtons() {
-    // Botón cerrar para sidebar derecho (análisis)
-    $(".sidebar-right").each(function() {
-      if ($(this).find(".mobile-drawer-close").length === 0) {
-        $(this).prepend('<button class="mobile-drawer-close" aria-label="Cerrar">×</button>');
-      }
+  function setupOverlayClickHandler() {
+    var overlay = $("#mobile-overlay-main");
+    
+    if (overlay.length === 0) {
+      console.error("❌ Overlay no encontrado");
+      return;
+    }
+    
+    // Remover handlers previos
+    overlay.off("click touchstart touchend");
+    
+    // ✅ Usar touchstart para mejor respuesta en móvil
+    overlay.on("touchstart", function(e) {
+      if (!isDrawerOpen()) return;
+      
+      // Verificar tiempo mínimo de apertura
+      if (Date.now() - drawerOpenTime < 300) return;
+      
+      console.log("👆 Touch en overlay detectado");
+      e.preventDefault();
+      e.stopPropagation();
+      closeMobileDrawers();
     });
     
-    // Botón cerrar para sidebar izquierdo (filtros)
-    $(".well").each(function() {
-      if ($(this).find(".mobile-drawer-close").length === 0) {
-        $(this).prepend('<button class="mobile-drawer-close" aria-label="Cerrar">×</button>');
-      }
+    // ✅ También manejar click para dispositivos híbridos
+    overlay.on("click", function(e) {
+      if (!isDrawerOpen()) return;
+      
+      // Verificar tiempo mínimo de apertura
+      if (Date.now() - drawerOpenTime < 300) return;
+      
+      console.log("🖱️ Click en overlay detectado");
+      e.preventDefault();
+      e.stopPropagation();
+      closeMobileDrawers();
+    });
+    
+    console.log("✅ Overlay click handler configurado");
+  }
+  
+  // ============================================================
+  // ✅ v3.3: MÉTODO ALTERNATIVO - DETECCIÓN GLOBAL DE TOQUES
+  // Si el toque no está dentro de un drawer abierto, cerrar
+  // ============================================================
+  
+  $(document).on("touchstart", function(e) {
+    if (!isMobile() || !isDrawerOpen()) return;
+    
+    // Verificar tiempo mínimo
+    if (Date.now() - drawerOpenTime < 300) return;
+    
+    var $target = $(e.target);
+    
+    // Si el toque está dentro de un drawer abierto, no cerrar
+    if ($target.closest(".mobile-open").length > 0) {
+      return;
+    }
+    
+    // Si el toque está en los botones FAB, no cerrar
+    if ($target.closest(".mobile-fab-container").length > 0) {
+      return;
+    }
+    
+    // Si el toque está en un modal, no cerrar
+    if ($target.closest(".modal").length > 0) {
+      return;
+    }
+    
+    // Si llegamos aquí, el toque está fuera del sidebar - cerrar
+    console.log("👆 Toque fuera del sidebar - cerrando");
+    closeMobileDrawers();
+  });
+  
+  // ============================================================
+  // PREVENIR TECLADO EN SELECTINPUTS
+  // ============================================================
+  
+  function preventKeyboardOnSelects() {
+    $(document).on("focus", ".selectize-input input", function(e) {
+      $(this).attr("readonly", "readonly");
+      $(this).attr("inputmode", "none");
+    });
+    
+    $(".well select, [class*='sidebar_panel'] select").each(function() {
+      $(this).attr("inputmode", "none");
+    });
+    
+    var observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        if (mutation.addedNodes.length) {
+          $(mutation.addedNodes).find(".selectize-input input").attr("readonly", "readonly");
+          $(mutation.addedNodes).find("select").attr("inputmode", "none");
+        }
+      });
+    });
+    
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
     });
   }
   
   // ============================================================
-  // MANEJADORES MÓVILES
+  // CONFIGURAR CIERRE AUTOMÁTICO DEL SIDEBAR POR BOTONES
   // ============================================================
   
-  // 1. Abrir filtros (sidebar izquierdo)
-  $(document).on("click", "#mobile-btn-filters", function() {
+  function setupSidebarAutoClose() {
+    var closeButtonSelectors = [
+      "[id$='-btn_consultar']",
+      "[id$='btn_consultar']",
+      "[id$='-reset_config']",
+      "[id$='reset_config']",
+      "[id$='-download_csv']",
+      "[id$='download_csv']:not([id$='download_csv_mobile'])"
+    ];
+    
+    $(document).off("click.sidebarAutoClose");
+    
+    closeButtonSelectors.forEach(function(selector) {
+      $(document).on("click.sidebarAutoClose", selector, function(e) {
+        if (isMobile() && isDrawerOpen()) {
+          var buttonId = $(this).attr("id") || "unknown";
+          console.log("🔘 Botón de acción presionado:", buttonId);
+          
+          setTimeout(function() {
+            closeMobileDrawers();
+          }, 150);
+        }
+      });
+    });
+  }
+  
+  // ============================================================
+  // VERIFICAR SI HAY DRAWER ABIERTO
+  // ============================================================
+  
+  function isDrawerOpen() {
+    return $(".well.mobile-open").length > 0 || 
+           $(".sidebar-right.mobile-open").length > 0 ||
+           $("[class*='sidebar_panel'].mobile-open").length > 0;
+  }
+  
+  // ============================================================
+  // CONFIGURAR VISIBILIDAD DEL BOTÓN DESCARGA
+  // ============================================================
+  
+  function setupDownloadButtonVisibility() {
+    $(".mobile-download-container").addClass("hidden-until-ready");
+    
+    function checkForData() {
+      var $rows = $(".dataTables_wrapper table tbody tr");
+      var hasRealData = false;
+      
+      if ($rows.length > 0) {
+        var firstCellText = $rows.first().find("td").first().text().trim();
+        hasRealData = firstCellText && 
+                      !firstCellText.includes("Configure") &&
+                      !firstCellText.includes("No hay datos") &&
+                      !firstCellText.includes("Mensaje");
+      }
+      
+      if (hasRealData) {
+        $(".mobile-download-container").removeClass("hidden-until-ready");
+      } else {
+        $(".mobile-download-container").addClass("hidden-until-ready");
+      }
+      
+      return hasRealData;
+    }
+    
+    setInterval(checkForData, 500);
+    
+    $(document).on("shiny:value", function(event) {
+      if (event.name && event.name.includes("table_data")) {
+        setTimeout(checkForData, 300);
+        setTimeout(checkForData, 600);
+        setTimeout(checkForData, 1000);
+      }
+    });
+    
+    setTimeout(checkForData, 1000);
+    setTimeout(checkForData, 2000);
+  }
+  
+  // ============================================================
+  // MANEJADORES MÓVILES - BOTONES FAB
+  // ============================================================
+  
+  $(document).on("click", "#mobile-btn-filters", function(e) {
+    e.stopPropagation();
     var sidebar = $(".well").first();
     if (sidebar.length === 0) {
       sidebar = $("[class*='sidebar_panel']").first();
@@ -138,41 +314,33 @@ $(document).ready(function() {
     openMobileDrawer(sidebar, "left");
   });
   
-  // 2. ✅ v3.0: RESTAURAR - Simula click en botón "Restablecer consulta"
-  $(document).on("click", "#mobile-btn-restore", function() {
-    // Buscar el botón de restablecer por ID que termina en "reset_config"
+  $(document).on("click", "#mobile-btn-restore", function(e) {
+    e.stopPropagation();
     var resetBtn = $("[id$='-reset_config'], [id$='reset_config']").first();
     
     if (resetBtn.length > 0) {
-      // Simular click en el botón original
       resetBtn.trigger("click");
-      console.log("🔄 Botón Restaurar: click simulado en", resetBtn.attr("id"));
-      
-      // Mostrar feedback visual
+      console.log("🔄 Botón Restaurar: click simulado");
       showMobileToast("Consulta restablecida");
     } else {
-      console.warn("⚠️ No se encontró el botón de restablecer");
       showMobileToast("No disponible en esta vista");
     }
   });
   
-  // 3. ✅ v3.0: PROYECCIÓN - Abre modal de metodología
-  $(document).on("click", "#mobile-btn-projection", function() {
-    // Buscar el botón de metodología por ID que termina en "info_grafica1"
+  $(document).on("click", "#mobile-btn-projection", function(e) {
+    e.stopPropagation();
     var metodologiaBtn = $("[id$='-info_grafica1'], [id$='info_grafica1']").first();
     
     if (metodologiaBtn.length > 0) {
-      // Simular click en el botón original
       metodologiaBtn.trigger("click");
-      console.log("ℹ️ Botón Proyección: click simulado en", metodologiaBtn.attr("id"));
+      console.log("ℹ️ Botón Proyección: click simulado");
     } else {
-      console.warn("⚠️ No se encontró el botón de metodología");
       showMobileToast("No disponible en esta vista");
     }
   });
   
-  // 4. Abrir análisis (sidebar derecho)
-  $(document).on("click", "#mobile-btn-analysis", function() {
+  $(document).on("click", "#mobile-btn-analysis", function(e) {
+    e.stopPropagation();
     var sidebar = $(".sidebar-right:visible").first();
     if (sidebar.length === 0) {
       sidebar = $(".sidebar-right").first();
@@ -180,40 +348,31 @@ $(document).ready(function() {
     openMobileDrawer(sidebar, "right");
   });
   
-  // Cerrar drawer con botón X
-  $(document).on("click", ".mobile-drawer-close", function() {
-    closeMobileDrawers();
-  });
+  // ============================================================
+  // CERRAR CON TECLA ESCAPE
+  // ============================================================
   
-  // Cerrar drawer con overlay
-  $(document).on("click", ".mobile-overlay", function() {
-    closeMobileDrawers();
-  });
-  
-  // Cerrar con tecla Escape
   $(document).on("keydown", function(e) {
-    if (e.key === "Escape" && isMobile()) {
+    if (e.key === "Escape" && isMobile() && isDrawerOpen()) {
+      console.log("⌨️ Cerrando drawer con Escape");
       closeMobileDrawers();
     }
   });
   
   // ============================================================
-  // ✅ v3.0: TOAST PARA FEEDBACK VISUAL
+  // TOAST PARA FEEDBACK VISUAL
   // ============================================================
   
   function showMobileToast(message) {
-    // Remover toast existente
     $(".mobile-toast").remove();
     
     var toast = $('<div class="mobile-toast">' + message + '</div>');
     $("body").append(toast);
     
-    // Mostrar con animación
     setTimeout(function() {
       toast.addClass("show");
     }, 10);
     
-    // Ocultar después de 2 segundos
     setTimeout(function() {
       toast.removeClass("show");
       setTimeout(function() {
@@ -235,19 +394,22 @@ $(document).ready(function() {
     // Cerrar cualquier drawer abierto primero
     closeMobileDrawers();
     
-    // Agregar clase para abrir
-    drawer.addClass("mobile-open");
-    
-    // Mostrar overlay
-    $(".mobile-overlay").addClass("active");
-    
-    // Prevenir scroll del body
-    $("body").addClass("mobile-drawer-open");
-    
-    // Focus en el drawer para accesibilidad
-    drawer.attr("tabindex", "-1").focus();
-    
-    console.log("📂 Drawer abierto: " + direction);
+    // Pequeño delay para asegurar que el cierre se complete
+    setTimeout(function() {
+      // Registrar tiempo de apertura
+      drawerOpenTime = Date.now();
+      
+      // Agregar clase para abrir
+      drawer.addClass("mobile-open");
+      
+      // Mostrar overlay
+      $(".mobile-overlay").addClass("active");
+      
+      // Prevenir scroll del body
+      $("body").addClass("mobile-drawer-open");
+      
+      console.log("📂 Drawer abierto: " + direction + " (tiempo: " + drawerOpenTime + ")");
+    }, 50);
   }
   
   function closeMobileDrawers() {
@@ -263,8 +425,15 @@ $(document).ready(function() {
     // Restaurar scroll del body
     $("body").removeClass("mobile-drawer-open");
     
+    // Reset del tiempo
+    drawerOpenTime = 0;
+    
     console.log("📂 Drawers cerrados");
   }
+  
+  // Exponer función globalmente
+  window.closeMobileDrawers = closeMobileDrawers;
+  window.isDrawerOpen = isDrawerOpen;
   
   // ============================================================
   // RESIZE HANDLER
@@ -277,14 +446,11 @@ $(document).ready(function() {
       if (isMobile()) {
         initMobileUI();
       } else {
-        // Limpiar UI móvil
         $(".mobile-fab-container").remove();
         $(".mobile-overlay").remove();
-        $(".mobile-drawer-close").remove();
         $(".mobile-toast").remove();
         closeMobileDrawers();
         
-        // Restaurar estado desktop de sidebars
         $(".sidebar-right").removeClass("mobile-open hidden");
         $(".well").removeClass("mobile-open");
       }
@@ -303,9 +469,7 @@ $(document).ready(function() {
       if (plotlyDiv && typeof Plotly !== "undefined") {
         try {
           Plotly.Plots.resize(plotlyDiv);
-        } catch(e) {
-          // Silenciar errores si el gráfico aún no está listo
-        }
+        } catch(e) {}
       }
     });
   }
@@ -326,11 +490,12 @@ $(document).ready(function() {
   
   $(document).on("shown.bs.tab", function() {
     if (isMobile()) {
-      addCloseButtons();
-      closeMobileDrawers();
+      setupSidebarAutoClose();
+      preventKeyboardOnSelects();
+      setupOverlayClickHandler();
     }
     setTimeout(triggerPlotlyResize, 300);
   });
   
-  console.log("✅ sidebar_toggle.js v3.0 cargado (4 botones móviles)");
+  console.log("✅ sidebar_toggle.js v3.3 cargado");
 });

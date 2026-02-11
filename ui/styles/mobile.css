@@ -1,6 +1,11 @@
 /* ui/styles/mobile.css */
-/* Versión: 3.1 - Modal mejorado y botón descarga móvil */
+/* Versión: 3.5 - Mejoras visuales en sidebar derecho (Análisis) */
 /* Viewport de referencia: iPhone 13 Pro (390x844) */
+/* Cambios v3.5:
+   - Sidebar derecho: encabezados en color azul de marca (#006988)
+   - Sidebar derecho: texto de análisis reducido 2 puntos
+   - Sidebar derecho: margen izquierdo aumentado para mejor espaciado
+*/
 
 @media screen and (max-width: 768px) {
   
@@ -15,6 +20,9 @@
     --mobile-color-primary: #006988;
     --mobile-color-secondary: #155671;
     --mobile-color-accent: #004062;
+    /* v3.4: Variables para radio buttons */
+    --radio-size: 18px;
+    --radio-spacing: 10px;
   }
   
   /* ============================================================
@@ -85,7 +93,9 @@
     overflow-y: auto !important;
     background-color: #f5f5f5 !important;
     box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
-    padding: var(--mobile-spacing-md) !important;
+    padding: 15px !important;
+    padding-left: 36px !important;
+    padding-right: 15px !important;
     padding-top: 55px !important;
     margin: 0 !important;
   }
@@ -143,26 +153,33 @@
   }
   
   /* ============================================================
-     OVERLAY OSCURO
+     ✅ v3.4: OVERLAY OSCURO - COMPLETAMENTE REESCRITO
      ============================================================ */
   
   .mobile-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    height: 100dvh;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1999;
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    background-color: rgba(0, 0, 0, 0.5) !important;
+    z-index: 1999 !important;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    /* ✅ CRÍTICO: Permitir clicks cuando está activo */
+    pointer-events: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
   
   .mobile-overlay.active {
-    display: block;
-    opacity: 1;
+    opacity: 1 !important;
+    visibility: visible !important;
+    /* ✅ CRÍTICO: Habilitar clicks cuando está activo */
+    pointer-events: auto !important;
   }
   
   /* ============================================================
@@ -243,30 +260,11 @@
   }
   
   /* ============================================================
-     BOTÓN CERRAR DRAWER
+     BOTÓN CERRAR DRAWER (OCULTO)
      ============================================================ */
   
   .mobile-drawer-close {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: clamp(32px, 9vw, 40px);
-    height: clamp(32px, 9vw, 40px);
-    border-radius: 50%;
-    background-color: #CE4A0B;
-    color: white;
-    border: none;
-    font-size: clamp(1.1rem, 4vw, 1.4rem);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 2001;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-  }
-  
-  .mobile-drawer-close:hover {
-    background-color: #AE2400;
+    display: none !important;
   }
   
   /* ============================================================
@@ -460,7 +458,6 @@
     justify-content: center !important;
   }
 
-  /* Botón CERRAR con color azul */
   .modal-footer .btn-default,
   .modal-footer .btn[data-dismiss="modal"] {
     background-color: #006988 !important;
@@ -503,6 +500,10 @@
   .mobile-download-btn:active {
     background-color: #005570 !important;
     border-color: #005570 !important;
+  }
+
+  .mobile-download-container.hidden-until-ready {
+    display: none !important;
   }
 
   /* ============================================================
@@ -710,7 +711,132 @@
   }
 
   /* ============================================================
-     FORMULARIOS Y CONTROLES
+     ✅ v3.4: RADIO BUTTONS - TAMAÑO UNIFORME Y ESPACIADO
+     ============================================================ */
+
+  /* Encabezados de grupos de radio buttons - MÁS GRANDES Y EN NEGRITAS */
+  .well .shiny-input-radiogroup > label,
+  .well .shiny-input-container > label.control-label,
+  .well > .shiny-input-container > label:first-child,
+  [class*="sidebar_panel"] .shiny-input-radiogroup > label,
+  [class*="sidebar_panel"] .shiny-input-container > label.control-label {
+    font-size: clamp(0.95rem, 4vw, 1.1rem) !important;
+    font-weight: 700 !important;
+    color: #333 !important;
+    margin-bottom: 8px !important;
+    display: block !important;
+  }
+
+  /* Contenedor de opciones de radio */
+  .well .shiny-options-group,
+  .well .shiny-input-radiogroup .shiny-options-group,
+  [class*="sidebar_panel"] .shiny-options-group {
+    margin-top: 4px !important;
+  }
+
+  /* Cada opción de radio (contenedor) */
+  .well .radio,
+  .well .shiny-input-radiogroup .radio,
+  [class*="sidebar_panel"] .radio {
+    margin-top: 6px !important;
+    margin-bottom: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  /* ✅ v3.4: CÍRCULO DEL RADIO BUTTON - TAMAÑO UNIFORME */
+  .well .radio input[type="radio"],
+  .well .shiny-input-radiogroup input[type="radio"],
+  [class*="sidebar_panel"] .radio input[type="radio"],
+  .well .shiny-options-group input[type="radio"] {
+    /* Tamaño fijo uniforme */
+    width: var(--radio-size) !important;
+    height: var(--radio-size) !important;
+    min-width: var(--radio-size) !important;
+    min-height: var(--radio-size) !important;
+    max-width: var(--radio-size) !important;
+    max-height: var(--radio-size) !important;
+    /* Espaciado entre círculo y texto */
+    margin-right: var(--radio-spacing) !important;
+    margin-left: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    /* Asegurar que sea visible */
+    opacity: 1 !important;
+    position: relative !important;
+    /* Apariencia */
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    border: 2px solid #666 !important;
+    border-radius: 50% !important;
+    background-color: white !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    vertical-align: middle !important;
+  }
+
+  /* Estado checked del radio button */
+  .well .radio input[type="radio"]:checked,
+  .well .shiny-input-radiogroup input[type="radio"]:checked,
+  [class*="sidebar_panel"] .radio input[type="radio"]:checked,
+  .well .shiny-options-group input[type="radio"]:checked {
+    border-color: var(--mobile-color-primary) !important;
+    background-color: white !important;
+  }
+
+  /* Punto interior cuando está seleccionado */
+  .well .radio input[type="radio"]:checked::after,
+  .well .shiny-input-radiogroup input[type="radio"]:checked::after,
+  [class*="sidebar_panel"] .radio input[type="radio"]:checked::after,
+  .well .shiny-options-group input[type="radio"]:checked::after {
+    content: "" !important;
+    display: block !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 10px !important;
+    height: 10px !important;
+    border-radius: 50% !important;
+    background-color: var(--mobile-color-primary) !important;
+  }
+
+  /* ✅ v3.4: TEXTO DEL RADIO BUTTON */
+  .well .radio label,
+  .well .shiny-input-radiogroup .radio label,
+  [class*="sidebar_panel"] .radio label,
+  .well .shiny-options-group label {
+    font-size: clamp(0.85rem, 3.5vw, 0.95rem) !important;
+    font-weight: 500 !important;
+    padding-left: 0 !important;
+    margin-bottom: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    cursor: pointer !important;
+    line-height: 1.3 !important;
+  }
+
+  /* ✅ v3.4: RADIO BUTTONS INLINE (como "Ámbito de datos") */
+  .well .shiny-input-radiogroup.shiny-input-container-inline .shiny-options-group,
+  .well .shiny-input-container-inline .shiny-options-group,
+  [class*="sidebar_panel"] .shiny-input-container-inline .shiny-options-group {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 15px !important;
+    margin-top: 4px !important;
+  }
+
+  .well .shiny-input-container-inline .radio,
+  [class*="sidebar_panel"] .shiny-input-container-inline .radio {
+    display: inline-flex !important;
+    margin-right: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* ============================================================
+     FORMULARIOS GENERALES
      ============================================================ */
 
   .form-control,
@@ -723,22 +849,72 @@
     margin-bottom: var(--mobile-spacing-sm);
   }
 
-  .shiny-input-container label {
-    font-size: clamp(0.75rem, 3vw, 0.85rem);
-    margin-bottom: 2px;
+  /* Labels de selectInput (Año, Entidad, etc.) */
+  .well .shiny-input-container:not(.shiny-input-radiogroup) > label.control-label,
+  [class*="sidebar_panel"] .shiny-input-container:not(.shiny-input-radiogroup) > label.control-label {
+    font-size: clamp(0.85rem, 3.5vw, 0.95rem) !important;
+    font-weight: 600 !important;
+    margin-bottom: 4px !important;
   }
 
-  .radio input[type="radio"],
-  .checkbox input[type="checkbox"] {
-    width: clamp(16px, 4.5vw, 20px);
-    height: clamp(16px, 4.5vw, 20px);
-    margin-right: 6px;
+  /* ✅ v3.4: Textos informativos/comentarios - MÁS PEQUEÑOS */
+  .well > div[style*="background-color"],
+  .well div[style*="padding: 10px"],
+  .well div[style*="border-radius: 5px"] {
+    font-size: clamp(0.65rem, 2.5vw, 0.75rem) !important;
+    line-height: 1.3 !important;
   }
 
-  .radio label,
-  .checkbox label {
-    font-size: clamp(0.8rem, 3vw, 0.9rem);
-    padding-left: 4px;
+  .well > div[style*="background-color"] small,
+  .well div[style*="padding: 10px"] small {
+    font-size: clamp(0.6rem, 2.3vw, 0.7rem) !important;
+  }
+
+  .well > small[style*="background-color"],
+  .well small[style*="CCE4B1"],
+  .well > small {
+    font-size: clamp(0.6rem, 2.3vw, 0.7rem) !important;
+    line-height: 1.3 !important;
+    padding: 6px !important;
+  }
+
+  [id*="info_tipo_corte"] {
+    font-size: clamp(0.65rem, 2.5vw, 0.75rem) !important;
+  }
+
+  [id*="info_tipo_corte"] div {
+    font-size: clamp(0.65rem, 2.5vw, 0.75rem) !important;
+    padding: 8px !important;
+  }
+
+  [id*="info_tipo_corte"] small {
+    font-size: clamp(0.6rem, 2.3vw, 0.7rem) !important;
+  }
+
+  [id*="info_tipo_corte"] strong {
+    font-size: clamp(0.65rem, 2.5vw, 0.75rem) !important;
+  }
+
+  /* ============================================================
+     PREVENIR TECLADO EN SELECTINPUTS
+     ============================================================ */
+
+  .well select,
+  .well .selectize-input input,
+  [class*="sidebar_panel"] select,
+  [class*="sidebar_panel"] .selectize-input input {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
+
+  .selectize-input > input {
+    opacity: 0 !important;
+    position: absolute !important;
+    left: -9999px !important;
+  }
+
+  .selectize-dropdown {
+    z-index: 2100 !important;
   }
 
   .btn-primary,
@@ -784,32 +960,58 @@
 
   /* ============================================================
      SIDEBAR DERECHO - CONTENIDO
+     ✅ v3.5: Color azul de marca, texto reducido, más margen izquierdo
      ============================================================ */
 
+  .sidebar-right {
+    /* ✅ v3.5: Aumentar padding izquierdo */
+    padding-left: 20px !important;
+  }
+
+  /* ✅ v3.5: Encabezados en color azul de marca */
   .sidebar-right h3 {
     font-size: clamp(1rem, 4vw, 1.2rem);
     margin-bottom: var(--mobile-spacing-sm);
+    color: #006988 !important;
+    font-weight: 600 !important;
   }
 
   .sidebar-right h4 {
-    font-size: clamp(0.85rem, 3.5vw, 1rem);
+    font-size: clamp(0.8rem, 3.2vw, 0.95rem);
     margin-top: var(--mobile-spacing-sm);
     margin-bottom: 4px;
+    color: #006988 !important;
+    font-weight: 600 !important;
   }
 
+  /* ✅ v3.5: Texto de análisis reducido 2 puntos */
   .sidebar-right p {
-    font-size: clamp(0.75rem, 3vw, 0.85rem);
+    font-size: clamp(0.7rem, 2.8vw, 0.8rem);
     margin-bottom: 6px;
     line-height: 1.35;
+    color: #333 !important;
   }
 
   .alcance-analisis {
-    font-size: clamp(0.7rem, 2.8vw, 0.8rem);
+    font-size: clamp(0.65rem, 2.5vw, 0.75rem);
   }
 
   .sidebar-section {
     margin-bottom: var(--mobile-spacing-md);
     padding-bottom: var(--mobile-spacing-sm);
+  }
+
+  /* ✅ v3.5: Estilo para listas dentro del sidebar derecho */
+  .sidebar-right ul,
+  .sidebar-right ol {
+    font-size: clamp(0.7rem, 2.8vw, 0.8rem);
+    padding-left: 18px;
+    margin-bottom: 8px;
+  }
+
+  .sidebar-right li {
+    margin-bottom: 3px;
+    line-height: 1.3;
   }
 
   /* ============================================================
@@ -839,9 +1041,7 @@
 
   button,
   .btn,
-  a.btn,
-  input[type="radio"] + label,
-  input[type="checkbox"] + label {
+  a.btn {
     min-height: 44px;
   }
 

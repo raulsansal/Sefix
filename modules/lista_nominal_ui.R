@@ -36,7 +36,7 @@ lista_nominal_ui <- function(id) {
         tags$hr(),
         # ========== FIN SELECTOR NACIONAL/EXTRANJERO ==========
         tags$small(
-          style = "color: #000; display: block; font-weight: bold; margin-bottom: 8px; text-align: center; background-color: #CCE4B1; border-color #71A251; padding: 8px; border-radius: 4px;",
+          style = "color: #000; display: block; font-weight: medium; margin-bottom: 8px; text-align: center; background-color: #CCE4B1; border-color #71A251; padding: 8px; border-radius: 4px;",
           "Configura los filtros y presiona el botón 'Consultar' para actualizar"
         ),
         selectInput(ns("year"), "Año:", choices = NULL, selected = NULL),
