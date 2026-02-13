@@ -1,18 +1,20 @@
 # modules/lista_nominal_graficas/graficas_consultado_4_5.R
 # Gráficas 4 y 5: Evolución mensual del año consultado (con y sin desglose por sexo)
-# Versión: 2.0 - CORRECCIÓN: Usar ambito_reactivo para cambio de vista automático
+# Versión: 2.1 - Posición Fuente en y=-0.35 para desktop (JS ajusta en mobile)
+# Cambios v2.1:
+#   - Gráfica 4 (2 trazas): Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile
+#   - Gráfica 5 (4 trazas): Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile
 
 graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta, 
                                     anio_consultado, texto_alcance, estado_app, mostrar_graficas_consultadas, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_consultado_4_5 v2.0")
+  message("📊 Inicializando graficas_consultado_4_5 v2.1")
   
   # ========== GRÁFICA 4: EVOLUCIÓN MENSUAL DEL AÑO SELECCIONADO ==========
   
   output$grafico_evolucion_year <- renderPlotly({
     req(input$tipo_corte == "historico")
     
-    # ✅ v2.0: Usar ambito_reactivo en lugar de input$ambito_datos
     ambito_actual <- ambito_reactivo()
     
     datos_completos <- datos_year_consulta()
@@ -80,7 +82,8 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       fechas_datos <- datos_completos$fecha
       etiquetas_meses <- format(fechas_datos, "%b")
       
-      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      # ========== PREPARAR ANNOTATIONS ==========
+      # ✅ v2.1: Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile para 2 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -93,7 +96,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.40,
+          x = 0.5, y = -0.35,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -125,13 +128,12 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         annotations = annotations_list
       )
       
-      message("✅ Gráfico 4: Evolución mensual ", year_datos, " Nacional renderizado (SIN card NB)")
+      message("✅ Gráfico 4: Evolución mensual ", year_datos, " Nacional renderizado")
       return(p)
       
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
       
-      # Verificar que las columnas existan
       if (!("padron_extranjero" %in% colnames(datos_completos)) ||
           !("lista_extranjero" %in% colnames(datos_completos))) {
         
@@ -152,16 +154,11 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
                  ))
       }
       
-      # Reemplazar NA con 0 para poder graficar
       datos_extranjero <- datos_completos
       datos_extranjero$padron_extranjero[is.na(datos_extranjero$padron_extranjero)] <- 0
       datos_extranjero$lista_extranjero[is.na(datos_extranjero$lista_extranjero)] <- 0
       
       message("📊 [GRÁFICA 4] Graficando ", nrow(datos_extranjero), " meses de extranjero (año ", year_datos, ")")
-      message("   Rango padrón: ", min(datos_extranjero$padron_extranjero, na.rm = TRUE), 
-              " - ", max(datos_extranjero$padron_extranjero, na.rm = TRUE))
-      message("   Rango lista: ", min(datos_extranjero$lista_extranjero, na.rm = TRUE), 
-              " - ", max(datos_extranjero$lista_extranjero, na.rm = TRUE))
       
       p <- plot_ly()
       
@@ -198,7 +195,8 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       fechas_extranjero <- datos_extranjero$fecha
       etiquetas_meses <- format(fechas_extranjero, "%b")
       
-      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
+      # ========== PREPARAR ANNOTATIONS ==========
+      # ✅ v2.1: Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile para 2 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -211,7 +209,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.40,
+          x = 0.5, y = -0.35,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -243,15 +241,14 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         annotations = annotations_list
       )
       
-      message("✅ Gráfico 4: Evolución mensual ", year_datos, " Extranjero renderizado (SIN card NB)")
+      message("✅ Gráfico 4: Evolución mensual ", year_datos, " Extranjero renderizado")
       return(p)
     }
   }) %>%
-    # ✅ CORRECCIÓN v2.0: Agregar ambito_reactivo para cambio de vista automático
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      ambito_reactivo(),  # ✅ v2.0: AGREGADO para cambio de vista
+      ambito_reactivo(),
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
@@ -261,7 +258,6 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
   output$grafico_evolucion_year_sexo <- renderPlotly({
     req(input$tipo_corte == "historico")
     
-    # ✅ v2.0: Usar ambito_reactivo en lugar de input$ambito_datos
     ambito_actual <- ambito_reactivo()
     
     # ========== NO MOSTRAR SI NO SE DEBE ==========
@@ -384,7 +380,8 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       fechas_datos <- datos_completos$fecha
       etiquetas_meses <- format(fechas_datos, "%b")
       
-      # ========== PREPARAR ANNOTATIONS (CON CARD NB) ==========
+      # ========== PREPARAR ANNOTATIONS ==========
+      # ✅ v2.1: Fuente en y = -0.45desktop) - JS ajusta a -0.60 en mobile para 4 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -397,7 +394,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.40,
+          x = 0.5, y = -0.45,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -406,7 +403,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         )
       )
       
-      # ✅ MANTENER v2.0: Card NB SÍ aplica en gráfica 5 (CON desglose por sexo)
+      # Card NB SÍ aplica en gráfica 5 (CON desglose por sexo)
       card_nb <- crear_card_no_binario(datos_completos, ambito = "nacional", tipo_periodo = "mensual", año_consultado = year_datos)
       if (!is.null(card_nb)) {
         annotations_list[[length(annotations_list) + 1]] <- card_nb
@@ -441,13 +438,12 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         annotations = annotations_list
       )
       
-      message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Nacional renderizado (CON card NB)")
+      message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Nacional renderizado")
       return(p)
       
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
       
-      # Verificar que estamos en ámbito extranjero
       if (ambito_actual != "extranjero") {
         return(plot_ly() %>%
                  layout(
@@ -465,7 +461,6 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
                  ))
       }
       
-      # Verificar columnas de sexo
       cols_sexo_extranjero <- c("padron_extranjero_hombres", "padron_extranjero_mujeres", 
                                 "lista_extranjero_hombres", "lista_extranjero_mujeres")
       
@@ -489,7 +484,6 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
                  ))
       }
       
-      # Reemplazar NA con 0 para poder graficar
       datos_extranjero <- datos_completos
       datos_extranjero$padron_extranjero_hombres[is.na(datos_extranjero$padron_extranjero_hombres)] <- 0
       datos_extranjero$padron_extranjero_mujeres[is.na(datos_extranjero$padron_extranjero_mujeres)] <- 0
@@ -500,7 +494,6 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       
       p <- plot_ly()
       
-      # Obtener últimos valores para ordenar trazas
       ultimo_padron_h <- tail(datos_extranjero$padron_extranjero_hombres, 1)
       ultimo_padron_m <- tail(datos_extranjero$padron_extranjero_mujeres, 1)
       ultimo_lista_h <- tail(datos_extranjero$lista_extranjero_hombres, 1)
@@ -571,7 +564,8 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       fechas_extranjero <- datos_extranjero$fecha
       etiquetas_meses <- format(fechas_extranjero, "%b")
       
-      # ========== PREPARAR ANNOTATIONS (CON CARD NB) ==========
+      # ========== PREPARAR ANNOTATIONS ==========
+      # ✅ v2.1: Fuente en y = -0.345(desktop) - JS ajusta a -0.60 en mobile para 4 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -584,7 +578,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.40,
+          x = 0.5, y = -0.45,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -593,7 +587,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         )
       )
       
-      # ✅ MANTENER v2.0: Card NB SÍ aplica en gráfica 5 (CON desglose por sexo)
+      # Card NB SÍ aplica en gráfica 5 (CON desglose por sexo)
       card_nb <- crear_card_no_binario(datos_extranjero, ambito = "extranjero", tipo_periodo = "mensual", año_consultado = year_datos)
       if (!is.null(card_nb)) {
         annotations_list[[length(annotations_list) + 1]] <- card_nb
@@ -628,21 +622,20 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         annotations = annotations_list
       )
       
-      message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Extranjero renderizado (CON card NB)")
+      message("✅ Gráfico 5: Evolución mensual ", year_datos, " por sexo Extranjero renderizado")
       return(p)
     }
   }) %>%
-    # ✅ CORRECCIÓN v2.0: Agregar ambito_reactivo para cambio de vista automático
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      ambito_reactivo(),  # ✅ v2.0: AGREGADO para cambio de vista
+      ambito_reactivo(),
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_consultado_4_5 v2.0 inicializado")
-  message("   ✅ CORRECCIÓN: Card NB eliminada de gráfica 4")
-  message("   ✅ MANTIENE: Cards NB en gráfica 5 (desglose por sexo)")
-  message("   ✅ CORRECCIÓN: ambito_reactivo usado para cambio de vista automático")
+  message("✅ graficas_consultado_4_5 v2.1 inicializado")
+  message("   ✅ v2.1: Fuente en y=-0.35 para desktop (todas las gráficas)")
+  message("   ✅ v2.1: JS ajusta a y=-0.40 en mobile para gráficas con 2 trazas")
+  message("   ✅ v2.1: JS ajusta a y=-0.60 en mobile para gráficas con 4 trazas")
 }

@@ -1,18 +1,19 @@
 # modules/lista_nominal_graficas/graficas_historico_3.R
 # Gráfica 3: Evolución anual por sexo
-# Versión: 2.6 - CORRECCIÓN: Usar ambito_reactivo para cambio de vista automático
+# Versión: 2.7 - Posición Fuente en y=-0.35 para desktop (JS ajusta en mobile)
+# Cambios v2.7:
+#   - Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile para 4 trazas
 
 graficas_historico_3 <- function(input, output, session, datos_anuales_completos, anio_actual, 
                                  texto_alcance, estado_app, mostrar_graficas_anuales, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_historico_3 v2.6")
+  message("📊 Inicializando graficas_historico_3 v2.7")
   
   # ========== GRÁFICA 3: EVOLUCIÓN ANUAL + DESGLOSE POR SEXO ==========
   
   output$grafico_evolucion_anual_sexo <- renderPlotly({
     req(input$tipo_corte == "historico")
     
-    # ✅ v2.6: Usar ambito_reactivo en lugar de input$ambito_datos
     ambito_actual <- ambito_reactivo()
     
     # ========== NO RENDERIZAR EN ESTADO INICIAL ==========
@@ -85,23 +86,19 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       p <- plot_ly()
       
       # ========== ORDENAR TRAZAS DINÁMICAMENTE ==========
-      # Obtener último valor de cada serie para determinar orden visual
       ultimo_padron_h <- tail(datos_anuales$padron_hombres[!is.na(datos_anuales$padron_hombres)], 1)
       ultimo_padron_m <- tail(datos_anuales$padron_mujeres[!is.na(datos_anuales$padron_mujeres)], 1)
       ultimo_lista_h <- tail(datos_anuales$lista_hombres[!is.na(datos_anuales$lista_hombres)], 1)
       ultimo_lista_m <- tail(datos_anuales$lista_mujeres[!is.na(datos_anuales$lista_mujeres)], 1)
       
-      # Crear lista con metadatos de cada traza
       trazas_info <- data.frame(
         nombre = c("padron_h", "padron_m", "lista_h", "lista_m"),
         valor = c(ultimo_padron_h, ultimo_padron_m, ultimo_lista_h, ultimo_lista_m),
         stringsAsFactors = FALSE
       )
       
-      # Ordenar de mayor a menor (orden visual de arriba a abajo)
       trazas_info <- trazas_info[order(trazas_info$valor, decreasing = TRUE), ]
       
-      # Agregar trazas en el orden visual correcto
       for (i in 1:nrow(trazas_info)) {
         traza_nombre <- trazas_info$nombre[i]
         
@@ -156,7 +153,8 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         }
       }
       
-      # ========== PREPARAR ANNOTATIONS (CON CARD NB) ==========
+      # ========== PREPARAR ANNOTATIONS ==========
+      # ✅ v2.7: Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile para 4 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -178,7 +176,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         )
       )
       
-      # ✅ MANTENER: Card NB SÍ aplica en gráfica 3 (CON desglose por sexo)
+      # Card NB SÍ aplica en gráfica 3 (CON desglose por sexo)
       card_nb <- crear_card_no_binario(datos_anuales, ambito = "nacional", tipo_periodo = "anual")
       if (!is.null(card_nb)) {
         annotations_list[[length(annotations_list) + 1]] <- card_nb
@@ -206,7 +204,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         annotations = annotations_list
       )
       
-      message("✅ Gráfico 3: Evolución anual por sexo Nacional renderizado (CON card NB)")
+      message("✅ Gráfico 3: Evolución anual por sexo Nacional renderizado")
       return(p)
       
     } else {
@@ -234,22 +232,18 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       }
       
       # ========== DETECTAR AÑOS CON/SIN DATOS DE SEXO ==========
-      # Verificar que las columnas existan
       tiene_cols_sexo <- all(c("padron_extranjero_hombres", "padron_extranjero_mujeres", 
                                "lista_extranjero_hombres", "lista_extranjero_mujeres") %in% 
                                colnames(datos_extranjero))
       
       if (!tiene_cols_sexo) {
-        # Si no hay columnas de sexo, todos los años no tienen sexo
         datos_extranjero$tiene_sexo <- FALSE
       } else {
-        # Crear vector lógico con la misma longitud que datos_extranjero
         tiene_sexo_vector <- !is.na(datos_extranjero$padron_extranjero_hombres) & 
           !is.na(datos_extranjero$padron_extranjero_mujeres) &
           !is.na(datos_extranjero$lista_extranjero_hombres) &
           !is.na(datos_extranjero$lista_extranjero_mujeres)
         
-        # Asignar el vector (ahora tiene la misma longitud)
         datos_extranjero$tiene_sexo <- tiene_sexo_vector
       }
       
@@ -266,7 +260,6 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       if (length(años_sin_sexo) > 0) {
         datos_sin_sexo <- datos_extranjero[datos_extranjero$año %in% años_sin_sexo, ]
         
-        # Padrón Total
         p <- p %>% add_trace(
           data = datos_sin_sexo,
           x = ~año,
@@ -276,13 +269,9 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
           name = 'Padrón Extranjero',
           line = list(color = '#EAC43E', width = 3),
           marker = list(size = 10, color = '#EAC43E'),
-          hovertemplate = paste0(
-            '<b>%{x}</b><br>',
-            'Padrón: %{y:,.0f}<extra></extra>'
-          )
+          hovertemplate = paste0('<b>%{x}</b><br>Padrón: %{y:,.0f}<extra></extra>')
         )
         
-        # Lista Total
         p <- p %>% add_trace(
           data = datos_sin_sexo,
           x = ~año,
@@ -292,10 +281,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
           name = 'Lista Extranjero',
           line = list(color = '#B3D491', width = 3),
           marker = list(size = 10, color = '#B3D491'),
-          hovertemplate = paste0(
-            '<b>%{x}</b><br>',
-            'Lista: %{y:,.0f}<extra></extra>'
-          )
+          hovertemplate = paste0('<b>%{x}</b><br>Lista: %{y:,.0f}<extra></extra>')
         )
       }
       
@@ -303,8 +289,6 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       if (length(años_con_sexo) > 0) {
         datos_con_sexo <- datos_extranjero[datos_extranjero$año %in% años_con_sexo, ]
         
-        # ========== ORDENAR TRAZAS DINÁMICAMENTE ==========
-        # Obtener último valor de cada serie para determinar orden visual
         vals_padron_h <- datos_con_sexo$padron_extranjero_hombres[!is.na(datos_con_sexo$padron_extranjero_hombres)]
         ultimo_padron_h <- if(length(vals_padron_h) > 0) tail(vals_padron_h, 1) else 0
         
@@ -317,17 +301,14 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         vals_lista_m <- datos_con_sexo$lista_extranjero_mujeres[!is.na(datos_con_sexo$lista_extranjero_mujeres)]
         ultimo_lista_m <- if(length(vals_lista_m) > 0) tail(vals_lista_m, 1) else 0
         
-        # Crear lista con metadatos de cada traza
         trazas_info <- data.frame(
           nombre = c("padron_h", "padron_m", "lista_h", "lista_m"),
           valor = c(ultimo_padron_h, ultimo_padron_m, ultimo_lista_h, ultimo_lista_m),
           stringsAsFactors = FALSE
         )
         
-        # Ordenar de mayor a menor (orden visual de arriba a abajo)
         trazas_info <- trazas_info[order(trazas_info$valor, decreasing = TRUE), ]
         
-        # Agregar trazas en el orden visual correcto
         for (i in 1:nrow(trazas_info)) {
           traza_nombre <- trazas_info$nombre[i]
           
@@ -394,6 +375,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       }
       
       # ========== LAYOUT CON ANOTACIÓN ==========
+      # ✅ v2.7: Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile para 4 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -406,7 +388,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.45,
+          x = 0.5, y = -0.35,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -428,7 +410,7 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         )
       }
       
-      # ✅ MANTENER: Card NB SÍ aplica en gráfica 3 (CON desglose por sexo cuando existe)
+      # Card NB SÍ aplica cuando hay datos con sexo
       if (length(años_con_sexo) > 0) {
         card_nb <- crear_card_no_binario(datos_extranjero, ambito = "extranjero", tipo_periodo = "anual")
         if (!is.null(card_nb)) {
@@ -451,20 +433,19 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
         annotations = annotations_list
       )
       
-      message("✅ Gráfico 3: Evolución anual por sexo Extranjero (híbrido) renderizado (CON card NB cuando aplica)")
+      message("✅ Gráfico 3: Evolución anual por sexo Extranjero (híbrido) renderizado")
       return(p)
     }
   }) %>%
-    # ✅ CORRECCIÓN v2.6: Agregar ambito_reactivo para cambio de vista automático
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      ambito_reactivo(),  # ✅ v2.6: AGREGADO para cambio de vista
+      ambito_reactivo(),
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_historico_3 v2.6 inicializado")
-  message("   ✅ CORRECCIÓN: ambito_reactivo usado para cambio de vista automático")
+  message("✅ graficas_historico_3 v2.7 inicializado")
+  message("   ✅ v2.7: Fuente en y=-0.35 para desktop")
+  message("   ✅ v2.7: JS ajusta a y=-0.60 en mobile para gráficas con 4 trazas")
 }
-

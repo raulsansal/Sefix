@@ -1,15 +1,15 @@
 # modules/lista_nominal_graficas/graficas_historico_1_2.R
 # Gráficas históricas 1 y 2: Proyección mensual y Evolución anual
-# Versión: 2.12 - Ajuste posición Fuente en gráficas con 4 trazas (y=-0.60)
-# Basado en v2.7 original
-# Cambio v2.12:
-#   - Gráfica 1 (4 trazas): Fuente en y = -0.60 (más abajo para dar espacio a leyendas en 2 líneas)
-#   - Gráfica 2 (2 trazas): Fuente en y = -0.35 (sin cambios)
+# Versión: 2.14 - Posición Fuente restaurada para desktop (y=-0.35)
+# Cambios v2.14:
+#   - Gráfica 1 (4 trazas): Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile
+#   - Gráfica 2 (2 trazas): Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile
+#   - La lógica de ajuste móvil se maneja en custom.js
 
 graficas_historico_1_2 <- function(input, output, session, datos_year_actual, datos_anuales_completos, 
                                    anio_actual, texto_alcance, estado_app, mostrar_graficas_anuales, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_historico_1_2 v2.12")
+  message("📊 Inicializando graficas_historico_1_2 v2.14")
   
   # ========== GRÁFICA 1: EVOLUCIÓN MENSUAL AÑO ACTUAL + PROYECCIÓN ==========
   
@@ -162,8 +162,8 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       
       etiquetas_meses <- format(fechas_completas_eje, "%b")
       
-      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
-      # ✅ v2.12: Fuente en y = -0.60 para gráficas con 4 trazas
+      # ========== PREPARAR ANNOTATIONS ==========
+      # ✅ v2.14: Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile para 4 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -176,7 +176,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.60,
+          x = 0.5, y = -0.35,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -218,7 +218,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         annotations = annotations_list
       )
       
-      message("✅ Gráfico 1: Proyección ", year_datos, " Nacional renderizado (SIN card NB)")
+      message("✅ Gráfico 1: Proyección ", year_datos, " Nacional renderizado")
       return(p)
       
     } else {
@@ -326,8 +326,8 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       
       etiquetas_meses <- format(fechas_completas_eje, "%b")
       
-      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
-      # ✅ v2.12: Fuente en y = -0.60 para gráficas con 4 trazas
+      # ========== PREPARAR ANNOTATIONS ==========
+      # ✅ v2.14: Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile para 4 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -340,7 +340,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.60,
+          x = 0.5, y = -0.35,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -382,16 +382,15 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         annotations = annotations_list
       )
       
-      message("✅ Gráfico 1: Proyección ", year_datos, " Extranjero renderizado (SIN card NB)")
+      message("✅ Gráfico 1: Proyección ", year_datos, " Extranjero renderizado")
       return(p)
     }
     
   }) %>%
-    # ✅ CORRECCIÓN v2.7: Agregar ambito_reactivo para cambio de vista automático
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      ambito_reactivo(),  # ✅ v2.7: AGREGADO para cambio de vista
+      ambito_reactivo(),
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
@@ -401,7 +400,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
   output$grafico_evolucion_anual <- renderPlotly({
     req(input$tipo_corte == "historico")
     
-    # ✅ v2.7: Usar ambito_reactivo en lugar de input$ambito_datos
     ambito_actual <- ambito_reactivo()
     
     # ========== NO RENDERIZAR EN ESTADO INICIAL ==========
@@ -486,8 +484,8 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
-      # ✅ v2.12: Gráfica 2 tiene solo 2 trazas - Fuente en y = -0.35 (sin cambios)
+      # ========== PREPARAR ANNOTATIONS ==========
+      # ✅ v2.14: Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile para 2 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -525,7 +523,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         annotations = annotations_list
       )
       
-      message("✅ Gráfico 2: Evolución anual Nacional renderizado (SIN card NB)")
+      message("✅ Gráfico 2: Evolución anual Nacional renderizado")
       return(p)
       
     } else {
@@ -579,8 +577,8 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # ========== PREPARAR ANNOTATIONS (SIN CARD NB) ==========
-      # ✅ v2.12: Gráfica 2 tiene solo 2 trazas - Fuente en y = -0.35 (sin cambios)
+      # ========== PREPARAR ANNOTATIONS ==========
+      # ✅ v2.14: Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile para 2 trazas
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
@@ -618,32 +616,29 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         annotations = annotations_list
       )
       
-      message("✅ Gráfico 2: Evolución anual Extranjero renderizado (SIN card NB)")
+      message("✅ Gráfico 2: Evolución anual Extranjero renderizado")
       return(p)
     }
     
   }) %>%
-    # ✅ CORRECCIÓN v2.7: Agregar ambito_reactivo para cambio de vista automático
     bindEvent(
       estado_app(),
       input$btn_consultar,
-      ambito_reactivo(),  # ✅ v2.7: AGREGADO para cambio de vista
+      ambito_reactivo(),
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
   
-  # ========== ✅ v2.13: MODAL METODOLOGÍA MEJORADO ==========
+  # ========== MODAL METODOLOGÍA ==========
   
   observeEvent(input$info_grafica1, {
     showModal(modalDialog(
-      # ✅ v2.13: Título con botón X integrado
       title = tags$div(
         style = "display: flex; justify-content: space-between; align-items: center; width: 100%;",
         tags$span(
           style = "color: #003E66; font-weight: bold; font-size: 18px;",
           icon("chart-line"), " Metodología de Proyección"
         ),
-        # Botón X para cerrar (esquina superior derecha)
         tags$button(
           type = "button",
           class = "close modal-close-x",
@@ -653,7 +648,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
           HTML("&times;")
         )
       ),
-      # ✅ v2.13: Contenido con clase para control CSS
       tags$div(
         class = "modal-metodologia-content",
         style = "font-size: 14px; line-height: 1.6;",
@@ -711,11 +705,10 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       ),
       
-      easyClose = TRUE,  # ✅ Cerrar al hacer clic fuera del modal
+      easyClose = TRUE,
       fade = TRUE,
-      size = "m",  # ✅ v2.13: Tamaño mediano para mejor visualización en móvil
+      size = "m",
       
-      # ✅ v2.13: Botón CERRAR con color azul
       footer = tags$div(
         style = "text-align: center;",
         modalButton(
@@ -728,8 +721,8 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     ))
   })
   
-  message("✅ graficas_historico_1_2 v2.12 inicializado")
-  message("   ✅ v2.12: Fuente en y=-0.60 para gráficas con 4 trazas")
-  message("   ✅ v2.12: Fuente en y=-0.35 para gráficas con 2 trazas (sin cambios)")
-  message("   ✅ v2.13: Modal con botón X, color azul, easyClose")
+  message("✅ graficas_historico_1_2 v2.14 inicializado")
+  message("   ✅ v2.14: Fuente en y=-0.35 para desktop (todas las gráficas)")
+  message("   ✅ v2.14: JS ajusta a y=-0.60 en mobile para gráficas con 4 trazas")
+  message("   ✅ v2.14: JS ajusta a y=-0.40 en mobile para gráficas con 2 trazas")
 }

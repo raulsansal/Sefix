@@ -24,7 +24,7 @@ library(tidyr)
 library(mapview)
 library(data.table) 
 library(shinycssloaders)
-library(httr)  # AGREGAR ESTA LÍNEA
+library(httr)  
 
 # ========== CARGAR SISTEMA DE FIREBASE (ANTES QUE TODO) ==========
 if (file.exists("firebase_loaders.R")) {
