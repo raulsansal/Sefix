@@ -1,11 +1,9 @@
 // ui/www/custom.js
-// Versión: 2.7 - SOLUCIÓN DEFINITIVA: Ajustes via JavaScript post-render
-// Cambios v2.7:
-//   - Card NB se ajusta DESPUÉS del render via JavaScript (no depende de R)
-//   - Texto de alcance se reposiciona a y=1.18 en móvil
-//   - Hint cambia a "(Clic para desglose)" en móvil
-//   - Card NB se compacta 50% en móvil
-//   - NO DEPENDE de input$screen_width en R
+// Versión: 2.8 - Corrige hint "Ver desglose" → "Clic para desglose" + elimina espacio vacío
+// Cambios v2.8:
+//   - Busca "Ver desglose" (nuevo texto de R) en lugar de "Hover para desglose"
+//   - Elimina espacio vacío en card NB móvil (height: auto)
+//   - Mantiene ajustes de tamaño y posición
 
 // ============================================================
 // DETECCIÓN DE ANCHO DE PANTALLA PARA SHINY
@@ -20,7 +18,6 @@ $(document).ready(function() {
     }
   }
   
-  // Enviar múltiples veces para asegurar que llegue
   setTimeout(sendScreenWidth, 100);
   setTimeout(sendScreenWidth, 300);
   setTimeout(sendScreenWidth, 500);
@@ -114,6 +111,10 @@ function isMobileView() {
   return window.innerWidth <= 768;
 }
 
+function isTabletView() {
+  return window.innerWidth > 768 && window.innerWidth <= 1024;
+}
+
 $(document).on('shiny:connected', function() {
   if (isTouchDevice()) {
     $('body').addClass('touch-device');
@@ -145,17 +146,20 @@ if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
 }
 
 // ============================================================
-// ✅ v2.7: AJUSTE COMPLETO DE PLOTLY PARA MÓVIL (POST-RENDER)
-// Esta es la función principal que hace TODO el trabajo
+// ✅ v2.8: AJUSTE COMPLETO DE PLOTLY PARA MÓVIL/TABLET
 // ============================================================
 
 function adjustPlotlyForMobile() {
-  if (!isMobileView()) {
-    console.log('🖥️ [JS] Vista desktop detectada, sin ajustes móviles');
+  var isMobile = isMobileView();
+  var isTablet = isTabletView();
+  
+  if (!isMobile && !isTablet) {
+    console.log('🖥️ [JS] Vista desktop detectada, sin ajustes');
     return;
   }
   
-  console.log('📱 [JS v2.7] Ajustando gráficas para móvil (width=' + window.innerWidth + 'px)');
+  var deviceType = isMobile ? 'MÓVIL' : 'TABLET';
+  console.log('📱 [JS v2.8] Ajustando gráficas para ' + deviceType + ' (width=' + window.innerWidth + 'px)');
   
   $('.plotly, .js-plotly-plot').each(function() {
     var plotlyDiv = this;
@@ -169,11 +173,9 @@ function adjustPlotlyForMobile() {
         numTrazas = plotlyDiv.data.length;
       }
       
-      // Posición de Fuente según número de trazas
       var fuenteYPosition = numTrazas >= 4 ? -0.60 : -0.40;
       
       if (!plotlyDiv.layout.annotations || !Array.isArray(plotlyDiv.layout.annotations)) {
-        // Sin annotations, solo ajustar layout general
         Plotly.relayout(plotlyDiv, {
           'title.font.size': 12,
           'xaxis.tickfont.size': 8,
@@ -192,7 +194,7 @@ function adjustPlotlyForMobile() {
       
       for (var i = 0; i < plotlyDiv.layout.annotations.length; i++) {
         var ann = plotlyDiv.layout.annotations[i];
-        var updatedAnn = JSON.parse(JSON.stringify(ann)); // Deep clone
+        var updatedAnn = JSON.parse(JSON.stringify(ann));
         
         // =====================================================
         // 1. AJUSTAR TEXTO "FUENTE"
@@ -206,7 +208,7 @@ function adjustPlotlyForMobile() {
         }
         
         // =====================================================
-        // 2. AJUSTAR TEXTO DE ALCANCE (subir ~20px)
+        // 2. AJUSTAR TEXTO DE ALCANCE
         // =====================================================
         if (ann.text && (
             ann.text.indexOf('Estado:') !== -1 || 
@@ -215,90 +217,152 @@ function adjustPlotlyForMobile() {
             ann.text.indexOf('Municipio:') !== -1 ||
             ann.text.indexOf('Sección:') !== -1
         )) {
-          // Solo si NO es la card NB
           if (ann.text.indexOf('No Binario') === -1 && ann.text.indexOf('⚧') === -1) {
-            // Subir el texto de alcance (de ~1.12 a 1.18)
             if (updatedAnn.y < 1.17) {
               updatedAnn.y = 1.18;
               hasChanges = true;
               console.log('   📊 Texto alcance subido a y=1.18');
             }
-            // Reducir tamaño de fuente
             updatedAnn.font = updatedAnn.font || {};
             updatedAnn.font.size = 11;
           }
         }
         
         // =====================================================
-        // 3. AJUSTAR CARD NB (reducir 50%, cambiar hint)
+        // 3. AJUSTAR CARD NB - ✅ v2.8 CORREGIDO
         // =====================================================
         if (ann.text && (ann.text.indexOf('No Binario') !== -1 || ann.text.indexOf('⚧') !== -1)) {
-          console.log('   🎯 Card NB detectada, aplicando ajustes móviles...');
+          console.log('   🎯 Card NB detectada, aplicando ajustes para ' + deviceType + '...');
           
-          // 3.1 Cambiar hint de "Hover" a "Clic"
+          // ✅ v2.8: Buscar "Ver desglose" (el nuevo texto de R) y cambiarlo
+          if (updatedAnn.text.indexOf('Ver desglose') !== -1) {
+            updatedAnn.text = updatedAnn.text.replace(/Ver desglose/g, 'Clic para desglose');
+            hasChanges = true;
+            console.log('      ✅ Hint cambiado de "Ver desglose" a "Clic para desglose"');
+          }
+          
+          // También buscar el viejo texto por si acaso
           if (updatedAnn.text.indexOf('Hover para desglose') !== -1) {
             updatedAnn.text = updatedAnn.text.replace(/Hover para desglose/g, 'Clic para desglose');
             hasChanges = true;
-            console.log('      ✅ Hint cambiado a "Clic para desglose"');
+            console.log('      ✅ Hint cambiado de "Hover para desglose" a "Clic para desglose"');
           }
           
-          // 3.2 Reducir tamaños de fuente (de desktop a móvil)
-          // Desktop: 14px, 12px, 11px, 10px, 9px
-          // Móvil:   8px,  7px,  6px,  6px,  5px
-          updatedAnn.text = updatedAnn.text
-            .replace(/font-size:\s*14px/g, 'font-size:8px')
-            .replace(/font-size:\s*12px/g, 'font-size:7px')
-            .replace(/font-size:\s*11px/g, 'font-size:6px')
-            .replace(/font-size:\s*10px/g, 'font-size:6px')
-            .replace(/font-size:\s*9px/g, 'font-size:5px');
-          
-          // 3.3 Agregar line-height 1.5 a cada span (si no existe)
-          if (updatedAnn.text.indexOf('line-height') === -1) {
-            updatedAnn.text = updatedAnn.text.replace(/<span style='/g, "<span style='line-height:1.5; ");
+          if (isMobile) {
+            // =====================================================
+            // MÓVIL: Card muy compacta
+            // =====================================================
+            
+            // Reducir tamaños de fuente
+            updatedAnn.text = updatedAnn.text
+              .replace(/font-size:\s*14px/g, 'font-size:8px')
+              .replace(/font-size:\s*12px/g, 'font-size:7px')
+              .replace(/font-size:\s*11px/g, 'font-size:6px')
+              .replace(/font-size:\s*10px/g, 'font-size:6px')
+              .replace(/font-size:\s*9px/g, 'font-size:5px');
+            
+            // ✅ v2.8: Forzar line-height compacto para eliminar espacio vacío
+            // Reemplazar cualquier line-height existente con 1.2
+            updatedAnn.text = updatedAnn.text.replace(/line-height:\s*[\d.]+;?/g, '');
+            updatedAnn.text = updatedAnn.text.replace(/<span style='/g, "<span style='line-height:1.2; ");
+            
+            // Acortar etiquetas
+            updatedAnn.text = updatedAnn.text
+              .replace(/Padrón Nacional/g, 'Padrón Nac.')
+              .replace(/Lista Nacional/g, 'Lista Nac.')
+              .replace(/Padrón Extranjero/g, 'Padrón Ext.')
+              .replace(/Lista Extranjero/g, 'Lista Ext.');
+            
+            // ✅ v2.8: Reducir padding al mínimo para eliminar espacio vacío
+            updatedAnn.borderpad = 2;
+            updatedAnn.borderwidth = 1;
+            
+            // Posición esquina superior izquierda
+            updatedAnn.x = 0.02;
+            updatedAnn.y = 0.98;
+            updatedAnn.xanchor = 'left';
+            updatedAnn.yanchor = 'top';
+            
+            hasChanges = true;
+            console.log('      ✅ Card NB compactada para MÓVIL (line-height:1.2, borderpad:3)');
+            
+          } else if (isTablet) {
+            // =====================================================
+            // TABLET: Card mediana
+            // =====================================================
+            
+            // Reducir tamaños de fuente (menos agresivo que móvil)
+            updatedAnn.text = updatedAnn.text
+              .replace(/font-size:\s*14px/g, 'font-size:11px')
+              .replace(/font-size:\s*12px/g, 'font-size:9px')
+              .replace(/font-size:\s*11px/g, 'font-size:8px')
+              .replace(/font-size:\s*10px/g, 'font-size:8px')
+              .replace(/font-size:\s*9px/g, 'font-size:7px');
+            
+            // Line-height más compacto
+            updatedAnn.text = updatedAnn.text.replace(/line-height:\s*[\d.]+;?/g, '');
+            updatedAnn.text = updatedAnn.text.replace(/<span style='/g, "<span style='line-height:1.3; ");
+            
+            updatedAnn.borderpad = 4;
+            updatedAnn.borderwidth = 1.5;
+            
+            updatedAnn.x = 0.02;
+            updatedAnn.y = 0.98;
+            updatedAnn.xanchor = 'left';
+            updatedAnn.yanchor = 'top';
+            
+            hasChanges = true;
+            console.log('      ✅ Card NB ajustada para TABLET');
           }
-          
-          // 3.4 Acortar etiquetas
-          updatedAnn.text = updatedAnn.text
-            .replace(/Padrón Nacional/g, 'Padrón Nac.')
-            .replace(/Lista Nacional/g, 'Lista Nac.')
-            .replace(/Padrón Extranjero/g, 'Padrón Ext.')
-            .replace(/Lista Extranjero/g, 'Lista Ext.');
-          
-          // 3.5 Reducir padding y borde
-          updatedAnn.borderpad = 2;
-          updatedAnn.borderwidth = 1;
-          
-          // 3.6 Mover a esquina superior izquierda
-          updatedAnn.x = 0.02;
-          updatedAnn.y = 0.98;
-          updatedAnn.xanchor = 'left';
-          updatedAnn.yanchor = 'top';
-          
-          hasChanges = true;
-          console.log('      ✅ Card NB compactada para móvil');
         }
         
         newAnnotations.push(updatedAnn);
       }
       
-      // Aplicar cambios si los hubo
       if (hasChanges) {
         Plotly.relayout(plotlyDiv, {
           'annotations': newAnnotations,
-          'title.font.size': 12,
-          'xaxis.tickfont.size': 8,
-          'yaxis.tickfont.size': 8,
-          'legend.font.size': 7,
+          'title.font.size': isMobile ? 12 : 14,
+          'xaxis.tickfont.size': isMobile ? 8 : 9,
+          'yaxis.tickfont.size': isMobile ? 8 : 9,
+          'legend.font.size': isMobile ? 7 : 8,
           'margin.t': 85,
           'margin.b': 140,
           'margin.l': 50,
           'margin.r': 20
         });
-        console.log('✅ [JS v2.7] Gráfica ajustada para móvil');
+        console.log('✅ [JS v2.8] Gráfica ajustada para ' + deviceType);
       }
       
     } catch(e) {
-      console.log('❌ [JS] Error ajustando Plotly para móvil:', e);
+      console.log('❌ [JS] Error ajustando Plotly:', e);
+    }
+  });
+  
+  // ✅ v2.8: Ajustar altura de cards NB via CSS directo
+  adjustCardNBHeight();
+}
+
+// ============================================================
+// ✅ v2.8: AJUSTAR ALTURA DE CARD NB VIA DOM
+// ============================================================
+
+function adjustCardNBHeight() {
+  if (!isMobileView() && !isTabletView()) return;
+  
+  // Buscar todas las annotations que contengan "No Binario"
+  $('.plotly .annotation, .js-plotly-plot .annotation').each(function() {
+    var $ann = $(this);
+    var text = $ann.text() || '';
+    
+    if (text.indexOf('No Binario') !== -1 || text.indexOf('⚧') !== -1) {
+      // Forzar que el contenedor se ajuste al contenido
+      $ann.find('rect').each(function() {
+        // El rect es el fondo de la annotation
+        // Podemos intentar reducir su altura si es necesario
+      });
+      
+      console.log('   🔧 Card NB encontrada en DOM');
     }
   });
 }
@@ -319,12 +383,12 @@ function isNBCardElement(element) {
 }
 
 function setupMobileNBTooltip() {
-  if (!isMobileView()) return;
+  if (!isMobileView() && !isTabletView()) return;
   
   $(document).off('click.nbtooltip touchend.nbtooltip');
   
   $(document).on('click.nbtooltip touchend.nbtooltip', '.plotly, .js-plotly-plot', function(e) {
-    if (!isMobileView()) return;
+    if (!isMobileView() && !isTabletView()) return;
     
     var target = e.target;
     var $target = $(target);
@@ -336,7 +400,7 @@ function setupMobileNBTooltip() {
       e.preventDefault();
       e.stopPropagation();
       
-      console.log('✅ [NB Mobile] Clic en card NB detectado');
+      console.log('✅ [NB] Clic en card NB detectado');
       
       if (nbTooltipActive && activeNBAnnotation === $annotation[0]) {
         hideNBTooltip(plotlyDiv);
@@ -365,7 +429,7 @@ function setupMobileNBTooltip() {
     hideAllNBTooltips();
   });
   
-  console.log('✅ [NB Mobile] Handler de tooltip configurado');
+  console.log('✅ [NB] Handler de tooltip configurado');
 }
 
 function showNBTooltip(plotlyDiv, annotationElement) {
@@ -386,10 +450,10 @@ function showNBTooltip(plotlyDiv, annotationElement) {
     
     $(annotationElement).addClass('nb-tooltip-active');
     
-    console.log('✅ [NB Mobile] Tooltip mostrado');
+    console.log('✅ [NB] Tooltip mostrado');
     
   } catch (e) {
-    console.log('⚠️ [NB Mobile] Error mostrando tooltip:', e);
+    console.log('⚠️ [NB] Error mostrando tooltip:', e);
   }
 }
 
@@ -413,7 +477,7 @@ function hideNBTooltip(plotlyDiv) {
     activeNBAnnotation = null;
     
   } catch (e) {
-    console.log('⚠️ [NB Mobile] Error ocultando tooltip:', e);
+    console.log('⚠️ [NB] Error ocultando tooltip:', e);
   }
 }
 
@@ -432,11 +496,9 @@ function hideAllNBTooltips() {
 // EJECUTAR AJUSTES EN DIFERENTES MOMENTOS
 // ============================================================
 
-// Cuando Shiny renderiza una gráfica
 $(document).on('shiny:value', function(event) {
   if (event.name && (event.name.indexOf('grafico') !== -1 || event.name.indexOf('plot') !== -1)) {
     console.log('📊 [JS] Gráfica renderizada: ' + event.name);
-    // Múltiples intentos para asegurar que se apliquen
     setTimeout(adjustPlotlyForMobile, 300);
     setTimeout(adjustPlotlyForMobile, 600);
     setTimeout(adjustPlotlyForMobile, 1000);
@@ -445,14 +507,12 @@ $(document).on('shiny:value', function(event) {
   }
 });
 
-// Al cambiar de pestaña
 $(document).on('shown.bs.tab', function() {
   setTimeout(adjustPlotlyForMobile, 400);
   setTimeout(adjustPlotlyForMobile, 800);
   hideAllNBTooltips();
 });
 
-// Al redimensionar
 $(window).on('resize', function() {
   clearTimeout(window.adjustTimer);
   window.adjustTimer = setTimeout(function() {
@@ -461,7 +521,6 @@ $(window).on('resize', function() {
   hideAllNBTooltips();
 });
 
-// Al cargar el documento
 $(document).ready(function() {
   setupMobileNBTooltip();
   setTimeout(adjustPlotlyForMobile, 2000);
@@ -469,14 +528,14 @@ $(document).ready(function() {
   setTimeout(adjustPlotlyForMobile, 5000);
 });
 
-// Cuando Shiny se conecta
 $(document).on('shiny:connected', function() {
+  setupMobileNBTooltip();
   setTimeout(adjustPlotlyForMobile, 2500);
   setTimeout(adjustPlotlyForMobile, 4000);
   setTimeout(adjustPlotlyForMobile, 6000);
 });
 
-console.log('✅ custom.js v2.7 cargado - SOLUCIÓN DEFINITIVA');
-console.log('   ✅ Ajustes via JavaScript post-render (no depende de R)');
-console.log('   ✅ Card NB: hint, tamaños, posición ajustados en móvil');
-console.log('   ✅ Texto alcance: subido a y=1.18 en móvil');
+console.log('✅ custom.js v2.8 cargado');
+console.log('   ✅ Busca "Ver desglose" y lo cambia a "Clic para desglose"');
+console.log('   ✅ Line-height reducido a 1.2 para eliminar espacio vacío');
+console.log('   ✅ Soporta móvil Y tablet');

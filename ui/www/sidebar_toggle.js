@@ -1,10 +1,11 @@
 // ui/www/sidebar_toggle.js
-// Versión: 3.4 - Botón descarga robusto + prevención de teclado mejorada
-// Cambios v3.4:
-//   - Detección de datos en DataTable completamente reescrita
-//   - Múltiples selectores para encontrar el DataTable
-//   - Prevención de teclado: blur inmediato + readonly proactivo
-//   - Debug mejorado para diagnóstico
+// Versión: 3.5 - Botones contextuales por pestaña + FILTROS corregido
+// Cambios v3.5:
+//   - Botones de barra inferior cambian según pestaña activa
+//   - Lista Nominal: FILTROS, RESTABLECER, PROYECCIÓN, ANÁLISIS
+//   - Elecciones Federales: FILTROS, RESTABLECER, DESCARGAR, ANÁLISIS
+//   - FILTROS ahora funciona con namespaces específicos
+//   - Detecta cambios de pestaña via Shiny
 
 $(document).ready(function() {
   
@@ -21,6 +22,253 @@ $(document).ready(function() {
   // ============================================================
   
   var drawerOpenTime = 0;
+  
+  // ============================================================
+  // ✅ v3.5: CONFIGURACIÓN DE BOTONES POR PESTAÑA
+  // ============================================================
+  
+  var tabButtonConfigs = {
+    "lista": {
+      buttons: [
+        { id: "mobile-btn-filters", icon: "⚙️", label: "Filtros", action: "filters" },
+        { id: "mobile-btn-restore", icon: "🔄", label: "Restablecer", action: "restore" },
+        { id: "mobile-btn-projection", icon: "ℹ️", label: "Proyección", action: "projection" },
+        { id: "mobile-btn-analysis", icon: "📊", label: "Análisis", action: "analysis" }
+      ],
+      sidebarSelector: "#lista-sidebar_panel, [id$='lista-sidebar_panel']",
+      sidebarRightSelector: "#lista-sidebar-right-lista, [id$='sidebar-right-lista']",
+      restoreSelector: "#lista-reset_config, [id$='lista-reset_config']",
+      projectionSelector: "#lista-info_grafica1, [id$='lista-info_grafica1']",
+      downloadSelector: null
+    },
+    "federales": {
+      buttons: [
+        { id: "mobile-btn-filters", icon: "⚙️", label: "Filtros", action: "filters" },
+        { id: "mobile-btn-restore", icon: "🔄", label: "Restablecer", action: "restore" },
+        { id: "mobile-btn-download", icon: "📥", label: "Descargar", action: "download" },
+        { id: "mobile-btn-analysis", icon: "📊", label: "Análisis", action: "analysis" }
+      ],
+      sidebarSelector: "#federales-sidebar_panel, [id$='federales-sidebar_panel']",
+      sidebarRightSelector: "#federales-sidebar-right-federales, [id$='sidebar-right-federales']",
+      restoreSelector: "#federales-reset_config, [id$='federales-reset_config']",
+      projectionSelector: null,
+      downloadSelector: "#federales-download_csv, [id$='federales-download_csv']"
+    },
+    // Configuración por defecto para otras pestañas
+    "default": {
+      buttons: [
+        { id: "mobile-btn-filters", icon: "⚙️", label: "Filtros", action: "filters" },
+        { id: "mobile-btn-restore", icon: "🔄", label: "Restablecer", action: "restore" },
+        { id: "mobile-btn-info", icon: "ℹ️", label: "Info", action: "info" },
+        { id: "mobile-btn-analysis", icon: "📊", label: "Análisis", action: "analysis" }
+      ],
+      sidebarSelector: ".well, [class*='sidebar_panel']",
+      sidebarRightSelector: ".sidebar-right",
+      restoreSelector: "[id$='-reset_config'], [id$='reset_config']",
+      projectionSelector: null,
+      downloadSelector: null
+    }
+  };
+  
+  // Pestaña activa actual
+  var currentTab = "lista";
+  
+  // ============================================================
+  // ✅ v3.5: OBTENER CONFIGURACIÓN PARA PESTAÑA ACTUAL
+  // ============================================================
+  
+  function getTabConfig(tabId) {
+    if (tabButtonConfigs[tabId]) {
+      return tabButtonConfigs[tabId];
+    }
+    return tabButtonConfigs["default"];
+  }
+  
+  // ============================================================
+  // ✅ v3.5: ACTUALIZAR BOTONES DE LA BARRA INFERIOR
+  // ============================================================
+  
+  function updateMobileButtons(tabId) {
+    if (!isMobile()) return;
+    
+    currentTab = tabId || "lista";
+    var config = getTabConfig(currentTab);
+    
+    console.log("📱 [v3.5] Actualizando botones para pestaña: " + currentTab);
+    
+    // Eliminar barra existente
+    $(".mobile-fab-container").remove();
+    
+    // Crear nueva barra con botones específicos
+    var buttonsHtml = config.buttons.map(function(btn) {
+      return '<button class="mobile-fab-btn" id="' + btn.id + '" type="button" data-action="' + btn.action + '">' +
+        '<span class="fab-icon">' + btn.icon + '</span>' +
+        '<span class="fab-label">' + btn.label + '</span>' +
+      '</button>';
+    }).join('');
+    
+    var fabContainer = $('<div class="mobile-fab-container">' + buttonsHtml + '</div>');
+    $("body").append(fabContainer);
+    
+    // Configurar handlers para los nuevos botones
+    setupButtonHandlers(config);
+    
+    console.log("✅ [v3.5] Botones actualizados: " + config.buttons.map(function(b) { return b.label; }).join(", "));
+  }
+  
+  // ============================================================
+  // ✅ v3.5: CONFIGURAR HANDLERS DE BOTONES
+  // ============================================================
+  
+  function setupButtonHandlers(config) {
+    // Remover handlers anteriores
+    $(document).off("click.mobileButtons");
+    
+    // FILTROS
+    $(document).on("click.mobileButtons", "#mobile-btn-filters", function(e) {
+      e.stopPropagation();
+      var sidebar = $(config.sidebarSelector).first();
+      
+      if (sidebar.length === 0) {
+        // Fallback: buscar cualquier sidebar
+        sidebar = $(".well").first();
+        if (sidebar.length === 0) {
+          sidebar = $("[class*='sidebar_panel']").first();
+        }
+      }
+      
+      if (sidebar.length > 0) {
+        openMobileDrawer(sidebar, "left");
+        console.log("✅ [FILTROS] Abriendo sidebar: " + sidebar.attr("id"));
+      } else {
+        showMobileToast("Filtros no disponibles");
+        console.log("⚠️ [FILTROS] No se encontró sidebar con selector: " + config.sidebarSelector);
+      }
+    });
+    
+    // RESTABLECER
+    $(document).on("click.mobileButtons", "#mobile-btn-restore", function(e) {
+      e.stopPropagation();
+      var resetBtn = $(config.restoreSelector).first();
+      
+      if (resetBtn.length > 0) {
+        resetBtn.trigger("click");
+        showMobileToast("Consulta restablecida");
+        console.log("✅ [RESTABLECER] Trigger en: " + resetBtn.attr("id"));
+      } else {
+        showMobileToast("No disponible en esta vista");
+        console.log("⚠️ [RESTABLECER] No se encontró botón con selector: " + config.restoreSelector);
+      }
+    });
+    
+    // PROYECCIÓN (solo Lista Nominal)
+    $(document).on("click.mobileButtons", "#mobile-btn-projection", function(e) {
+      e.stopPropagation();
+      if (config.projectionSelector) {
+        var metodologiaBtn = $(config.projectionSelector).first();
+        
+        if (metodologiaBtn.length > 0) {
+          metodologiaBtn.trigger("click");
+          console.log("✅ [PROYECCIÓN] Trigger en: " + metodologiaBtn.attr("id"));
+        } else {
+          showMobileToast("No disponible");
+          console.log("⚠️ [PROYECCIÓN] No se encontró botón con selector: " + config.projectionSelector);
+        }
+      } else {
+        showMobileToast("No disponible en esta vista");
+      }
+    });
+    
+    // DESCARGAR (solo Elecciones Federales)
+    $(document).on("click.mobileButtons", "#mobile-btn-download", function(e) {
+      e.stopPropagation();
+      if (config.downloadSelector) {
+        var downloadBtn = $(config.downloadSelector).first();
+        
+        if (downloadBtn.length > 0) {
+          // Para downloadButton de Shiny, necesitamos hacer clic directo
+          downloadBtn[0].click();
+          showMobileToast("Descargando CSV...");
+          console.log("✅ [DESCARGAR] Trigger en: " + downloadBtn.attr("id"));
+        } else {
+          showMobileToast("No hay datos para descargar");
+          console.log("⚠️ [DESCARGAR] No se encontró botón con selector: " + config.downloadSelector);
+        }
+      } else {
+        showMobileToast("No disponible en esta vista");
+      }
+    });
+    
+    // ANÁLISIS
+    $(document).on("click.mobileButtons", "#mobile-btn-analysis", function(e) {
+      e.stopPropagation();
+      var sidebar = $(config.sidebarRightSelector).first();
+      
+      if (sidebar.length === 0) {
+        // Fallback
+        sidebar = $(".sidebar-right:visible").first();
+        if (sidebar.length === 0) {
+          sidebar = $(".sidebar-right").first();
+        }
+      }
+      
+      if (sidebar.length > 0) {
+        openMobileDrawer(sidebar, "right");
+        console.log("✅ [ANÁLISIS] Abriendo sidebar: " + sidebar.attr("id"));
+      } else {
+        showMobileToast("Análisis no disponible");
+        console.log("⚠️ [ANÁLISIS] No se encontró sidebar con selector: " + config.sidebarRightSelector);
+      }
+    });
+    
+    // INFO (genérico para otras pestañas)
+    $(document).on("click.mobileButtons", "#mobile-btn-info", function(e) {
+      e.stopPropagation();
+      showMobileToast("Información no disponible");
+    });
+  }
+  
+  // ============================================================
+  // ✅ v3.5: DETECTAR CAMBIOS DE PESTAÑA
+  // ============================================================
+  
+  function detectTabChange() {
+    // Método 1: Observar cambios en input$main_tabs via Shiny
+    $(document).on("shiny:inputchanged", function(event) {
+      if (event.name === "main_tabs") {
+        var newTab = event.value;
+        console.log("📑 [v3.5] Cambio de pestaña detectado (shiny:inputchanged): " + newTab);
+        updateMobileButtons(newTab);
+      }
+    });
+    
+    // Método 2: Observar clics en pestañas directamente
+    $(document).on("shown.bs.tab", 'a[data-toggle="tab"]', function(e) {
+      var tabId = $(e.target).attr("href");
+      if (tabId) {
+        // Extraer el ID de la pestaña del href (ej: "#shiny-tab-lista" -> "lista")
+        var match = tabId.match(/tab[_-](\w+)/i);
+        if (match) {
+          var newTab = match[1];
+          console.log("📑 [v3.5] Cambio de pestaña detectado (shown.bs.tab): " + newTab);
+          updateMobileButtons(newTab);
+        }
+      }
+    });
+    
+    // Método 3: Observar cambios en clases activas del tabsetPanel
+    $(document).on("click", ".nav-tabs > li > a", function() {
+      var $tab = $(this);
+      var tabValue = $tab.attr("data-value") || $tab.closest("li").attr("data-value");
+      
+      if (tabValue) {
+        console.log("📑 [v3.5] Cambio de pestaña detectado (click): " + tabValue);
+        setTimeout(function() {
+          updateMobileButtons(tabValue);
+        }, 100);
+      }
+    });
+  }
   
   // ============================================================
   // INICIALIZACIÓN DESKTOP (código original)
@@ -58,7 +306,7 @@ $(document).ready(function() {
   });
   
   // ============================================================
-  // SISTEMA MÓVIL - INICIALIZACIÓN v3.4
+  // SISTEMA MÓVIL - INICIALIZACIÓN v3.5
   // ============================================================
   
   function initMobileUI() {
@@ -70,56 +318,47 @@ $(document).ready(function() {
       return;
     }
     
-    if ($(".mobile-fab-container").length > 0) return;
+    // Crear overlay si no existe
+    if ($(".mobile-overlay").length === 0) {
+      var overlay = $('<div class="mobile-overlay" id="mobile-overlay-main"></div>');
+      $("body").prepend(overlay);
+    }
     
-    $(".mobile-overlay").remove();
-    var overlay = $('<div class="mobile-overlay" id="mobile-overlay-main"></div>');
-    $("body").prepend(overlay);
+    // Detectar pestaña actual
+    var activeTab = $(".nav-tabs > li.active > a").attr("data-value") || 
+                    $(".nav-tabs > li.active > a").attr("href");
     
-    var fabContainer = $('<div class="mobile-fab-container">' +
-      '<button class="mobile-fab-btn" id="mobile-btn-filters" type="button">' +
-        '<span class="fab-icon">⚙️</span>' +
-        '<span class="fab-label">Filtros</span>' +
-      '</button>' +
-      '<button class="mobile-fab-btn" id="mobile-btn-restore" type="button">' +
-        '<span class="fab-icon">🔄</span>' +
-        '<span class="fab-label">Restabecer</span>' +
-      '</button>' +
-      '<button class="mobile-fab-btn" id="mobile-btn-projection" type="button">' +
-        '<span class="fab-icon">ℹ️</span>' +
-        '<span class="fab-label">Proyección</span>' +
-      '</button>' +
-      '<button class="mobile-fab-btn" id="mobile-btn-analysis" type="button">' +
-        '<span class="fab-icon">📊</span>' +
-        '<span class="fab-label">Análisis</span>' +
-      '</button>' +
-    '</div>');
+    if (activeTab) {
+      // Extraer ID si es un href
+      var match = activeTab.match(/tab[_-](\w+)/i);
+      currentTab = match ? match[1] : activeTab.replace("#", "");
+    } else {
+      currentTab = "lista"; // Default
+    }
     
-    $("body").append(fabContainer);
+    console.log("📱 [v3.5] Inicializando UI móvil, pestaña activa: " + currentTab);
     
+    // Crear botones para la pestaña actual
+    updateMobileButtons(currentTab);
+    
+    // Configurar otros handlers
     setupSidebarAutoClose();
     setupDownloadButtonVisibility();
     setupOverlayClickHandler();
-    
-    // ✅ v3.4: Prevención de teclado mejorada
     preventKeyboardOnSelects();
+    detectTabChange();
     
-    console.log("✅ UI móvil v3.4 inicializada");
+    console.log("✅ UI móvil v3.5 inicializada");
   }
   
   // ============================================================
-  // ✅ v3.4: PREVENCIÓN DE TECLADO - COMPLETAMENTE REESCRITA
+  // PREVENCIÓN DE TECLADO (igual que v3.4)
   // ============================================================
   
   function preventKeyboardOnSelects() {
     if (!isMobile()) return;
     
-    // ============================================
-    // ESTRATEGIA 1: Aplicar readonly ANTES del focus
-    // ============================================
-    
     function makeSelectizeReadonly() {
-      // Buscar todos los inputs dentro de selectize y hacerlos readonly
       $(".selectize-input input").each(function() {
         $(this).attr("readonly", "readonly");
         $(this).attr("inputmode", "none");
@@ -127,7 +366,6 @@ $(document).ready(function() {
         $(this).attr("autocorrect", "off");
         $(this).attr("autocapitalize", "off");
         $(this).attr("spellcheck", "false");
-        // CSS para prevenir selección
         $(this).css({
           "caret-color": "transparent",
           "-webkit-user-select": "none",
@@ -135,44 +373,26 @@ $(document).ready(function() {
         });
       });
       
-      // Para selects nativos
       $(".well select, [class*='sidebar_panel'] select").each(function() {
         $(this).attr("inputmode", "none");
       });
     }
     
-    // Aplicar inmediatamente
     makeSelectizeReadonly();
-    
-    // Aplicar después de que Shiny inicialice
     setTimeout(makeSelectizeReadonly, 500);
     setTimeout(makeSelectizeReadonly, 1000);
     setTimeout(makeSelectizeReadonly, 2000);
     
-    // ============================================
-    // ESTRATEGIA 2: Interceptar mousedown/touchstart
-    // ============================================
-    
     $(document).on("mousedown touchstart", ".selectize-input", function(e) {
-      // Hacer readonly antes de que el input reciba focus
       $(this).find("input").attr("readonly", "readonly").attr("inputmode", "none");
     });
     
-    // ============================================
-    // ESTRATEGIA 3: Blur inmediato si recibe focus
-    // ============================================
-    
     $(document).on("focus", ".selectize-input input", function(e) {
       var $input = $(this);
-      
-      // Asegurar que tenga readonly
       $input.attr("readonly", "readonly");
       $input.attr("inputmode", "none");
       
-      // Blur inmediato para cerrar teclado si se abrió
       setTimeout(function() {
-        // Solo hacer blur si el teclado virtual podría estar abierto
-        // Verificamos que no haya un dropdown abierto que necesite el input
         var $selectize = $input.closest(".selectize-control");
         var isDropdownOpen = $selectize.find(".selectize-dropdown").is(":visible");
         
@@ -182,13 +402,8 @@ $(document).ready(function() {
       }, 50);
     });
     
-    // ============================================
-    // ESTRATEGIA 4: Observar cambios en el DOM
-    // ============================================
-    
     var observer = new MutationObserver(function(mutations) {
       var needsUpdate = false;
-      
       mutations.forEach(function(mutation) {
         if (mutation.addedNodes.length) {
           $(mutation.addedNodes).each(function() {
@@ -210,15 +425,9 @@ $(document).ready(function() {
       subtree: true
     });
     
-    // ============================================
-    // ESTRATEGIA 5: Evento de Shiny
-    // ============================================
-    
     $(document).on("shiny:inputchanged shiny:value", function() {
       setTimeout(makeSelectizeReadonly, 100);
     });
-    
-    console.log("✅ Prevención de teclado v3.4 configurada");
   }
   
   // ============================================================
@@ -306,24 +515,15 @@ $(document).ready(function() {
   }
   
   // ============================================================
-  // ✅ v3.4: VISIBILIDAD DEL BOTÓN DESCARGA - COMPLETAMENTE REESCRITA
+  // VISIBILIDAD DEL BOTÓN DESCARGA (igual que v3.4)
   // ============================================================
   
   function setupDownloadButtonVisibility() {
-    // Ocultar inicialmente
     $(".mobile-download-container").addClass("hidden-until-ready");
-    
-    // ============================================
-    // FUNCIÓN DE DETECCIÓN ROBUSTA
-    // ============================================
     
     function checkForData() {
       var hasRealData = false;
       var debugInfo = [];
-      
-      // ============================================
-      // MÉTODO 1: Buscar DataTable por múltiples selectores
-      // ============================================
       
       var $dataTable = null;
       var selectors = [
@@ -339,60 +539,39 @@ $(document).ready(function() {
         var $found = $(selectors[i]);
         if ($found.length > 0) {
           $dataTable = $found;
-          debugInfo.push("Selector encontrado: " + selectors[i] + " (" + $found.length + " filas)");
+          debugInfo.push("Selector: " + selectors[i] + " (" + $found.length + " filas)");
           break;
         }
       }
       
       if (!$dataTable || $dataTable.length === 0) {
-        debugInfo.push("No se encontró DataTable");
         updateButtonVisibility(false, debugInfo);
         return false;
       }
-      
-      // ============================================
-      // MÉTODO 2: Verificar contenido de las celdas
-      // ============================================
       
       var $firstRow = $dataTable.first();
       var $cells = $firstRow.find("td");
       
       if ($cells.length === 0) {
-        debugInfo.push("No se encontraron celdas (td)");
         updateButtonVisibility(false, debugInfo);
         return false;
       }
       
-      // Obtener texto de la primera celda
       var firstCellText = $cells.first().text().trim().toLowerCase();
-      debugInfo.push("Primera celda: '" + firstCellText.substring(0, 50) + "'");
       
-      // Lista de textos que indican "sin datos"
       var noDataTexts = [
-        "configure",
-        "no hay datos",
-        "mensaje",
-        "sin datos",
-        "no data",
-        "loading",
-        "cargando",
-        "esperando"
+        "configure", "no hay datos", "mensaje", "sin datos",
+        "no data", "loading", "cargando", "esperando"
       ];
       
-      // Verificar si es un mensaje de "sin datos"
       var isNoDataMessage = noDataTexts.some(function(text) {
         return firstCellText.includes(text);
       });
       
       if (isNoDataMessage) {
-        debugInfo.push("Detectado mensaje de 'sin datos'");
         updateButtonVisibility(false, debugInfo);
         return false;
       }
-      
-      // ============================================
-      // MÉTODO 3: Verificar que hay múltiples celdas con contenido
-      // ============================================
       
       var cellsWithContent = 0;
       $cells.each(function() {
@@ -402,66 +581,35 @@ $(document).ready(function() {
         }
       });
       
-      debugInfo.push("Celdas con contenido: " + cellsWithContent);
-      
-      // Si hay al menos 2 celdas con contenido, consideramos que hay datos
       hasRealData = cellsWithContent >= 2;
       
-      // ============================================
-      // MÉTODO 4: Verificar número total de filas
-      // ============================================
-      
       var totalRows = $dataTable.length;
-      debugInfo.push("Total de filas: " + totalRows);
-      
-      // Si solo hay 1 fila y tiene pocas celdas, probablemente es un mensaje
       if (totalRows === 1 && cellsWithContent < 3) {
         hasRealData = false;
-        debugInfo.push("Solo 1 fila con pocas celdas - probablemente mensaje");
       }
       
       updateButtonVisibility(hasRealData, debugInfo);
       return hasRealData;
     }
     
-    // ============================================
-    // ACTUALIZAR VISIBILIDAD DEL BOTÓN
-    // ============================================
-    
     function updateButtonVisibility(show, debugInfo) {
       var $container = $(".mobile-download-container");
       
-      if ($container.length === 0) {
-        console.log("⚠️ Contenedor de botón descarga no encontrado");
-        return;
-      }
+      if ($container.length === 0) return;
       
       if (show) {
         $container.removeClass("hidden-until-ready");
-        console.log("✅ Botón descarga VISIBLE", debugInfo);
       } else {
         $container.addClass("hidden-until-ready");
-        // Solo loguear ocasionalmente para no saturar la consola
-        if (Math.random() < 0.1) {
-          console.log("⏳ Botón descarga OCULTO", debugInfo);
-        }
       }
     }
     
-    // ============================================
-    // EJECUTAR VERIFICACIONES
-    // ============================================
-    
-    // Verificación periódica cada 500ms
     setInterval(checkForData, 500);
     
-    // Verificar después de eventos de Shiny
     $(document).on("shiny:value", function(event) {
       if (event.name) {
         var name = event.name.toLowerCase();
         if (name.includes("table") || name.includes("data") || name.includes("main")) {
-          console.log("📊 Evento shiny:value detectado:", event.name);
-          // Verificar múltiples veces después del evento
           setTimeout(checkForData, 200);
           setTimeout(checkForData, 500);
           setTimeout(checkForData, 1000);
@@ -471,69 +619,19 @@ $(document).ready(function() {
       }
     });
     
-    // Verificar cuando el DataTable se redibuja
     $(document).on("draw.dt", function() {
-      console.log("📊 Evento draw.dt detectado");
       setTimeout(checkForData, 100);
       setTimeout(checkForData, 300);
       setTimeout(checkForData, 500);
     });
     
-    // Verificar al inicio con delays progresivos
     setTimeout(checkForData, 500);
     setTimeout(checkForData, 1000);
     setTimeout(checkForData, 1500);
     setTimeout(checkForData, 2000);
     setTimeout(checkForData, 3000);
     setTimeout(checkForData, 5000);
-    
-    console.log("✅ Visibilidad de botón descarga v3.4 configurada");
   }
-  
-  // ============================================================
-  // MANEJADORES MÓVILES - BOTONES FAB
-  // ============================================================
-  
-  $(document).on("click", "#mobile-btn-filters", function(e) {
-    e.stopPropagation();
-    var sidebar = $(".well").first();
-    if (sidebar.length === 0) {
-      sidebar = $("[class*='sidebar_panel']").first();
-    }
-    openMobileDrawer(sidebar, "left");
-  });
-  
-  $(document).on("click", "#mobile-btn-restore", function(e) {
-    e.stopPropagation();
-    var resetBtn = $("[id$='-reset_config'], [id$='reset_config']").first();
-    
-    if (resetBtn.length > 0) {
-      resetBtn.trigger("click");
-      showMobileToast("Consulta restablecida");
-    } else {
-      showMobileToast("No disponible en esta vista");
-    }
-  });
-  
-  $(document).on("click", "#mobile-btn-projection", function(e) {
-    e.stopPropagation();
-    var metodologiaBtn = $("[id$='-info_grafica1'], [id$='info_grafica1']").first();
-    
-    if (metodologiaBtn.length > 0) {
-      metodologiaBtn.trigger("click");
-    } else {
-      showMobileToast("No disponible en esta vista");
-    }
-  });
-  
-  $(document).on("click", "#mobile-btn-analysis", function(e) {
-    e.stopPropagation();
-    var sidebar = $(".sidebar-right:visible").first();
-    if (sidebar.length === 0) {
-      sidebar = $(".sidebar-right").first();
-    }
-    openMobileDrawer(sidebar, "right");
-  });
   
   // ============================================================
   // CERRAR CON TECLA ESCAPE
@@ -596,6 +694,7 @@ $(document).ready(function() {
   
   window.closeMobileDrawers = closeMobileDrawers;
   window.isDrawerOpen = isDrawerOpen;
+  window.updateMobileButtons = updateMobileButtons; // Exponer globalmente
   
   // ============================================================
   // RESIZE HANDLER
@@ -645,7 +744,6 @@ $(document).ready(function() {
     setTimeout(function() {
       if (isMobile()) {
         initMobileUI();
-        // Re-aplicar prevención de teclado después de que Shiny esté listo
         preventKeyboardOnSelects();
       }
     }, 500);
@@ -660,5 +758,8 @@ $(document).ready(function() {
     setTimeout(triggerPlotlyResize, 300);
   });
   
-  console.log("✅ sidebar_toggle.js v3.4 cargado");
+  console.log("✅ sidebar_toggle.js v3.5 cargado");
+  console.log("   ✅ Botones contextuales por pestaña");
+  console.log("   ✅ Lista Nominal: FILTROS, RESTABLECER, PROYECCIÓN, ANÁLISIS");
+  console.log("   ✅ Elecciones Federales: FILTROS, RESTABLECER, DESCARGAR, ANÁLISIS");
 });

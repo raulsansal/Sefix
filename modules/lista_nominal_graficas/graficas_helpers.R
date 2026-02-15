@@ -219,7 +219,7 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
       
       etiqueta_padron <- etiqueta_padron_full
       etiqueta_lista <- etiqueta_lista_full
-      hint_text <- "(Hover para desglose)"
+      hint_text <- "(Clic para desglose)"
       
       texto_card <- paste0(
         "<span style='font-size:", font_size_icon, "px; color:#9B59B6;'>⚧</span> ",
@@ -254,7 +254,7 @@ crear_card_no_binario <- function(datos, ambito = "nacional", tipo_periodo = "me
       
       etiqueta_padron <- etiqueta_padron_full
       etiqueta_lista <- etiqueta_lista_full
-      hint_text <- "(Hover para desglose)"
+      hint_text <- "(Ver desglose)"
       
       # ✅ v2.5: CORREGIDO error de sintaxis
       texto_card <- paste0(
