@@ -1,13 +1,14 @@
 # modules/lista_nominal_graficas/graficas_historico_3.R
 # Gráfica 3: Evolución anual por sexo
-# Versión: 2.7 - Posición Fuente en y=-0.35 para desktop (JS ajusta en mobile)
-# Cambios v2.7:
-#   - Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile para 4 trazas
+# Versión: 2.9 - Texto alcance reposicionado (y=1.15) + screen_width robusto
+# Cambios v2.9:
+#   - Texto de alcance subido 20px (y=1.15 en lugar de y=1.12)
+#   - screen_width se obtiene de forma más robusta con logs
 
 graficas_historico_3 <- function(input, output, session, datos_anuales_completos, anio_actual, 
                                  texto_alcance, estado_app, mostrar_graficas_anuales, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_historico_3 v2.7")
+  message("📊 Inicializando graficas_historico_3 v2.9")
   
   # ========== GRÁFICA 3: EVOLUCIÓN ANUAL + DESGLOSE POR SEXO ==========
   
@@ -154,11 +155,11 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       }
       
       # ========== PREPARAR ANNOTATIONS ==========
-      # ✅ v2.7: Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile para 4 trazas
+      # ✅ v2.9: Texto alcance en y = 1.15 (subido 20px)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
-          x = 0.5, y = 1.12,
+          x = 0.5, y = 1.15,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -177,7 +178,10 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       )
       
       # Card NB SÍ aplica en gráfica 3 (CON desglose por sexo)
-      card_nb <- crear_card_no_binario(datos_anuales, ambito = "nacional", tipo_periodo = "anual")
+      # ✅ v2.9: Obtener screen_width de forma robusta con log
+      screen_w <- isolate(input$screen_width)
+      message("📱 [GRÁFICA 3] screen_width recibido: ", if(is.null(screen_w)) "NULL" else screen_w)
+      card_nb <- crear_card_no_binario(datos_anuales, ambito = "nacional", tipo_periodo = "anual", screen_width = screen_w)
       if (!is.null(card_nb)) {
         annotations_list[[length(annotations_list) + 1]] <- card_nb
       }
@@ -375,11 +379,11 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       }
       
       # ========== LAYOUT CON ANOTACIÓN ==========
-      # ✅ v2.7: Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile para 4 trazas
+      # ✅ v2.9: Texto alcance en y = 1.15 (subido 20px)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
-          x = 0.5, y = 1.12,
+          x = 0.5, y = 1.15,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -412,7 +416,10 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       
       # Card NB SÍ aplica cuando hay datos con sexo
       if (length(años_con_sexo) > 0) {
-        card_nb <- crear_card_no_binario(datos_extranjero, ambito = "extranjero", tipo_periodo = "anual")
+        # ✅ v2.9: Obtener screen_width de forma robusta con log
+        screen_w <- isolate(input$screen_width)
+        message("📱 [GRÁFICA 3 EXT] screen_width recibido: ", if(is.null(screen_w)) "NULL" else screen_w)
+        card_nb <- crear_card_no_binario(datos_extranjero, ambito = "extranjero", tipo_periodo = "anual", screen_width = screen_w)
         if (!is.null(card_nb)) {
           annotations_list[[length(annotations_list) + 1]] <- card_nb
         }
@@ -445,7 +452,6 @@ graficas_historico_3 <- function(input, output, session, datos_anuales_completos
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_historico_3 v2.7 inicializado")
-  message("   ✅ v2.7: Fuente en y=-0.35 para desktop")
-  message("   ✅ v2.7: JS ajusta a y=-0.60 en mobile para gráficas con 4 trazas")
+  message("✅ graficas_historico_3 v2.9 inicializado")
+  message("   ✅ v2.9: Texto alcance en y=1.15 (subido 20px)")
 }

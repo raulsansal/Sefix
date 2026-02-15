@@ -1,11 +1,11 @@
 // ui/www/custom.js
-// Versión: 2.3 - Ajuste dinámico de Plotly para mobile (posición Fuente y texto alcance)
-// Cambios v2.3:
-//   - Ajuste de posición "Fuente" según número de trazas en mobile
-//   - 4 trazas: y = -0.60 (para liberar espacio a leyendas)
-//   - 2 trazas: y = -0.40
-//   - Texto de alcance: +2px en mobile (font size 15 en lugar de 13)
-//   - Desktop: mantiene valores originales (y = -0.35)
+// Versión: 2.7 - SOLUCIÓN DEFINITIVA: Ajustes via JavaScript post-render
+// Cambios v2.7:
+//   - Card NB se ajusta DESPUÉS del render via JavaScript (no depende de R)
+//   - Texto de alcance se reposiciona a y=1.18 en móvil
+//   - Hint cambia a "(Clic para desglose)" en móvil
+//   - Card NB se compacta 50% en móvil
+//   - NO DEPENDE de input$screen_width en R
 
 // ============================================================
 // DETECCIÓN DE ANCHO DE PANTALLA PARA SHINY
@@ -13,7 +13,6 @@
 
 $(document).ready(function() {
   
-  // Función para enviar ancho de pantalla a Shiny
   function sendScreenWidth() {
     if (typeof Shiny !== 'undefined' && Shiny.setInputValue) {
       Shiny.setInputValue('screen_width', window.innerWidth, {priority: 'event'});
@@ -21,15 +20,16 @@ $(document).ready(function() {
     }
   }
   
-  // Enviar al cargar (con delay para asegurar que Shiny esté listo)
+  // Enviar múltiples veces para asegurar que llegue
+  setTimeout(sendScreenWidth, 100);
+  setTimeout(sendScreenWidth, 300);
   setTimeout(sendScreenWidth, 500);
+  setTimeout(sendScreenWidth, 1000);
   
-  // Enviar cuando Shiny esté conectado
   $(document).on('shiny:connected', function() {
     sendScreenWidth();
   });
   
-  // Enviar al redimensionar (con debounce)
   var resizeTimer;
   $(window).on('resize', function() {
     clearTimeout(resizeTimer);
@@ -38,7 +38,6 @@ $(document).ready(function() {
     }, 250);
   });
   
-  // Enviar al cambiar orientación
   $(window).on('orientationchange', function() {
     setTimeout(sendScreenWidth, 100);
   });
@@ -48,16 +47,17 @@ $(document).ready(function() {
 // MANEJO DE OPCIÓN "EXTRAORDINARIA"
 // ============================================================
 
-Shiny.addCustomMessageHandler('disableExtraordinaria', function(disable) {
-  $('#tipo_eleccion[value=EXTRAORDINARIA]').prop('disabled', disable);
-  $('label[for="tipo_eleccionEXTRAORDINARIA"]').toggleClass('disabled-option', disable);
-});
+if (typeof Shiny !== 'undefined') {
+  Shiny.addCustomMessageHandler('disableExtraordinaria', function(disable) {
+    $('#tipo_eleccion[value=EXTRAORDINARIA]').prop('disabled', disable);
+    $('label[for="tipo_eleccionEXTRAORDINARIA"]').toggleClass('disabled-option', disable);
+  });
+}
 
 // ============================================================
-// RESIZE DE GRÁFICOS PLOTLY - MEJORADO PARA MÓVIL
+// RESIZE DE GRÁFICOS PLOTLY
 // ============================================================
 
-// Función centralizada para resize de Plotly
 function resizePlotlyGraphs(selector) {
   var $plots = selector ? $(selector) : $('.plotly, .js-plotly-plot');
   
@@ -77,13 +77,11 @@ function resizePlotlyGraphs(selector) {
   });
 }
 
-// Forzar resize de gráficos de Plotly para mantener responsividad
 $(document).on('shiny:connected', function() {
   setTimeout(function() {
     resizePlotlyGraphs();
   }, 1000);
   
-  // Detectar cambios de tab y forzar resize
   $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
     setTimeout(function() {
       resizePlotlyGraphs('.tab-pane.active .plotly, .tab-pane.active .js-plotly-plot');
@@ -91,7 +89,6 @@ $(document).on('shiny:connected', function() {
   });
 });
 
-// Resize cuando cambia el tamaño de la ventana
 $(window).on('resize', function() {
   clearTimeout(window.resizeTimer);
   window.resizeTimer = setTimeout(function() {
@@ -99,38 +96,24 @@ $(window).on('resize', function() {
   }, 250);
 });
 
-// Resize cuando cambia la orientación del dispositivo
 $(window).on('orientationchange', function() {
   setTimeout(function() {
     resizePlotlyGraphs();
   }, 500);
 });
 
-// Forzar resize específico cuando se renderiza un nuevo gráfico
-$(document).on('shiny:value', function(event) {
-  if (event.name && (event.name.includes('grafico') || event.name.includes('plot'))) {
-    setTimeout(function() {
-      var targetId = '#' + event.name.replace(/:/g, '-');
-      resizePlotlyGraphs(targetId);
-    }, 500);
-  }
-});
-
 // ============================================================
 // MEJORAS PARA TOUCH EN MÓVIL
 // ============================================================
 
-// Detectar si es dispositivo touch
 function isTouchDevice() {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
-// Detectar si es móvil
 function isMobileView() {
   return window.innerWidth <= 768;
 }
 
-// Mejorar interacción táctil con selectize
 $(document).on('shiny:connected', function() {
   if (isTouchDevice()) {
     $('body').addClass('touch-device');
@@ -162,133 +145,338 @@ if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
 }
 
 // ============================================================
-// ✅ v2.3: AJUSTE DINÁMICO DE PLOTLY PARA MÓVIL
-// Ajusta posición de "Fuente" y tamaño de texto de alcance
+// ✅ v2.7: AJUSTE COMPLETO DE PLOTLY PARA MÓVIL (POST-RENDER)
+// Esta es la función principal que hace TODO el trabajo
 // ============================================================
 
 function adjustPlotlyForMobile() {
   if (!isMobileView()) {
-    return; // No hacer nada en desktop
+    console.log('🖥️ [JS] Vista desktop detectada, sin ajustes móviles');
+    return;
   }
+  
+  console.log('📱 [JS v2.7] Ajustando gráficas para móvil (width=' + window.innerWidth + 'px)');
   
   $('.plotly, .js-plotly-plot').each(function() {
     var plotlyDiv = this;
-    if (plotlyDiv && typeof Plotly !== 'undefined' && plotlyDiv.layout) {
-      try {
-        // ========== CONTAR NÚMERO DE TRAZAS ==========
-        var numTrazas = 0;
-        if (plotlyDiv.data && Array.isArray(plotlyDiv.data)) {
-          numTrazas = plotlyDiv.data.length;
-        }
-        
-        // ========== DETERMINAR POSICIÓN Y DE "FUENTE" ==========
-        // 4+ trazas: y = -0.60 (más espacio para leyendas en 2 líneas)
-        // 2-3 trazas: y = -0.40 (espaciado normal)
-        var fuenteYPosition = numTrazas >= 4 ? -0.60 : -0.40;
-        
-        // ========== AJUSTAR ANNOTATIONS ==========
-        if (plotlyDiv.layout.annotations && Array.isArray(plotlyDiv.layout.annotations)) {
-          var newAnnotations = [];
-          
-          plotlyDiv.layout.annotations.forEach(function(ann, index) {
-            var updatedAnn = Object.assign({}, ann);
-            
-            // Detectar annotation de "Fuente" por su contenido
-            if (ann.text && ann.text.includes('Fuente:')) {
-              updatedAnn.y = fuenteYPosition;
-              console.log('📊 Ajustando Fuente a y=' + fuenteYPosition + ' (trazas: ' + numTrazas + ')');
-            }
-            
-            // Detectar annotation de alcance (texto del filtro) y aumentar tamaño
-            // El texto de alcance está en y = 1.12 y contiene "Estado:" o "Entidad:" o similar
-            if (ann.y === 1.12 || (ann.text && (
-                ann.text.includes('Estado:') || 
-                ann.text.includes('Entidad:') || 
-                ann.text.includes('Nacional') ||
-                ann.text.includes('Distrito:') ||
-                ann.text.includes('Municipio:')
-            ))) {
-              // Aumentar 2px el tamaño del texto (de 13 a 15)
-              if (ann.font) {
-                updatedAnn.font = Object.assign({}, ann.font, { size: 15 });
-              } else {
-                updatedAnn.font = { size: 15 };
-              }
-            }
-            
-            newAnnotations.push(updatedAnn);
-          });
-          
-          // Aplicar cambios usando Plotly.relayout
-          Plotly.relayout(plotlyDiv, {
-            'annotations': newAnnotations,
-            'title.font.size': 12,
-            'xaxis.tickfont.size': 8,
-            'yaxis.tickfont.size': 8,
-            'legend.font.size': 7,
-            'margin.t': 80,
-            'margin.b': 140,
-            'margin.l': 50,
-            'margin.r': 20
-          });
-        } else {
-          // Si no hay annotations, solo ajustar otros parámetros
-          Plotly.relayout(plotlyDiv, {
-            'title.font.size': 12,
-            'xaxis.tickfont.size': 8,
-            'yaxis.tickfont.size': 8,
-            'legend.font.size': 7,
-            'margin.t': 80,
-            'margin.b': 140,
-            'margin.l': 50,
-            'margin.r': 20
-          });
-        }
-        
-      } catch(e) {
-        console.log('Error ajustando Plotly para móvil:', e);
+    if (!plotlyDiv || typeof Plotly === 'undefined' || !plotlyDiv.layout) {
+      return;
+    }
+    
+    try {
+      var numTrazas = 0;
+      if (plotlyDiv.data && Array.isArray(plotlyDiv.data)) {
+        numTrazas = plotlyDiv.data.length;
       }
+      
+      // Posición de Fuente según número de trazas
+      var fuenteYPosition = numTrazas >= 4 ? -0.60 : -0.40;
+      
+      if (!plotlyDiv.layout.annotations || !Array.isArray(plotlyDiv.layout.annotations)) {
+        // Sin annotations, solo ajustar layout general
+        Plotly.relayout(plotlyDiv, {
+          'title.font.size': 12,
+          'xaxis.tickfont.size': 8,
+          'yaxis.tickfont.size': 8,
+          'legend.font.size': 7,
+          'margin.t': 85,
+          'margin.b': 140,
+          'margin.l': 50,
+          'margin.r': 20
+        });
+        return;
+      }
+      
+      var newAnnotations = [];
+      var hasChanges = false;
+      
+      for (var i = 0; i < plotlyDiv.layout.annotations.length; i++) {
+        var ann = plotlyDiv.layout.annotations[i];
+        var updatedAnn = JSON.parse(JSON.stringify(ann)); // Deep clone
+        
+        // =====================================================
+        // 1. AJUSTAR TEXTO "FUENTE"
+        // =====================================================
+        if (ann.text && ann.text.indexOf('Fuente:') !== -1) {
+          if (updatedAnn.y !== fuenteYPosition) {
+            updatedAnn.y = fuenteYPosition;
+            hasChanges = true;
+            console.log('   📊 Fuente ajustada a y=' + fuenteYPosition);
+          }
+        }
+        
+        // =====================================================
+        // 2. AJUSTAR TEXTO DE ALCANCE (subir ~20px)
+        // =====================================================
+        if (ann.text && (
+            ann.text.indexOf('Estado:') !== -1 || 
+            ann.text.indexOf('Entidad:') !== -1 || 
+            ann.text.indexOf('Distrito:') !== -1 ||
+            ann.text.indexOf('Municipio:') !== -1 ||
+            ann.text.indexOf('Sección:') !== -1
+        )) {
+          // Solo si NO es la card NB
+          if (ann.text.indexOf('No Binario') === -1 && ann.text.indexOf('⚧') === -1) {
+            // Subir el texto de alcance (de ~1.12 a 1.18)
+            if (updatedAnn.y < 1.17) {
+              updatedAnn.y = 1.18;
+              hasChanges = true;
+              console.log('   📊 Texto alcance subido a y=1.18');
+            }
+            // Reducir tamaño de fuente
+            updatedAnn.font = updatedAnn.font || {};
+            updatedAnn.font.size = 11;
+          }
+        }
+        
+        // =====================================================
+        // 3. AJUSTAR CARD NB (reducir 50%, cambiar hint)
+        // =====================================================
+        if (ann.text && (ann.text.indexOf('No Binario') !== -1 || ann.text.indexOf('⚧') !== -1)) {
+          console.log('   🎯 Card NB detectada, aplicando ajustes móviles...');
+          
+          // 3.1 Cambiar hint de "Hover" a "Clic"
+          if (updatedAnn.text.indexOf('Hover para desglose') !== -1) {
+            updatedAnn.text = updatedAnn.text.replace(/Hover para desglose/g, 'Clic para desglose');
+            hasChanges = true;
+            console.log('      ✅ Hint cambiado a "Clic para desglose"');
+          }
+          
+          // 3.2 Reducir tamaños de fuente (de desktop a móvil)
+          // Desktop: 14px, 12px, 11px, 10px, 9px
+          // Móvil:   8px,  7px,  6px,  6px,  5px
+          updatedAnn.text = updatedAnn.text
+            .replace(/font-size:\s*14px/g, 'font-size:8px')
+            .replace(/font-size:\s*12px/g, 'font-size:7px')
+            .replace(/font-size:\s*11px/g, 'font-size:6px')
+            .replace(/font-size:\s*10px/g, 'font-size:6px')
+            .replace(/font-size:\s*9px/g, 'font-size:5px');
+          
+          // 3.3 Agregar line-height 1.5 a cada span (si no existe)
+          if (updatedAnn.text.indexOf('line-height') === -1) {
+            updatedAnn.text = updatedAnn.text.replace(/<span style='/g, "<span style='line-height:1.5; ");
+          }
+          
+          // 3.4 Acortar etiquetas
+          updatedAnn.text = updatedAnn.text
+            .replace(/Padrón Nacional/g, 'Padrón Nac.')
+            .replace(/Lista Nacional/g, 'Lista Nac.')
+            .replace(/Padrón Extranjero/g, 'Padrón Ext.')
+            .replace(/Lista Extranjero/g, 'Lista Ext.');
+          
+          // 3.5 Reducir padding y borde
+          updatedAnn.borderpad = 2;
+          updatedAnn.borderwidth = 1;
+          
+          // 3.6 Mover a esquina superior izquierda
+          updatedAnn.x = 0.02;
+          updatedAnn.y = 0.98;
+          updatedAnn.xanchor = 'left';
+          updatedAnn.yanchor = 'top';
+          
+          hasChanges = true;
+          console.log('      ✅ Card NB compactada para móvil');
+        }
+        
+        newAnnotations.push(updatedAnn);
+      }
+      
+      // Aplicar cambios si los hubo
+      if (hasChanges) {
+        Plotly.relayout(plotlyDiv, {
+          'annotations': newAnnotations,
+          'title.font.size': 12,
+          'xaxis.tickfont.size': 8,
+          'yaxis.tickfont.size': 8,
+          'legend.font.size': 7,
+          'margin.t': 85,
+          'margin.b': 140,
+          'margin.l': 50,
+          'margin.r': 20
+        });
+        console.log('✅ [JS v2.7] Gráfica ajustada para móvil');
+      }
+      
+    } catch(e) {
+      console.log('❌ [JS] Error ajustando Plotly para móvil:', e);
     }
   });
+}
+
+// ============================================================
+// SIMULAR HOVER EN MÓVIL PARA CARD NB (TOOLTIP)
+// ============================================================
+
+var nbTooltipActive = false;
+var activeNBAnnotation = null;
+
+function isNBCardElement(element) {
+  if (!element) return false;
+  var text = element.textContent || element.innerText || '';
+  return text.indexOf('No Binario') !== -1 || 
+         text.indexOf('⚧') !== -1 || 
+         text.indexOf('Clic para desglose') !== -1;
+}
+
+function setupMobileNBTooltip() {
+  if (!isMobileView()) return;
+  
+  $(document).off('click.nbtooltip touchend.nbtooltip');
+  
+  $(document).on('click.nbtooltip touchend.nbtooltip', '.plotly, .js-plotly-plot', function(e) {
+    if (!isMobileView()) return;
+    
+    var target = e.target;
+    var $target = $(target);
+    var plotlyDiv = this;
+    
+    var $annotation = $target.closest('.annotation');
+    
+    if ($annotation.length > 0 && isNBCardElement($annotation[0])) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      console.log('✅ [NB Mobile] Clic en card NB detectado');
+      
+      if (nbTooltipActive && activeNBAnnotation === $annotation[0]) {
+        hideNBTooltip(plotlyDiv);
+      } else {
+        showNBTooltip(plotlyDiv, $annotation[0]);
+      }
+      
+      return false;
+    }
+  });
+  
+  $(document).on('click.nbclose touchend.nbclose', function(e) {
+    if (!nbTooltipActive) return;
+    
+    var $target = $(e.target);
+    
+    if ($target.closest('.hoverlayer').length > 0) {
+      return;
+    }
+    
+    var $annotation = $target.closest('.annotation');
+    if ($annotation.length > 0 && isNBCardElement($annotation[0])) {
+      return;
+    }
+    
+    hideAllNBTooltips();
+  });
+  
+  console.log('✅ [NB Mobile] Handler de tooltip configurado');
+}
+
+function showNBTooltip(plotlyDiv, annotationElement) {
+  try {
+    var rect = annotationElement.getBoundingClientRect();
+    
+    var hoverEvent = new MouseEvent('mouseover', {
+      bubbles: true,
+      cancelable: true,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2
+    });
+    
+    annotationElement.dispatchEvent(hoverEvent);
+    
+    nbTooltipActive = true;
+    activeNBAnnotation = annotationElement;
+    
+    $(annotationElement).addClass('nb-tooltip-active');
+    
+    console.log('✅ [NB Mobile] Tooltip mostrado');
+    
+  } catch (e) {
+    console.log('⚠️ [NB Mobile] Error mostrando tooltip:', e);
+  }
+}
+
+function hideNBTooltip(plotlyDiv) {
+  try {
+    if (activeNBAnnotation) {
+      var mouseoutEvent = new MouseEvent('mouseout', {
+        bubbles: true,
+        cancelable: true
+      });
+      
+      activeNBAnnotation.dispatchEvent(mouseoutEvent);
+      $(activeNBAnnotation).removeClass('nb-tooltip-active');
+    }
+    
+    if (plotlyDiv && typeof Plotly !== 'undefined') {
+      Plotly.Fx.hover(plotlyDiv, []);
+    }
+    
+    nbTooltipActive = false;
+    activeNBAnnotation = null;
+    
+  } catch (e) {
+    console.log('⚠️ [NB Mobile] Error ocultando tooltip:', e);
+  }
+}
+
+function hideAllNBTooltips() {
+  $('.plotly, .js-plotly-plot').each(function() {
+    hideNBTooltip(this);
+  });
+  
+  $('.annotation.nb-tooltip-active').removeClass('nb-tooltip-active');
+  
+  nbTooltipActive = false;
+  activeNBAnnotation = null;
 }
 
 // ============================================================
 // EJECUTAR AJUSTES EN DIFERENTES MOMENTOS
 // ============================================================
 
-// Ejecutar ajuste después de que se rendericen las gráficas
+// Cuando Shiny renderiza una gráfica
 $(document).on('shiny:value', function(event) {
-  if (event.name && (event.name.includes('grafico') || event.name.includes('plot'))) {
-    // Múltiples intentos para asegurar que el gráfico esté completamente renderizado
+  if (event.name && (event.name.indexOf('grafico') !== -1 || event.name.indexOf('plot') !== -1)) {
+    console.log('📊 [JS] Gráfica renderizada: ' + event.name);
+    // Múltiples intentos para asegurar que se apliquen
     setTimeout(adjustPlotlyForMobile, 300);
     setTimeout(adjustPlotlyForMobile, 600);
     setTimeout(adjustPlotlyForMobile, 1000);
+    setTimeout(adjustPlotlyForMobile, 1500);
+    setTimeout(adjustPlotlyForMobile, 2500);
   }
 });
 
-// También ejecutar al cambiar de tab
+// Al cambiar de pestaña
 $(document).on('shown.bs.tab', function() {
-  setTimeout(adjustPlotlyForMobile, 300);
-  setTimeout(adjustPlotlyForMobile, 600);
+  setTimeout(adjustPlotlyForMobile, 400);
+  setTimeout(adjustPlotlyForMobile, 800);
+  hideAllNBTooltips();
 });
 
-// Ejecutar al redimensionar ventana
+// Al redimensionar
 $(window).on('resize', function() {
   clearTimeout(window.adjustTimer);
   window.adjustTimer = setTimeout(function() {
     adjustPlotlyForMobile();
   }, 300);
+  hideAllNBTooltips();
 });
 
-// Ejecutar al cargar página
+// Al cargar el documento
 $(document).ready(function() {
-  setTimeout(adjustPlotlyForMobile, 1500);
-  setTimeout(adjustPlotlyForMobile, 3000);
-});
-
-// Ejecutar cuando Shiny esté conectado
-$(document).on('shiny:connected', function() {
+  setupMobileNBTooltip();
   setTimeout(adjustPlotlyForMobile, 2000);
+  setTimeout(adjustPlotlyForMobile, 3500);
+  setTimeout(adjustPlotlyForMobile, 5000);
 });
 
-console.log('✅ custom.js v2.3 cargado (ajuste dinámico de Fuente y alcance para mobile)');
+// Cuando Shiny se conecta
+$(document).on('shiny:connected', function() {
+  setTimeout(adjustPlotlyForMobile, 2500);
+  setTimeout(adjustPlotlyForMobile, 4000);
+  setTimeout(adjustPlotlyForMobile, 6000);
+});
+
+console.log('✅ custom.js v2.7 cargado - SOLUCIÓN DEFINITIVA');
+console.log('   ✅ Ajustes via JavaScript post-render (no depende de R)');
+console.log('   ✅ Card NB: hint, tamaños, posición ajustados en móvil');
+console.log('   ✅ Texto alcance: subido a y=1.18 en móvil');

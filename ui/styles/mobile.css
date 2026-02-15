@@ -1,10 +1,9 @@
 /* ui/styles/mobile.css */
-/* Versión: 3.5 - Mejoras visuales en sidebar derecho (Análisis) */
+/* Versión: 3.9 - Card NB compacta rectangular para móvil */
 /* Viewport de referencia: iPhone 13 Pro (390x844) */
-/* Cambios v3.5:
-   - Sidebar derecho: encabezados en color azul de marca (#006988)
-   - Sidebar derecho: texto de análisis reducido 2 puntos
-   - Sidebar derecho: margen izquierdo aumentado para mejor espaciado
+/* Cambios v3.9:
+   - Estilos para card NB activa (tooltip visible)
+   - Sin popup separado - reutiliza tooltip de Plotly
 */
 
 @media screen and (max-width: 768px) {
@@ -1054,4 +1053,27 @@
   * {
     -webkit-overflow-scrolling: touch;
   }
+
+  /* ============================================================
+     ✅ v3.9: ESTILOS PARA CARD NB ACTIVA (TOOLTIP VISIBLE)
+     ============================================================ */
+
+  /* Indicador visual cuando la card NB está activa */
+  .annotation.nb-tooltip-active {
+    filter: brightness(0.95);
+  }
+
+  .annotation.nb-tooltip-active rect {
+    stroke-width: 2px !important;
+  }
+
+  /* Asegurar que el cursor sea pointer en la card NB */
+  .plotly .annotation {
+    cursor: default;
+  }
+
+  .plotly .annotation:has(text) {
+    cursor: pointer;
+  }
+
 }

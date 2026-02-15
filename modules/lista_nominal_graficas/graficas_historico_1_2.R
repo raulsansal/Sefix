@@ -1,22 +1,21 @@
 # modules/lista_nominal_graficas/graficas_historico_1_2.R
 # Gráficas históricas 1 y 2: Proyección mensual y Evolución anual
-# Versión: 2.14 - Posición Fuente restaurada para desktop (y=-0.35)
-# Cambios v2.14:
+# Versión: 2.15 - Texto alcance reposicionado (y=1.15)
+# Cambios v2.15:
+#   - Texto de alcance subido 20px (y=1.15 en lugar de y=1.12)
 #   - Gráfica 1 (4 trazas): Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile
 #   - Gráfica 2 (2 trazas): Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile
-#   - La lógica de ajuste móvil se maneja en custom.js
 
 graficas_historico_1_2 <- function(input, output, session, datos_year_actual, datos_anuales_completos, 
                                    anio_actual, texto_alcance, estado_app, mostrar_graficas_anuales, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_historico_1_2 v2.14")
+  message("📊 Inicializando graficas_historico_1_2 v2.15")
   
   # ========== GRÁFICA 1: EVOLUCIÓN MENSUAL AÑO ACTUAL + PROYECCIÓN ==========
   
   output$grafico_evolucion_2025 <- renderPlotly({
     req(input$tipo_corte == "historico")
     
-    # ✅ v2.7: Usar ambito_reactivo en lugar de input$ambito_datos
     ambito_actual <- ambito_reactivo()
     
     # ========== NO RENDERIZAR EN ESTADO INICIAL ==========
@@ -64,7 +63,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
                ))
     }
     
-    # Obtener año de los datos (del último registro disponible)
+    # Obtener año de los datos
     year_datos <- format(max(datos_completos$fecha), "%Y")
     
     # Calcular meses restantes hasta diciembre
@@ -120,7 +119,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       
       # Proyecciones
       if (!is.null(proyeccion)) {
-        # Proyección Padrón
         p <- p %>% add_trace(
           data = proyeccion,
           x = ~fecha,
@@ -135,7 +133,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
           )
         )
         
-        # Proyección Lista
         p <- p %>% add_trace(
           data = proyeccion,
           x = ~fecha,
@@ -163,11 +160,11 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       etiquetas_meses <- format(fechas_completas_eje, "%b")
       
       # ========== PREPARAR ANNOTATIONS ==========
-      # ✅ v2.14: Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile para 4 trazas
+      # ✅ v2.15: Texto alcance en y = 1.15 (subido 20px)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
-          x = 0.5, y = 1.12,
+          x = 0.5, y = 1.15,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -185,7 +182,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # Layout con eje X corregido
+      # Layout
       p <- p %>% layout(
         title = list(
           text = paste0("Proyección ", year_datos, " - Padrón y LNE Nacional"),
@@ -224,7 +221,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
       
-      # Reemplazar NA con 0 para graficar
       datos_extranjero <- datos_completos
       if ("padron_extranjero" %in% colnames(datos_extranjero)) {
         datos_extranjero$padron_extranjero[is.na(datos_extranjero$padron_extranjero)] <- 0
@@ -238,7 +234,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         datos_extranjero$lista_extranjero <- 0
       }
       
-      # Proyectar usando columnas extranjero
+      # Proyectar
       proyeccion <- NULL
       if (meses_restantes > 0) {
         datos_para_proyeccion <- datos_extranjero
@@ -250,7 +246,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       # Crear gráfico
       p <- plot_ly()
       
-      # 1. Padrón Extranjero
       p <- p %>% add_trace(
         data = datos_extranjero,
         x = ~fecha,
@@ -266,7 +261,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # 2. Lista Extranjero
       p <- p %>% add_trace(
         data = datos_extranjero,
         x = ~fecha,
@@ -282,9 +276,7 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # Proyecciones
       if (!is.null(proyeccion)) {
-        # Proyección Padrón
         p <- p %>% add_trace(
           data = proyeccion,
           x = ~fecha,
@@ -299,7 +291,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
           )
         )
         
-        # Proyección Lista
         p <- p %>% add_trace(
           data = proyeccion,
           x = ~fecha,
@@ -315,7 +306,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       }
       
-      # ========== CONFIGURACIÓN DEL EJE X ==========
       fechas_reales <- datos_extranjero$fecha
       
       if (!is.null(proyeccion) && nrow(proyeccion) > 0) {
@@ -326,12 +316,11 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       
       etiquetas_meses <- format(fechas_completas_eje, "%b")
       
-      # ========== PREPARAR ANNOTATIONS ==========
-      # ✅ v2.14: Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile para 4 trazas
+      # ✅ v2.15: Texto alcance en y = 1.15 (subido 20px)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
-          x = 0.5, y = 1.12,
+          x = 0.5, y = 1.15,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -349,7 +338,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # Layout con eje X corregido
       p <- p %>% layout(
         title = list(
           text = paste0("Proyección ", year_datos, " - Padrón y LNE de Residentes en el Extranjero"),
@@ -420,7 +408,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
                ))
     }
     
-    # ========== CONTROL DE RENDERIZADO ==========
     if (!mostrar_graficas_anuales()) {
       return(NULL)
     }
@@ -429,7 +416,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     
     message("📊 [GRÁFICA 2] Renderizando - Estado: ", estado_app(), " | Ámbito: ", ambito_actual)
     
-    # ========== SIN DATOS DISPONIBLES ==========
     if (is.null(datos_anuales) || !is.data.frame(datos_anuales) || nrow(datos_anuales) == 0) {
       return(plot_ly() %>%
                layout(
@@ -452,7 +438,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       
       p <- plot_ly()
       
-      # 1. Padrón Nacional
       p <- p %>% add_trace(
         data = datos_anuales,
         x = ~año,
@@ -468,7 +453,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # 2. Lista Nacional
       p <- p %>% add_trace(
         data = datos_anuales,
         x = ~año,
@@ -484,12 +468,11 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # ========== PREPARAR ANNOTATIONS ==========
-      # ✅ v2.14: Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile para 2 trazas
+      # ✅ v2.15: Texto alcance en y = 1.15 (subido 20px)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
-          x = 0.5, y = 1.12,
+          x = 0.5, y = 1.15,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -507,7 +490,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # Layout
       p <- p %>% layout(
         title = list(
           text = paste0("Evolución Anual (2017-", anio_actual(), ") - Padrón y LNE Nacional"),
@@ -529,7 +511,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     } else {
       # ========== GRÁFICA EXTRANJERO ==========
       
-      # Reemplazar NA con 0 para graficar
       datos_extranjero <- datos_anuales
       if ("padron_extranjero" %in% colnames(datos_extranjero)) {
         datos_extranjero$padron_extranjero[is.na(datos_extranjero$padron_extranjero)] <- 0
@@ -545,7 +526,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
       
       p <- plot_ly()
       
-      # 1. Padrón Extranjero
       p <- p %>% add_trace(
         data = datos_extranjero,
         x = ~año,
@@ -561,7 +541,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # 2. Lista Extranjero
       p <- p %>% add_trace(
         data = datos_extranjero,
         x = ~año,
@@ -577,12 +556,11 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # ========== PREPARAR ANNOTATIONS ==========
-      # ✅ v2.14: Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile para 2 trazas
+      # ✅ v2.15: Texto alcance en y = 1.15 (subido 20px)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
-          x = 0.5, y = 1.12,
+          x = 0.5, y = 1.15,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -600,7 +578,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
         )
       )
       
-      # Layout
       p <- p %>% layout(
         title = list(
           text = paste0("Evolución Anual (2017-", anio_actual(), ") - Residentes en el Extranjero"),
@@ -721,8 +698,6 @@ graficas_historico_1_2 <- function(input, output, session, datos_year_actual, da
     ))
   })
   
-  message("✅ graficas_historico_1_2 v2.14 inicializado")
-  message("   ✅ v2.14: Fuente en y=-0.35 para desktop (todas las gráficas)")
-  message("   ✅ v2.14: JS ajusta a y=-0.60 en mobile para gráficas con 4 trazas")
-  message("   ✅ v2.14: JS ajusta a y=-0.40 en mobile para gráficas con 2 trazas")
+  message("✅ graficas_historico_1_2 v2.15 inicializado")
+  message("   ✅ v2.15: Texto alcance en y=1.15 (subido 20px)")
 }

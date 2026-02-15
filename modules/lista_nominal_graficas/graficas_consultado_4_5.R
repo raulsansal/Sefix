@@ -1,14 +1,14 @@
 # modules/lista_nominal_graficas/graficas_consultado_4_5.R
 # Gráficas 4 y 5: Evolución mensual del año consultado (con y sin desglose por sexo)
-# Versión: 2.1 - Posición Fuente en y=-0.35 para desktop (JS ajusta en mobile)
-# Cambios v2.1:
-#   - Gráfica 4 (2 trazas): Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile
-#   - Gráfica 5 (4 trazas): Fuente en y = -0.35 (desktop) - JS ajusta a -0.60 en mobile
+# Versión: 2.3 - Texto alcance reposicionado (y=1.15) + screen_width robusto
+# Cambios v2.3:
+#   - Texto de alcance subido 20px (y=1.15 en lugar de y=1.12)
+#   - screen_width se obtiene de forma más robusta
 
 graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta, 
                                     anio_consultado, texto_alcance, estado_app, mostrar_graficas_consultadas, ambito_reactivo) {
   
-  message("📊 Inicializando graficas_consultado_4_5 v2.1")
+  message("📊 Inicializando graficas_consultado_4_5 v2.3")
   
   # ========== GRÁFICA 4: EVOLUCIÓN MENSUAL DEL AÑO SELECCIONADO ==========
   
@@ -83,11 +83,11 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       etiquetas_meses <- format(fechas_datos, "%b")
       
       # ========== PREPARAR ANNOTATIONS ==========
-      # ✅ v2.1: Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile para 2 trazas
+      # ✅ v2.3: Texto alcance en y = 1.15 (subido 20px)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
-          x = 0.5, y = 1.12,
+          x = 0.5, y = 1.15,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -196,11 +196,11 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       etiquetas_meses <- format(fechas_extranjero, "%b")
       
       # ========== PREPARAR ANNOTATIONS ==========
-      # ✅ v2.1: Fuente en y = -0.35 (desktop) - JS ajusta a -0.40 en mobile para 2 trazas
+      # ✅ v2.3: Texto alcance en y = 1.15 (subido 20px)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
-          x = 0.5, y = 1.12,
+          x = 0.5, y = 1.15,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -381,11 +381,11 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       etiquetas_meses <- format(fechas_datos, "%b")
       
       # ========== PREPARAR ANNOTATIONS ==========
-      # ✅ v2.1: Fuente en y = -0.45desktop) - JS ajusta a -0.60 en mobile para 4 trazas
+      # ✅ v2.3: Texto alcance en y = 1.15 (subido 20px)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
-          x = 0.5, y = 1.12,
+          x = 0.5, y = 1.15,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -394,7 +394,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.45,
+          x = 0.5, y = -0.35,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -404,7 +404,10 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       )
       
       # Card NB SÍ aplica en gráfica 5 (CON desglose por sexo)
-      card_nb <- crear_card_no_binario(datos_completos, ambito = "nacional", tipo_periodo = "mensual", año_consultado = year_datos)
+      # ✅ v2.3: Obtener screen_width de forma robusta
+      screen_w <- isolate(input$screen_width)
+      message("📱 [GRÁFICA 5] screen_width recibido: ", if(is.null(screen_w)) "NULL" else screen_w)
+      card_nb <- crear_card_no_binario(datos_completos, ambito = "nacional", tipo_periodo = "mensual", año_consultado = year_datos, screen_width = screen_w)
       if (!is.null(card_nb)) {
         annotations_list[[length(annotations_list) + 1]] <- card_nb
       }
@@ -565,11 +568,11 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       etiquetas_meses <- format(fechas_extranjero, "%b")
       
       # ========== PREPARAR ANNOTATIONS ==========
-      # ✅ v2.1: Fuente en y = -0.345(desktop) - JS ajusta a -0.60 en mobile para 4 trazas
+      # ✅ v2.3: Texto alcance en y = 1.15 (subido 20px)
       annotations_list <- list(
         list(
           text = isolate(texto_alcance()),
-          x = 0.5, y = 1.12,
+          x = 0.5, y = 1.15,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -578,7 +581,7 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
         ),
         list(
           text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-          x = 0.5, y = -0.45,
+          x = 0.5, y = -0.35,
           xref = "paper", yref = "paper",
           xanchor = "center", yanchor = "top",
           showarrow = FALSE,
@@ -588,7 +591,10 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       )
       
       # Card NB SÍ aplica en gráfica 5 (CON desglose por sexo)
-      card_nb <- crear_card_no_binario(datos_extranjero, ambito = "extranjero", tipo_periodo = "mensual", año_consultado = year_datos)
+      # ✅ v2.3: Obtener screen_width de forma robusta
+      screen_w <- isolate(input$screen_width)
+      message("📱 [GRÁFICA 5 EXT] screen_width recibido: ", if(is.null(screen_w)) "NULL" else screen_w)
+      card_nb <- crear_card_no_binario(datos_extranjero, ambito = "extranjero", tipo_periodo = "mensual", año_consultado = year_datos, screen_width = screen_w)
       if (!is.null(card_nb)) {
         annotations_list[[length(annotations_list) + 1]] <- card_nb
       }
@@ -634,8 +640,6 @@ graficas_consultado_4_5 <- function(input, output, session, datos_year_consulta,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_consultado_4_5 v2.1 inicializado")
-  message("   ✅ v2.1: Fuente en y=-0.35 para desktop (todas las gráficas)")
-  message("   ✅ v2.1: JS ajusta a y=-0.40 en mobile para gráficas con 2 trazas")
-  message("   ✅ v2.1: JS ajusta a y=-0.60 en mobile para gráficas con 4 trazas")
+  message("✅ graficas_consultado_4_5 v2.3 inicializado")
+  message("   ✅ v2.3: Texto alcance en y=1.15 (subido 20px)")
 }
