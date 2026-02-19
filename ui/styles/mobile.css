@@ -1,9 +1,10 @@
 /* ui/styles/mobile.css */
-/* Versión: 3.9 - Card NB compacta rectangular para móvil */
+/* Versión: 3.17 - Fix correcto para Mostrar/Buscar (estructura real sin .row) */
 /* Viewport de referencia: iPhone 13 Pro (390x844) */
-/* Cambios v3.9:
-   - Estilos para card NB activa (tooltip visible)
-   - Sin popup separado - reutiliza tooltip de Plotly
+/* Cambios v3.17:
+   - FIX: La estructura real NO tiene .row, los elementos son hijos directos del wrapper
+   - Aplicar flexbox a .dataTables_wrapper con flex-wrap: wrap
+   - Usar order para posicionar elementos
 */
 
 @media screen and (max-width: 768px) {
@@ -19,7 +20,6 @@
     --mobile-color-primary: #006988;
     --mobile-color-secondary: #155671;
     --mobile-color-accent: #004062;
-    /* v3.4: Variables para radio buttons */
     --radio-size: 18px;
     --radio-spacing: 10px;
   }
@@ -137,6 +137,7 @@
     z-index: 2000;
     padding: var(--mobile-spacing-md);
     padding-top: 55px;
+    padding-left: 20px !important;
   }
   
   .sidebar-right.mobile-open {
@@ -152,7 +153,7 @@
   }
   
   /* ============================================================
-     ✅ v3.4: OVERLAY OSCURO - COMPLETAMENTE REESCRITO
+     OVERLAY OSCURO
      ============================================================ */
   
   .mobile-overlay {
@@ -168,7 +169,6 @@
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.3s ease, visibility 0.3s ease;
-    /* ✅ CRÍTICO: Permitir clicks cuando está activo */
     pointer-events: none;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
@@ -177,7 +177,6 @@
   .mobile-overlay.active {
     opacity: 1 !important;
     visibility: visible !important;
-    /* ✅ CRÍTICO: Habilitar clicks cuando está activo */
     pointer-events: auto !important;
   }
   
@@ -522,7 +521,7 @@
   }
 
   /* ============================================================
-     DATATABLE
+     ✅ v3.14: DATATABLE - SECCIÓN PRINCIPAL
      ============================================================ */
 
   .datatable-section {
@@ -531,13 +530,11 @@
     margin-top: clamp(15px, 4vh, 25px) !important;
   }
 
+  /* TÍTULO "TABLA DE DATOS" - VISIBLE CUANDO HAY DATOS */
   .datatable-section h3,
   .datatable-section h3.datatable-title,
-  .datatable-section > h3,
   h3.datatable-title {
     display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
     font-size: clamp(1rem, 4vw, 1.2rem) !important;
     font-weight: 600 !important;
     text-align: center !important;
@@ -546,153 +543,230 @@
     color: #333 !important;
   }
 
-  .datatable-section:has(.dataTables_wrapper table tbody tr) h3,
-  .datatable-section:has(.dataTables_wrapper table tbody tr) h3.datatable-title,
-  .dataTables_wrapper:not(:empty) ~ h3,
-  .datatable-section:has(.dataTable) h3 {
+  .datatable-section:has(.dataTables_wrapper table.dataTable tbody tr td:not(:only-child)) h3,
+  .datatable-section:has(.dataTables_wrapper table.dataTable tbody tr td:not(:only-child)) h3.datatable-title {
     display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
   }
 
-  .dataTables_wrapper + h3.datatable-title,
-  .dataTables_wrapper ~ h3.datatable-title {
-    display: none !important;
+  /* ENCABEZADO ÁMBITO/ALCANCE - DIV SEPARADO */
+  .datatable-header {
+    margin-bottom: 10px !important;
   }
+
+  .datatable-header-content {
+    text-align: center !important;
+    padding: 8px 10px !important;
+    background-color: #f8f9fa !important;
+    border-radius: 6px !important;
+    border: 1px solid #e9ecef !important;
+  }
+
+  .datatable-header-content > div:first-child {
+    font-size: clamp(12px, 3.2vw, 14px) !important;
+    font-weight: 700 !important;
+    color: #006988 !important;
+    margin-bottom: 4px !important;
+  }
+
+  .datatable-header-content > div:last-child {
+    font-size: clamp(9px, 2.4vw, 11px) !important;
+    font-weight: 400 !important;
+    color: #555 !important;
+    line-height: 1.3 !important;
+  }
+
+  /* ============================================================
+     ✅ v3.17: DATATABLE WRAPPER - ESTRUCTURA REAL (SIN .row)
+     Los elementos .dataTables_length y .dataTables_filter son
+     HIJOS DIRECTOS del wrapper, NO están en columnas Bootstrap
+     ============================================================ */
 
   .dataTables_wrapper {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    font-size: clamp(0.7em, 2.8vw, 0.85em);
-    width: 100% !important;
-  }
-
-  .dataTables_wrapper .row:first-child,
-  .dataTables_wrapper > .row:first-of-type,
-  .dataTables_wrapper > div:first-child:has(.dataTables_length),
-  .dataTables_wrapper > div:has(.dataTables_length):has(.dataTables_filter) {
     display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    gap: clamp(8px, 2vw, 15px) !important;
-    margin-bottom: clamp(8px, 2vh, 12px) !important;
-    padding: 0 2px !important;
+    flex-wrap: wrap !important;
     width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 
-  .dataTables_wrapper .row .col-sm-6,
-  .dataTables_wrapper .row .col-sm-12,
-  .dataTables_wrapper .row [class*="col-"] {
-    width: auto !important;
-    flex: 0 0 auto !important;
-    padding: 0 !important;
-    float: none !important;
-  }
-
-  .dataTables_wrapper .dataTables_length,
-  .dataTables_length {
-    float: none !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    flex: 0 0 auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
+  /* ✅ v3.17: Primera fila - Mostrar a la izquierda, Buscar a la derecha */
+  .dataTables_wrapper > .dataTables_length {
     order: 1 !important;
-    text-align: left !important;
-    width: auto !important;
-  }
-
-  .dataTables_wrapper .dataTables_filter,
-  .dataTables_filter {
-    float: none !important;
-    display: inline-flex !important;
-    align-items: center !important;
     flex: 0 0 auto !important;
     margin: 0 !important;
-    padding: 0 !important;
-    order: 2 !important;
-    text-align: right !important;
-    width: auto !important;
+    padding: 0 5px 0 0 !important;
   }
 
-  .dataTables_wrapper .dataTables_length label,
-  .dataTables_wrapper .dataTables_filter label {
-    font-size: clamp(9px, 2.5vw, 11px) !important;
+  .dataTables_wrapper > .dataTables_filter {
+    order: 2 !important;
+    flex: 0 0 auto !important;
     margin: 0 !important;
+    margin-left: auto !important;
+    padding: 0 0 0 5px !important;
+  }
+
+  /* ✅ v3.17: Processing en su lugar */
+  .dataTables_wrapper > .dataTables_processing {
+    order: 3 !important;
+    flex: 0 0 100% !important;
+  }
+
+  /* ✅ v3.17: Tabla ocupa todo el ancho */
+  .dataTables_wrapper > table.dataTable {
+    order: 4 !important;
+    flex: 0 0 100% !important;
+    margin-top: 10px !important;
+  }
+
+  /* ✅ v3.17: Info y paginación al final */
+  .dataTables_wrapper > .dataTables_info {
+    order: 5 !important;
+    flex: 0 0 100% !important;
+  }
+
+  .dataTables_wrapper > .dataTables_paginate {
+    order: 6 !important;
+    flex: 0 0 100% !important;
+  }
+
+  /* ============================================================
+     ✅ v3.17: ESTILOS PARA MOSTRAR Y BUSCAR
+     ============================================================ */
+
+  .dataTables_wrapper .dataTables_length {
+    display: inline-flex !important;
+    align-items: center !important;
+    float: none !important;
+  }
+
+  .dataTables_wrapper .dataTables_length label {
     display: inline-flex !important;
     align-items: center !important;
     gap: 3px !important;
+    margin: 0 !important;
+    font-size: 10px !important;
+    font-weight: normal !important;
     white-space: nowrap !important;
+    color: #333 !important;
   }
 
   .dataTables_wrapper .dataTables_length select {
-    font-size: 16px !important;
+    font-size: 12px !important;
+    font-weight: normal !important;
     padding: 2px 4px !important;
-    height: auto !important;
-    min-height: 26px !important;
+    height: 24px !important;
     margin: 0 3px !important;
-    width: auto !important;
+    min-width: 45px !important;
+    border: 1px solid #ccc !important;
+    border-radius: 4px !important;
+  }
+
+  .dataTables_wrapper .dataTables_filter {
+    display: inline-flex !important;
+    align-items: center !important;
+    float: none !important;
+  }
+
+  .dataTables_wrapper .dataTables_filter label {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+    margin: 0 !important;
+    font-size: 10px !important;
+    font-weight: normal !important;
+    white-space: nowrap !important;
+    color: #333 !important;
   }
 
   .dataTables_wrapper .dataTables_filter input {
-    width: clamp(80px, 22vw, 110px) !important;
-    font-size: 16px !important;
-    padding: 3px 6px !important;
-    height: auto !important;
-    min-height: 26px !important;
+    font-size: 12px !important;
+    font-weight: normal !important;
+    padding: 2px 4px !important;
+    height: 24px !important;
+    width: 70px !important;
     margin-left: 3px !important;
+    border: 1px solid #ccc !important;
+    border-radius: 4px !important;
   }
 
+  /* OCULTAR CAPTION DEL DATATABLE */
   .dataTables_wrapper caption,
   .dataTable caption,
   table.dataTable caption {
-    caption-side: top !important;
-    text-align: left !important;
-    padding: clamp(4px, 1vh, 8px) 0 !important;
-    margin-bottom: clamp(4px, 1vh, 8px) !important;
-    font-size: clamp(8px, 2.2vw, 10px) !important;
-    color: #555 !important;
+    display: none !important;
+  }
+
+  /* ============================================================
+     ✅ v3.17: TABLA - SCROLL NATIVO, SIN SEPARACIÓN
+     ============================================================ */
+
+  .dataTables_wrapper .dataTables_scroll {
+    overflow: visible !important;
+  }
+
+  .dataTables_wrapper .dataTables_scrollHead,
+  .dataTables_wrapper .dataTables_scrollBody {
+    overflow: visible !important;
+  }
+
+  .dataTables_wrapper .dataTables_scrollHeadInner {
     width: 100% !important;
-    max-width: 100% !important;
-    display: block !important;
-    line-height: 1.2 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
   }
 
-  .dataTables_wrapper caption *,
-  .dataTable caption *,
-  table.dataTable caption * {
-    display: inline !important;
-    white-space: nowrap !important;
-  }
-
-  .dataTables_wrapper caption > div,
-  .dataTable caption > div {
-    display: inline !important;
-    white-space: nowrap !important;
-  }
-
-  .dataTables_wrapper caption > div + div::before,
-  .dataTable caption > div + div::before {
-    content: " - " !important;
-  }
-
-  .dataTables_wrapper table,
+  .dataTables_wrapper table.dataTable,
   table.dataTable {
-    min-width: 450px;
     width: 100% !important;
+    min-width: 550px !important;
+    margin: 0 !important;
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
   }
+
+  .dataTables_wrapper table.dataTable thead th,
+  table.dataTable thead th {
+    font-size: clamp(9px, 2.5vw, 11px) !important;
+    padding: 8px 6px !important;
+    white-space: nowrap !important;
+    text-align: left !important;
+    vertical-align: middle !important;
+    border-bottom: 2px solid #dee2e6 !important;
+    background-color: #f8f9fa !important;
+  }
+
+  .dataTables_wrapper table.dataTable tbody td,
+  table.dataTable tbody td {
+    font-size: clamp(9px, 2.5vw, 11px) !important;
+    padding: 8px 6px !important;
+    white-space: nowrap !important;
+    text-align: left !important;
+    vertical-align: middle !important;
+    border-bottom: 1px solid #dee2e6 !important;
+  }
+
+  .dataTables_wrapper table.dataTable thead {
+    border-collapse: collapse !important;
+  }
+
+  .dataTables_wrapper table.dataTable tbody {
+    border-collapse: collapse !important;
+  }
+
+  .dataTables_wrapper table.dataTable tbody tr:first-child td {
+    border-top: none !important;
+    padding-top: 8px !important;
+  }
+
+  /* ============================================================
+     INFO Y PAGINACIÓN
+     ============================================================ */
 
   .dataTables_wrapper .dataTables_info {
     float: none !important;
     text-align: left !important;
-    font-size: clamp(9px, 2.5vw, 11px) !important;
+    font-size: clamp(9px, 2.4vw, 11px) !important;
     margin-top: clamp(8px, 2vh, 12px) !important;
-    padding: 0 !important;
+    padding: 0 4px !important;
+    color: #666 !important;
   }
 
   .dataTables_wrapper .dataTables_paginate {
@@ -705,15 +779,14 @@
     padding: clamp(4px, 1vh, 6px) clamp(6px, 2vw, 10px) !important;
     margin: 2px !important;
     font-size: clamp(10px, 2.8vw, 12px) !important;
-    min-width: 32px !important;
-    min-height: 32px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
   }
 
   /* ============================================================
-     ✅ v3.4: RADIO BUTTONS - TAMAÑO UNIFORME Y ESPACIADO
+     RADIO BUTTONS - TAMAÑO UNIFORME Y ESPACIADO
      ============================================================ */
 
-  /* Encabezados de grupos de radio buttons - MÁS GRANDES Y EN NEGRITAS */
   .well .shiny-input-radiogroup > label,
   .well .shiny-input-container > label.control-label,
   .well > .shiny-input-container > label:first-child,
@@ -726,14 +799,12 @@
     display: block !important;
   }
 
-  /* Contenedor de opciones de radio */
   .well .shiny-options-group,
   .well .shiny-input-radiogroup .shiny-options-group,
   [class*="sidebar_panel"] .shiny-options-group {
     margin-top: 4px !important;
   }
 
-  /* Cada opción de radio (contenedor) */
   .well .radio,
   .well .shiny-input-radiogroup .radio,
   [class*="sidebar_panel"] .radio {
@@ -743,27 +814,22 @@
     align-items: center !important;
   }
 
-  /* ✅ v3.4: CÍRCULO DEL RADIO BUTTON - TAMAÑO UNIFORME */
   .well .radio input[type="radio"],
   .well .shiny-input-radiogroup input[type="radio"],
   [class*="sidebar_panel"] .radio input[type="radio"],
   .well .shiny-options-group input[type="radio"] {
-    /* Tamaño fijo uniforme */
     width: var(--radio-size) !important;
     height: var(--radio-size) !important;
     min-width: var(--radio-size) !important;
     min-height: var(--radio-size) !important;
     max-width: var(--radio-size) !important;
     max-height: var(--radio-size) !important;
-    /* Espaciado entre círculo y texto */
     margin-right: var(--radio-spacing) !important;
     margin-left: 0 !important;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    /* Asegurar que sea visible */
     opacity: 1 !important;
     position: relative !important;
-    /* Apariencia */
     -webkit-appearance: none !important;
     -moz-appearance: none !important;
     appearance: none !important;
@@ -775,7 +841,6 @@
     vertical-align: middle !important;
   }
 
-  /* Estado checked del radio button */
   .well .radio input[type="radio"]:checked,
   .well .shiny-input-radiogroup input[type="radio"]:checked,
   [class*="sidebar_panel"] .radio input[type="radio"]:checked,
@@ -784,7 +849,6 @@
     background-color: white !important;
   }
 
-  /* Punto interior cuando está seleccionado */
   .well .radio input[type="radio"]:checked::after,
   .well .shiny-input-radiogroup input[type="radio"]:checked::after,
   [class*="sidebar_panel"] .radio input[type="radio"]:checked::after,
@@ -801,7 +865,6 @@
     background-color: var(--mobile-color-primary) !important;
   }
 
-  /* ✅ v3.4: TEXTO DEL RADIO BUTTON */
   .well .radio label,
   .well .shiny-input-radiogroup .radio label,
   [class*="sidebar_panel"] .radio label,
@@ -816,7 +879,6 @@
     line-height: 1.3 !important;
   }
 
-  /* ✅ v3.4: RADIO BUTTONS INLINE (como "Ámbito de datos") */
   .well .shiny-input-radiogroup.shiny-input-container-inline .shiny-options-group,
   .well .shiny-input-container-inline .shiny-options-group,
   [class*="sidebar_panel"] .shiny-input-container-inline .shiny-options-group {
@@ -848,7 +910,6 @@
     margin-bottom: var(--mobile-spacing-sm);
   }
 
-  /* Labels de selectInput (Año, Entidad, etc.) */
   .well .shiny-input-container:not(.shiny-input-radiogroup) > label.control-label,
   [class*="sidebar_panel"] .shiny-input-container:not(.shiny-input-radiogroup) > label.control-label {
     font-size: clamp(0.85rem, 3.5vw, 0.95rem) !important;
@@ -856,7 +917,6 @@
     margin-bottom: 4px !important;
   }
 
-  /* ✅ v3.4: Textos informativos/comentarios - MÁS PEQUEÑOS */
   .well > div[style*="background-color"],
   .well div[style*="padding: 10px"],
   .well div[style*="border-radius: 5px"] {
@@ -959,15 +1019,8 @@
 
   /* ============================================================
      SIDEBAR DERECHO - CONTENIDO
-     ✅ v3.5: Color azul de marca, texto reducido, más margen izquierdo
      ============================================================ */
 
-  .sidebar-right {
-    /* ✅ v3.5: Aumentar padding izquierdo */
-    padding-left: 20px !important;
-  }
-
-  /* ✅ v3.5: Encabezados en color azul de marca */
   .sidebar-right h3 {
     font-size: clamp(1rem, 4vw, 1.2rem);
     margin-bottom: var(--mobile-spacing-sm);
@@ -983,7 +1036,6 @@
     font-weight: 600 !important;
   }
 
-  /* ✅ v3.5: Texto de análisis reducido 2 puntos */
   .sidebar-right p {
     font-size: clamp(0.7rem, 2.8vw, 0.8rem);
     margin-bottom: 6px;
@@ -1000,7 +1052,6 @@
     padding-bottom: var(--mobile-spacing-sm);
   }
 
-  /* ✅ v3.5: Estilo para listas dentro del sidebar derecho */
   .sidebar-right ul,
   .sidebar-right ol {
     font-size: clamp(0.7rem, 2.8vw, 0.8rem);
@@ -1055,10 +1106,9 @@
   }
 
   /* ============================================================
-     ✅ v3.9: ESTILOS PARA CARD NB ACTIVA (TOOLTIP VISIBLE)
+     ESTILOS PARA CARD NB ACTIVA
      ============================================================ */
 
-  /* Indicador visual cuando la card NB está activa */
   .annotation.nb-tooltip-active {
     filter: brightness(0.95);
   }
@@ -1067,7 +1117,6 @@
     stroke-width: 2px !important;
   }
 
-  /* Asegurar que el cursor sea pointer en la card NB */
   .plotly .annotation {
     cursor: default;
   }

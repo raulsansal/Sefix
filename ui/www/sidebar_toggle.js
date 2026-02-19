@@ -1,11 +1,10 @@
 // ui/www/sidebar_toggle.js
-// Versión: 3.5 - Botones contextuales por pestaña + FILTROS corregido
-// Cambios v3.5:
-//   - Botones de barra inferior cambian según pestaña activa
-//   - Lista Nominal: FILTROS, RESTABLECER, PROYECCIÓN, ANÁLISIS
-//   - Elecciones Federales: FILTROS, RESTABLECER, DESCARGAR, ANÁLISIS
-//   - FILTROS ahora funciona con namespaces específicos
-//   - Detecta cambios de pestaña via Shiny
+// Versión: 3.11 - Fix completo Mostrar/Buscar
+// Cambios v3.11:
+//   - Columnas con display:flex y justify-content para alineación correcta
+//   - Select y Input con font-size: 12px (reducido de 16px)
+//   - font-weight: normal en todos los elementos (sin negritas)
+//   - Estilos aplicados al SELECT dentro de Mostrar
 
 $(document).ready(function() {
   
@@ -54,7 +53,6 @@ $(document).ready(function() {
       projectionSelector: null,
       downloadSelector: "#federales-download_csv, [id$='federales-download_csv']"
     },
-    // Configuración por defecto para otras pestañas
     "default": {
       buttons: [
         { id: "mobile-btn-filters", icon: "⚙️", label: "Filtros", action: "filters" },
@@ -70,8 +68,141 @@ $(document).ready(function() {
     }
   };
   
-  // Pestaña activa actual
   var currentTab = "lista";
+  
+  // ============================================================
+  // ✅ v3.11: FIX DATATABLE MOSTRAR/BUSCAR EN UNA LÍNEA
+  // Enfoque: SOLO aplicar estilos, NO ocultar ni clonar nada
+  // ============================================================
+  
+  function fixDataTableControls() {
+    if (!isMobile()) return;
+    
+    // Buscar todos los wrappers de DataTable
+    $(".dataTables_wrapper").each(function() {
+      var $wrapper = $(this);
+      
+      // Buscar la primera fila .row que contiene length y filter
+      var $firstRow = $wrapper.children(".row").first();
+      
+      if ($firstRow.length === 0) {
+        // Intentar con div directo que contenga los controles
+        $wrapper.children("div").each(function() {
+          var $div = $(this);
+          if ($div.find(".dataTables_length").length > 0 && $div.find(".dataTables_filter").length > 0) {
+            $firstRow = $div;
+            return false; // break
+          }
+        });
+      }
+      
+      if ($firstRow.length === 0) return;
+      
+      // Verificar si ya tiene la clase de fix
+      if ($firstRow.hasClass("mobile-dt-controls-fixed")) return;
+      
+      // ✅ v3.11: Aplicar estilos flex a la fila contenedora
+      $firstRow.attr('style', 
+        'display: flex !important;' +
+        'flex-direction: row !important;' +
+        'flex-wrap: nowrap !important;' +
+        'justify-content: space-between !important;' +
+        'align-items: center !important;' +
+        'width: 100% !important;' +
+        'margin: 0 0 10px 0 !important;' +
+        'padding: 0 5px !important;' +
+        'box-sizing: border-box !important;'
+      ).addClass("mobile-dt-controls-fixed");
+      
+      // ✅ v3.11: Aplicar flex: 1 a ambas columnas para que space-between funcione
+      var $children = $firstRow.children();
+      
+      $children.each(function() {
+        $(this).attr('style',
+          'width: auto !important;' +
+          'max-width: 50% !important;' +
+          'flex: 0 1 auto !important;' +
+          'padding: 0 !important;' +
+          'float: none !important;' +
+          'display: flex !important;'
+        );
+      });
+      
+      // Primera columna - alinear contenido a la izquierda
+      $children.first().css('justify-content', 'flex-start');
+      
+      // Segunda columna - alinear contenido a la derecha
+      $children.last().css('justify-content', 'flex-end');
+      
+      // ✅ v3.11: Estilos para dataTables_length (Mostrar)
+      var $length = $wrapper.find(".dataTables_length");
+      $length.attr('style',
+        'display: inline-flex !important;' +
+        'align-items: center !important;' +
+        'float: none !important;' +
+        'margin: 0 !important;' +
+        'padding: 0 !important;'
+      );
+      
+      $length.find('label').attr('style',
+        'display: inline-flex !important;' +
+        'align-items: center !important;' +
+        'gap: 3px !important;' +
+        'margin: 0 !important;' +
+        'font-size: 11px !important;' +
+        'font-weight: normal !important;' +
+        'white-space: nowrap !important;' +
+        'color: #333 !important;'
+      );
+      
+      // ✅ v3.11: Estilos para el SELECT dentro de Mostrar
+      $length.find('select').attr('style',
+        'font-size: 12px !important;' +
+        'font-weight: normal !important;' +
+        'padding: 2px 4px !important;' +
+        'height: 24px !important;' +
+        'min-width: 45px !important;' +
+        'margin: 0 2px !important;' +
+        'border: 1px solid #ccc !important;' +
+        'border-radius: 3px !important;'
+      );
+      
+      // ✅ v3.11: Estilos para dataTables_filter (Buscar)
+      var $filter = $wrapper.find(".dataTables_filter");
+      $filter.attr('style',
+        'display: inline-flex !important;' +
+        'align-items: center !important;' +
+        'float: none !important;' +
+        'margin: 0 !important;' +
+        'padding: 0 !important;'
+      );
+      
+      $filter.find('label').attr('style',
+        'display: inline-flex !important;' +
+        'align-items: center !important;' +
+        'gap: 3px !important;' +
+        'margin: 0 !important;' +
+        'font-size: 11px !important;' +
+        'font-weight: normal !important;' +
+        'white-space: nowrap !important;' +
+        'color: #333 !important;'
+      );
+      
+      // ✅ v3.11: Estilos para el INPUT dentro de Buscar
+      $filter.find('input').attr('style',
+        'width: 70px !important;' +
+        'font-size: 12px !important;' +
+        'font-weight: normal !important;' +
+        'padding: 2px 4px !important;' +
+        'height: 24px !important;' +
+        'margin-left: 3px !important;' +
+        'border: 1px solid #ccc !important;' +
+        'border-radius: 3px !important;'
+      );
+      
+      console.log("✅ [v3.11] DataTable controls: estilos aplicados correctamente");
+    });
+  }
   
   // ============================================================
   // ✅ v3.5: OBTENER CONFIGURACIÓN PARA PESTAÑA ACTUAL
@@ -94,12 +225,10 @@ $(document).ready(function() {
     currentTab = tabId || "lista";
     var config = getTabConfig(currentTab);
     
-    console.log("📱 [v3.5] Actualizando botones para pestaña: " + currentTab);
+    console.log("📱 [v3.9] Actualizando botones para pestaña: " + currentTab);
     
-    // Eliminar barra existente
     $(".mobile-fab-container").remove();
     
-    // Crear nueva barra con botones específicos
     var buttonsHtml = config.buttons.map(function(btn) {
       return '<button class="mobile-fab-btn" id="' + btn.id + '" type="button" data-action="' + btn.action + '">' +
         '<span class="fab-icon">' + btn.icon + '</span>' +
@@ -110,10 +239,9 @@ $(document).ready(function() {
     var fabContainer = $('<div class="mobile-fab-container">' + buttonsHtml + '</div>');
     $("body").append(fabContainer);
     
-    // Configurar handlers para los nuevos botones
     setupButtonHandlers(config);
     
-    console.log("✅ [v3.5] Botones actualizados: " + config.buttons.map(function(b) { return b.label; }).join(", "));
+    console.log("✅ [v3.9] Botones actualizados: " + config.buttons.map(function(b) { return b.label; }).join(", "));
   }
   
   // ============================================================
@@ -121,7 +249,6 @@ $(document).ready(function() {
   // ============================================================
   
   function setupButtonHandlers(config) {
-    // Remover handlers anteriores
     $(document).off("click.mobileButtons");
     
     // FILTROS
@@ -130,7 +257,6 @@ $(document).ready(function() {
       var sidebar = $(config.sidebarSelector).first();
       
       if (sidebar.length === 0) {
-        // Fallback: buscar cualquier sidebar
         sidebar = $(".well").first();
         if (sidebar.length === 0) {
           sidebar = $("[class*='sidebar_panel']").first();
@@ -142,7 +268,6 @@ $(document).ready(function() {
         console.log("✅ [FILTROS] Abriendo sidebar: " + sidebar.attr("id"));
       } else {
         showMobileToast("Filtros no disponibles");
-        console.log("⚠️ [FILTROS] No se encontró sidebar con selector: " + config.sidebarSelector);
       }
     });
     
@@ -154,14 +279,12 @@ $(document).ready(function() {
       if (resetBtn.length > 0) {
         resetBtn.trigger("click");
         showMobileToast("Consulta restablecida");
-        console.log("✅ [RESTABLECER] Trigger en: " + resetBtn.attr("id"));
       } else {
         showMobileToast("No disponible en esta vista");
-        console.log("⚠️ [RESTABLECER] No se encontró botón con selector: " + config.restoreSelector);
       }
     });
     
-    // PROYECCIÓN (solo Lista Nominal)
+    // PROYECCIÓN
     $(document).on("click.mobileButtons", "#mobile-btn-projection", function(e) {
       e.stopPropagation();
       if (config.projectionSelector) {
@@ -169,30 +292,25 @@ $(document).ready(function() {
         
         if (metodologiaBtn.length > 0) {
           metodologiaBtn.trigger("click");
-          console.log("✅ [PROYECCIÓN] Trigger en: " + metodologiaBtn.attr("id"));
         } else {
           showMobileToast("No disponible");
-          console.log("⚠️ [PROYECCIÓN] No se encontró botón con selector: " + config.projectionSelector);
         }
       } else {
         showMobileToast("No disponible en esta vista");
       }
     });
     
-    // DESCARGAR (solo Elecciones Federales)
+    // DESCARGAR
     $(document).on("click.mobileButtons", "#mobile-btn-download", function(e) {
       e.stopPropagation();
       if (config.downloadSelector) {
         var downloadBtn = $(config.downloadSelector).first();
         
         if (downloadBtn.length > 0) {
-          // Para downloadButton de Shiny, necesitamos hacer clic directo
           downloadBtn[0].click();
           showMobileToast("Descargando CSV...");
-          console.log("✅ [DESCARGAR] Trigger en: " + downloadBtn.attr("id"));
         } else {
           showMobileToast("No hay datos para descargar");
-          console.log("⚠️ [DESCARGAR] No se encontró botón con selector: " + config.downloadSelector);
         }
       } else {
         showMobileToast("No disponible en esta vista");
@@ -205,7 +323,6 @@ $(document).ready(function() {
       var sidebar = $(config.sidebarRightSelector).first();
       
       if (sidebar.length === 0) {
-        // Fallback
         sidebar = $(".sidebar-right:visible").first();
         if (sidebar.length === 0) {
           sidebar = $(".sidebar-right").first();
@@ -214,14 +331,12 @@ $(document).ready(function() {
       
       if (sidebar.length > 0) {
         openMobileDrawer(sidebar, "right");
-        console.log("✅ [ANÁLISIS] Abriendo sidebar: " + sidebar.attr("id"));
       } else {
         showMobileToast("Análisis no disponible");
-        console.log("⚠️ [ANÁLISIS] No se encontró sidebar con selector: " + config.sidebarRightSelector);
       }
     });
     
-    // INFO (genérico para otras pestañas)
+    // INFO
     $(document).on("click.mobileButtons", "#mobile-btn-info", function(e) {
       e.stopPropagation();
       showMobileToast("Información no disponible");
@@ -233,36 +348,30 @@ $(document).ready(function() {
   // ============================================================
   
   function detectTabChange() {
-    // Método 1: Observar cambios en input$main_tabs via Shiny
     $(document).on("shiny:inputchanged", function(event) {
       if (event.name === "main_tabs") {
         var newTab = event.value;
-        console.log("📑 [v3.5] Cambio de pestaña detectado (shiny:inputchanged): " + newTab);
+        console.log("📑 [v3.9] Cambio de pestaña detectado: " + newTab);
         updateMobileButtons(newTab);
       }
     });
     
-    // Método 2: Observar clics en pestañas directamente
     $(document).on("shown.bs.tab", 'a[data-toggle="tab"]', function(e) {
       var tabId = $(e.target).attr("href");
       if (tabId) {
-        // Extraer el ID de la pestaña del href (ej: "#shiny-tab-lista" -> "lista")
         var match = tabId.match(/tab[_-](\w+)/i);
         if (match) {
           var newTab = match[1];
-          console.log("📑 [v3.5] Cambio de pestaña detectado (shown.bs.tab): " + newTab);
           updateMobileButtons(newTab);
         }
       }
     });
     
-    // Método 3: Observar cambios en clases activas del tabsetPanel
     $(document).on("click", ".nav-tabs > li > a", function() {
       var $tab = $(this);
       var tabValue = $tab.attr("data-value") || $tab.closest("li").attr("data-value");
       
       if (tabValue) {
-        console.log("📑 [v3.5] Cambio de pestaña detectado (click): " + tabValue);
         setTimeout(function() {
           updateMobileButtons(tabValue);
         }, 100);
@@ -271,7 +380,7 @@ $(document).ready(function() {
   }
   
   // ============================================================
-  // INICIALIZACIÓN DESKTOP (código original)
+  // INICIALIZACIÓN DESKTOP
   // ============================================================
   
   $(".sidebar-right").each(function() {
@@ -284,7 +393,7 @@ $(document).ready(function() {
   });
   
   // ============================================================
-  // MANEJADOR TOGGLE DESKTOP (código original)
+  // MANEJADOR TOGGLE DESKTOP
   // ============================================================
   
   $(document).on("click", ".toggle-sidebar-btn", function() {
@@ -306,7 +415,7 @@ $(document).ready(function() {
   });
   
   // ============================================================
-  // SISTEMA MÓVIL - INICIALIZACIÓN v3.5
+  // SISTEMA MÓVIL - INICIALIZACIÓN v3.9
   // ============================================================
   
   function initMobileUI() {
@@ -318,41 +427,96 @@ $(document).ready(function() {
       return;
     }
     
-    // Crear overlay si no existe
     if ($(".mobile-overlay").length === 0) {
       var overlay = $('<div class="mobile-overlay" id="mobile-overlay-main"></div>');
       $("body").prepend(overlay);
     }
     
-    // Detectar pestaña actual
     var activeTab = $(".nav-tabs > li.active > a").attr("data-value") || 
                     $(".nav-tabs > li.active > a").attr("href");
     
     if (activeTab) {
-      // Extraer ID si es un href
       var match = activeTab.match(/tab[_-](\w+)/i);
       currentTab = match ? match[1] : activeTab.replace("#", "");
     } else {
-      currentTab = "lista"; // Default
+      currentTab = "lista";
     }
     
-    console.log("📱 [v3.5] Inicializando UI móvil, pestaña activa: " + currentTab);
+    console.log("📱 [v3.9] Inicializando UI móvil, pestaña activa: " + currentTab);
     
-    // Crear botones para la pestaña actual
     updateMobileButtons(currentTab);
     
-    // Configurar otros handlers
     setupSidebarAutoClose();
     setupDownloadButtonVisibility();
     setupOverlayClickHandler();
     preventKeyboardOnSelects();
     detectTabChange();
+    setupDataTableFix();
     
-    console.log("✅ UI móvil v3.5 inicializada");
+    console.log("✅ UI móvil v3.9 inicializada");
   }
   
   // ============================================================
-  // PREVENCIÓN DE TECLADO (igual que v3.4)
+  // ✅ v3.9: CONFIGURAR FIX PARA DATATABLE
+  // ============================================================
+  
+  function setupDataTableFix() {
+    if (!isMobile()) return;
+    
+    // Ejecutar inmediatamente
+    fixDataTableControls();
+    
+    // Ejecutar cuando DataTable se dibuja
+    $(document).on("draw.dt", function() {
+      // Remover marca para permitir re-aplicar estilos
+      $(".mobile-dt-controls-fixed").removeClass("mobile-dt-controls-fixed");
+      setTimeout(fixDataTableControls, 50);
+      setTimeout(fixDataTableControls, 200);
+    });
+    
+    // Ejecutar cuando Shiny actualiza valores
+    $(document).on("shiny:value", function(event) {
+      if (event.name && event.name.toLowerCase().includes("table")) {
+        $(".mobile-dt-controls-fixed").removeClass("mobile-dt-controls-fixed");
+        setTimeout(fixDataTableControls, 100);
+        setTimeout(fixDataTableControls, 300);
+        setTimeout(fixDataTableControls, 500);
+      }
+    });
+    
+    // Ejecutar con MutationObserver para detectar nuevos DataTables
+    var dtObserver = new MutationObserver(function(mutations) {
+      var needsFix = false;
+      mutations.forEach(function(mutation) {
+        if (mutation.addedNodes.length) {
+          $(mutation.addedNodes).each(function() {
+            if ($(this).find(".dataTables_wrapper").length > 0 || 
+                $(this).hasClass("dataTables_wrapper")) {
+              needsFix = true;
+            }
+          });
+        }
+      });
+      
+      if (needsFix) {
+        setTimeout(fixDataTableControls, 100);
+      }
+    });
+    
+    dtObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    
+    // Ejecutar en intervalos por si acaso
+    setTimeout(fixDataTableControls, 500);
+    setTimeout(fixDataTableControls, 1000);
+    setTimeout(fixDataTableControls, 2000);
+    setTimeout(fixDataTableControls, 3000);
+  }
+  
+  // ============================================================
+  // PREVENCIÓN DE TECLADO
   // ============================================================
   
   function preventKeyboardOnSelects() {
@@ -515,7 +679,7 @@ $(document).ready(function() {
   }
   
   // ============================================================
-  // VISIBILIDAD DEL BOTÓN DESCARGA (igual que v3.4)
+  // VISIBILIDAD DEL BOTÓN DESCARGA
   // ============================================================
   
   function setupDownloadButtonVisibility() {
@@ -523,7 +687,6 @@ $(document).ready(function() {
     
     function checkForData() {
       var hasRealData = false;
-      var debugInfo = [];
       
       var $dataTable = null;
       var selectors = [
@@ -539,13 +702,12 @@ $(document).ready(function() {
         var $found = $(selectors[i]);
         if ($found.length > 0) {
           $dataTable = $found;
-          debugInfo.push("Selector: " + selectors[i] + " (" + $found.length + " filas)");
           break;
         }
       }
       
       if (!$dataTable || $dataTable.length === 0) {
-        updateButtonVisibility(false, debugInfo);
+        updateButtonVisibility(false);
         return false;
       }
       
@@ -553,7 +715,7 @@ $(document).ready(function() {
       var $cells = $firstRow.find("td");
       
       if ($cells.length === 0) {
-        updateButtonVisibility(false, debugInfo);
+        updateButtonVisibility(false);
         return false;
       }
       
@@ -569,7 +731,7 @@ $(document).ready(function() {
       });
       
       if (isNoDataMessage) {
-        updateButtonVisibility(false, debugInfo);
+        updateButtonVisibility(false);
         return false;
       }
       
@@ -588,11 +750,11 @@ $(document).ready(function() {
         hasRealData = false;
       }
       
-      updateButtonVisibility(hasRealData, debugInfo);
+      updateButtonVisibility(hasRealData);
       return hasRealData;
     }
     
-    function updateButtonVisibility(show, debugInfo) {
+    function updateButtonVisibility(show) {
       var $container = $(".mobile-download-container");
       
       if ($container.length === 0) return;
@@ -613,8 +775,6 @@ $(document).ready(function() {
           setTimeout(checkForData, 200);
           setTimeout(checkForData, 500);
           setTimeout(checkForData, 1000);
-          setTimeout(checkForData, 1500);
-          setTimeout(checkForData, 2000);
         }
       }
     });
@@ -622,15 +782,12 @@ $(document).ready(function() {
     $(document).on("draw.dt", function() {
       setTimeout(checkForData, 100);
       setTimeout(checkForData, 300);
-      setTimeout(checkForData, 500);
     });
     
     setTimeout(checkForData, 500);
     setTimeout(checkForData, 1000);
-    setTimeout(checkForData, 1500);
     setTimeout(checkForData, 2000);
     setTimeout(checkForData, 3000);
-    setTimeout(checkForData, 5000);
   }
   
   // ============================================================
@@ -694,7 +851,8 @@ $(document).ready(function() {
   
   window.closeMobileDrawers = closeMobileDrawers;
   window.isDrawerOpen = isDrawerOpen;
-  window.updateMobileButtons = updateMobileButtons; // Exponer globalmente
+  window.updateMobileButtons = updateMobileButtons;
+  window.fixDataTableControls = fixDataTableControls;
   
   // ============================================================
   // RESIZE HANDLER
@@ -705,11 +863,14 @@ $(document).ready(function() {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(function() {
       if (isMobile()) {
+        // Limpiar y reinicializar
+        $(".mobile-dt-controls-fixed").removeClass("mobile-dt-controls-fixed");
         initMobileUI();
       } else {
         $(".mobile-fab-container").remove();
         $(".mobile-overlay").remove();
         $(".mobile-toast").remove();
+        $(".mobile-dt-controls-fixed").removeClass("mobile-dt-controls-fixed");
         closeMobileDrawers();
         $(".sidebar-right").removeClass("mobile-open hidden");
         $(".well").removeClass("mobile-open");
@@ -754,12 +915,13 @@ $(document).ready(function() {
       setupSidebarAutoClose();
       setupOverlayClickHandler();
       preventKeyboardOnSelects();
+      $(".mobile-dt-controls-fixed").removeClass("mobile-dt-controls-fixed");
+      fixDataTableControls();
     }
     setTimeout(triggerPlotlyResize, 300);
   });
   
-  console.log("✅ sidebar_toggle.js v3.5 cargado");
+  console.log("✅ sidebar_toggle.js v3.11 cargado");
   console.log("   ✅ Botones contextuales por pestaña");
-  console.log("   ✅ Lista Nominal: FILTROS, RESTABLECER, PROYECCIÓN, ANÁLISIS");
-  console.log("   ✅ Elecciones Federales: FILTROS, RESTABLECER, DESCARGAR, ANÁLISIS");
+  console.log("   ✅ Fix DataTable Mostrar(izq)/Buscar(der) con fuentes reducidas");
 });

@@ -1,9 +1,9 @@
 # modules/lista_nominal_ui.R
-# Versión: 3.3 - Botón Descargar CSV duplicado para móvil (debajo del DataTable)
-# Cambios vs v3.2:
-#   - Nuevo botón download_csv_mobile debajo del DataTable
-#   - Clase "mobile-only" para que solo aparezca en móvil
-#   - El botón original en sidebar se mantiene con clase "desktop-only"
+# Versión: 3.4 - Encabezado Ámbito/Alcance separado del DataTable
+# Cambios vs v3.3:
+#   - Nuevo uiOutput para Ámbito y Alcance ANTES del DataTable
+#   - Título cambiado a "Tabla de Datos" (español)
+#   - Encabezado dinámico se renderiza desde el server
 
 lista_nominal_ui <- function(id) {
   ns <- NS(id)
@@ -24,7 +24,7 @@ lista_nominal_ui <- function(id) {
         uiOutput(ns("info_tipo_corte")),
         tags$hr(),
         
-        # ========== NUEVO: SELECTOR NACIONAL/EXTRANJERO ==========
+        # ========== SELECTOR NACIONAL/EXTRANJERO ==========
         radioButtons(
           ns("ambito_datos"), 
           "Ámbito de datos:",
@@ -87,7 +87,6 @@ lista_nominal_ui <- function(id) {
         width = 8,
         
         # ========== GRÁFICAS PARA HISTÓRICOS ==========
-        # ✅ v3.1: Usar uiOutput dinámico en lugar de conditionalPanel hardcodeado
         conditionalPanel(
           condition = "input.tipo_corte == 'historico'",
           ns = ns,
@@ -130,16 +129,26 @@ lista_nominal_ui <- function(id) {
           )
         ),
         
-        # ========== DATATABLE (CON SPINNER) ==========
-        # v3.2: Usar clase datatable-section para ocultar título durante carga
+        # ========== ✅ v3.4: DATATABLE CON ENCABEZADO SEPARADO ==========
         fluidRow(
           column(12, 
                  div(
                    class = "datatable-section",
-                   h3("Data Table", 
+                   
+                   # ✅ v3.4: Título "Tabla de Datos" (en español)
+                   h3("Tabla de Datos", 
                       align = "center", 
                       style = "margin-top: 40px;",
                       class = "datatable-title"),
+                   
+                   # ✅ v3.4: Encabezado con Ámbito y Alcance (renderizado desde server)
+                   # Este div aparece ANTES del DataTable, no como caption interno
+                   div(
+                     class = "datatable-header",
+                     uiOutput(ns("main-table_header"))
+                   ),
+                   
+                   # DataTable con spinner
                    shinycssloaders::withSpinner(
                      DTOutput(ns("main-table_data")),
                      type = 6,
@@ -149,9 +158,9 @@ lista_nominal_ui <- function(id) {
                  )
           )
         ),
+        # ========== FIN DATATABLE ==========
         
-        # ========== ✅ v3.3: BOTÓN DESCARGAR CSV PARA MÓVIL ==========
-        # Solo visible en móvil, debajo del DataTable
+        # ========== BOTÓN DESCARGAR CSV PARA MÓVIL ==========
         fluidRow(
           column(12,
                  div(

@@ -1,12 +1,13 @@
 # modules/lista_nominal_server_main.R
-# Versión: 3.8 - Handler para botón de descarga móvil (download_csv_mobile)
-# Cambios vs v3.7:
-#   - Nuevo output$download_csv_mobile que replica funcionalidad de output$download_csv
+# Versión: 3.11 - DataTable sin scrollX (usar CSS nativo para scroll)
+# Cambios vs v3.10:
+#   - Removido scrollX = TRUE del DataTable (causa separación thead/tbody en móvil)
+#   - El scroll horizontal se maneja con CSS overflow-x: auto
 
 lista_nominal_server_main <- function(input, output, session, datos_columnas, combinacion_valida, estado_app) {
   ns <- session$ns
   
-  message("📊 Inicializando lista_nominal_server_main v3.8")
+  message("📊 Inicializando lista_nominal_server_main v3.11")
   
   # ========== CARGAR HELPERS PARA TEXTO DE ALCANCE ==========
   source("modules/lista_nominal_graficas/graficas_helpers.R", local = TRUE)
@@ -22,6 +23,35 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     message("⚠️ No se encontró lista_nominal_server_graficas.R")
   }
   
+  # ========== FUNCIÓN AUXILIAR PARA OBTENER AÑO CORRECTO ==========
+  
+  obtener_año_actual <- function() {
+    if (!is.null(input$year) && input$year != "" && !is.na(input$year)) {
+      return(as.character(input$year))
+    }
+    
+    if (exists("LNE_CATALOG", envir = .GlobalEnv)) {
+      catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
+      tipo_corte <- input$tipo_corte %||% "historico"
+      
+      if (tipo_corte == "historico" && length(catalog$historico) > 0) {
+        ultima_fecha <- max(catalog$historico)
+        año <- format(ultima_fecha, "%Y")
+        message("📅 [obtener_año_actual] Año desde catálogo histórico: ", año)
+        return(año)
+      } else if (tipo_corte == "semanal" && length(catalog$semanal_comun) > 0) {
+        ultima_fecha <- max(catalog$semanal_comun)
+        año <- format(ultima_fecha, "%Y")
+        message("📅 [obtener_año_actual] Año desde catálogo semanal: ", año)
+        return(año)
+      }
+    }
+    
+    año_sistema <- format(Sys.Date(), "%Y")
+    message("⚠️ [obtener_año_actual] Usando año del sistema: ", año_sistema)
+    return(año_sistema)
+  }
+  
   # ========== REACTIVE: TEXTO DE ALCANCE PARA DATATABLE ==========
   
   texto_alcance <- reactive({
@@ -32,18 +62,19 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
   # ========== REACTIVE: OBTENER ÚLTIMA FECHA DISPONIBLE ==========
   
   ultima_fecha_disponible <- reactive({
-    req(input$tipo_corte, input$year)
+    req(input$tipo_corte)
     
     if (!exists("LNE_CATALOG", envir = .GlobalEnv)) {
       return(NULL)
     }
     
     catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
+    año_actual <- obtener_año_actual()
     
     if (input$tipo_corte == "historico") {
-      fechas_year <- catalog$historico[format(catalog$historico, "%Y") == input$year]
+      fechas_year <- catalog$historico[format(catalog$historico, "%Y") == año_actual]
     } else {
-      fechas_year <- catalog$semanal_comun[format(catalog$semanal_comun, "%Y") == input$year]
+      fechas_year <- catalog$semanal_comun[format(catalog$semanal_comun, "%Y") == año_actual]
     }
     
     if (length(fechas_year) == 0) {
@@ -65,8 +96,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     "clave_municipio" = "Clave Municipio",
     "nombre_municipio" = "Municipio",
     "seccion" = "Sección",
-    
-    # Nacional
     "padron_nacional" = "Padrón Nacional",
     "padron_nacional_hombres" = "Padrón H",
     "padron_nacional_mujeres" = "Padrón M",
@@ -75,8 +104,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     "lista_nacional_hombres" = "Lista H",
     "lista_nacional_mujeres" = "Lista M",
     "lista_nacional_no_binario" = "Lista NB",
-    
-    # Extranjero
     "padron_extranjero" = "Padrón Extranjero",
     "padron_extranjero_hombres" = "Padrón H",
     "padron_extranjero_mujeres" = "Padrón M",
@@ -86,6 +113,50 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     "lista_extranjero_mujeres" = "Lista M",
     "lista_extranjero_no_binario" = "Lista NB"
   )
+  
+  # ========== OUTPUT PARA ENCABEZADO (ÁMBITO + ALCANCE) ==========
+  
+  output$`main-table_header` <- renderUI({
+    estado_actual <- estado_app()
+    
+    if (estado_actual == "inicial") {
+      return(NULL)
+    }
+    
+    if (!combinacion_valida()) {
+      return(NULL)
+    }
+    
+    datos <- datos_columnas()
+    if (is.null(datos) || is.null(datos$datos) || nrow(datos$datos) == 0) {
+      return(NULL)
+    }
+    
+    ambito <- isolate(input$ambito_datos %||% "nacional")
+    ambito_display <- if (ambito == "extranjero") "Extranjero" else "Nacional"
+    alcance_texto <- texto_alcance()
+    
+    tags$div(
+      class = "datatable-header-content",
+      style = "text-align: center; margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;",
+      
+      tags$div(
+        style = "font-size: 15px; font-weight: 700; color: #006988; margin-bottom: 5px;",
+        paste0("Ámbito: ", ambito_display)
+      ),
+      
+      tags$div(
+        style = "font-size: 12px; color: #555555; line-height: 1.4;",
+        alcance_texto
+      )
+    )
+  }) %>%
+    bindEvent(
+      estado_app(),
+      input$btn_consultar,
+      ignoreNULL = FALSE,
+      ignoreInit = FALSE
+    )
   
   # ========== RENDERIZAR TABLA CON COLUMNAS DINÁMICAS ==========
   
@@ -130,13 +201,15 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     message("📊 [DATATABLE] Columnas disponibles en CSV: ", paste(colnames(df), collapse = ", "))
     
     # ========== AGREGAR COLUMNA AÑO ==========
-    df$año <- isolate(input$year)
+    año_para_tabla <- obtener_año_actual()
+    df$año <- año_para_tabla
+    message("📊 [DATATABLE] Año asignado a tabla: ", año_para_tabla)
     
     # ========== DETERMINAR ÁMBITO ==========
     ambito <- isolate(input$ambito_datos %||% "nacional")
     message("📊 [DATATABLE] Ámbito seleccionado: ", ambito)
     
-    # ========== DEFINIR COLUMNAS BASE (SIEMPRE PRESENTES) ==========
+    # ========== DEFINIR COLUMNAS BASE ==========
     columnas_base <- c("año", "nombre_entidad")
     
     if ("cabecera_distrital" %in% colnames(df)) {
@@ -155,64 +228,26 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     if (ambito == "nacional") {
       message("📊 [DATATABLE] Construyendo columnas para vista NACIONAL")
       
-      if ("padron_nacional" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "padron_nacional")
-      }
-      
-      if ("padron_nacional_hombres" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "padron_nacional_hombres")
-      }
-      if ("padron_nacional_mujeres" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "padron_nacional_mujeres")
-      }
-      if ("padron_nacional_no_binario" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "padron_nacional_no_binario")
-      }
-      
-      if ("lista_nacional" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "lista_nacional")
-      }
-      
-      if ("lista_nacional_hombres" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "lista_nacional_hombres")
-      }
-      if ("lista_nacional_mujeres" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "lista_nacional_mujeres")
-      }
-      if ("lista_nacional_no_binario" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "lista_nacional_no_binario")
-      }
+      if ("padron_nacional" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional")
+      if ("padron_nacional_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_hombres")
+      if ("padron_nacional_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_mujeres")
+      if ("padron_nacional_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_nacional_no_binario")
+      if ("lista_nacional" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional")
+      if ("lista_nacional_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_hombres")
+      if ("lista_nacional_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_mujeres")
+      if ("lista_nacional_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_nacional_no_binario")
       
     } else {
       message("📊 [DATATABLE] Construyendo columnas para vista EXTRANJERO")
       
-      if ("padron_extranjero" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "padron_extranjero")
-      }
-      
-      if ("padron_extranjero_hombres" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "padron_extranjero_hombres")
-      }
-      if ("padron_extranjero_mujeres" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "padron_extranjero_mujeres")
-      }
-      if ("padron_extranjero_no_binario" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "padron_extranjero_no_binario")
-      }
-      
-      if ("lista_extranjero" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "lista_extranjero")
-      }
-      
-      if ("lista_extranjero_hombres" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "lista_extranjero_hombres")
-      }
-      if ("lista_extranjero_mujeres" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "lista_extranjero_mujeres")
-      }
-      if ("lista_extranjero_no_binario" %in% colnames(df)) {
-        columnas_datos <- c(columnas_datos, "lista_extranjero_no_binario")
-      }
+      if ("padron_extranjero" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero")
+      if ("padron_extranjero_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_hombres")
+      if ("padron_extranjero_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_mujeres")
+      if ("padron_extranjero_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "padron_extranjero_no_binario")
+      if ("lista_extranjero" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero")
+      if ("lista_extranjero_hombres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_hombres")
+      if ("lista_extranjero_mujeres" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_mujeres")
+      if ("lista_extranjero_no_binario" %in% colnames(df)) columnas_datos <- c(columnas_datos, "lista_extranjero_no_binario")
     }
     
     # ========== COMBINAR COLUMNAS ==========
@@ -263,39 +298,41 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       )
     ) else NULL
     
-    # ========== OBTENER TEXTO DE ALCANCE ==========
-    alcance_texto <- texto_alcance()
-    ambito_display <- if (ambito == "extranjero") "Extranjero" else "Nacional"
+    # ========== ✅ v3.11: DATATABLE SIN scrollX ==========
+    # scrollX: TRUE causa que DataTables separe thead y tbody en contenedores diferentes
+    # Esto rompe la alineación de columnas en móvil
+    # El scroll horizontal se maneja con CSS: overflow-x: auto en .dataTables_wrapper
     
-    # ========== CREAR CAPTION ==========
-    caption_html <- htmltools::tags$caption(
-      style = "caption-side: top; text-align: center; margin-bottom: 10px;",
-      htmltools::tags$div(
-        style = "font-size: 14px; color: #555555; font-weight: bold; margin-bottom: 5px;",
-        paste0("Ámbito: ", ambito_display)
-      ),
-      htmltools::tags$div(
-        style = "font-size: 13px; color: #555555;",
-        alcance_texto
-      )
-    )
-    
-    # ========== CREAR DATATABLE ==========
     dt <- datatable(
       datos_tabla,
-      caption = caption_html,
       options = list(
         pageLength = 10,
         lengthMenu = list(c(10, 25, 50, 100, -1), c("10", "25", "50", "100", "Todos")),
         dom = 'lfrtip',
         columnDefs = column_defs,
-        scrollX = TRUE
+        # ✅ v3.11: SIN scrollX - el CSS maneja el scroll horizontal
+        # scrollX = TRUE,  # REMOVIDO - causa separación thead/tbody
+        autoWidth = FALSE,
+        language = list(
+          search = "Buscar:",
+          lengthMenu = "Mostrar _MENU_",
+          info = "Mostrando _START_ a _END_ de _TOTAL_",
+          infoEmpty = "Sin registros",
+          infoFiltered = "(de _MAX_ totales)",
+          paginate = list(
+            first = "«",
+            last = "»",
+            `next` = "›",
+            previous = "‹"
+          )
+        )
       ),
       rownames = FALSE,
       class = 'cell-border stripe'
     )
     
     message("✅ DataTable renderizado correctamente con ", ncol(datos_tabla), " columnas")
+    message("✅ [DATATABLE] Año en datos: ", unique(datos_tabla$Año))
     dt
     
   }) %>%
@@ -307,7 +344,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     )
   
   # ========== FUNCIÓN AUXILIAR PARA PREPARAR DATOS CSV ==========
-  # ✅ v3.8: Función compartida para ambos botones de descarga
   
   preparar_datos_csv <- function() {
     datos <- datos_columnas()
@@ -316,20 +352,14 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     df <- datos$datos
     req(is.data.frame(df), nrow(df) > 0)
     
-    df$año <- input$year
+    df$año <- obtener_año_actual()
     ambito <- input$ambito_datos %||% "nacional"
     
     columnas_base <- c("año", "nombre_entidad")
     
-    if ("cabecera_distrital" %in% colnames(df)) {
-      columnas_base <- c(columnas_base, "cabecera_distrital")
-    }
-    if ("nombre_municipio" %in% colnames(df)) {
-      columnas_base <- c(columnas_base, "nombre_municipio")
-    }
-    if ("seccion" %in% colnames(df)) {
-      columnas_base <- c(columnas_base, "seccion")
-    }
+    if ("cabecera_distrital" %in% colnames(df)) columnas_base <- c(columnas_base, "cabecera_distrital")
+    if ("nombre_municipio" %in% colnames(df)) columnas_base <- c(columnas_base, "nombre_municipio")
+    if ("seccion" %in% colnames(df)) columnas_base <- c(columnas_base, "seccion")
     
     columnas_datos <- c()
     
@@ -368,10 +398,7 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     
     colnames(datos_tabla) <- nombres_columnas
     
-    list(
-      datos = datos_tabla,
-      ambito = ambito
-    )
+    list(datos = datos_tabla, ambito = ambito)
   }
   
   # ========== FUNCIÓN AUXILIAR PARA GENERAR NOMBRE ARCHIVO ==========
@@ -380,18 +407,10 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
     tipo <- if (input$tipo_corte == "historico") "historico" else "semanal"
     
     fecha <- ultima_fecha_disponible()
-    fecha_str <- if (!is.null(fecha)) {
-      format(fecha, "%Y%m%d")
-    } else {
-      format(Sys.Date(), "%Y%m%d")
-    }
+    fecha_str <- if (!is.null(fecha)) format(fecha, "%Y%m%d") else format(Sys.Date(), "%Y%m%d")
     
     entidad_str <- gsub(" ", "_", input$entidad %||% "Nacional")
-    ambito_str <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") {
-      "Extranjero"
-    } else {
-      "Nacional"
-    }
+    ambito_str <- if (!is.null(input$ambito_datos) && input$ambito_datos == "extranjero") "Extranjero" else "Nacional"
     
     paste0("lista_nominal_", tipo, "_", fecha_str, "_", ambito_str, "_", entidad_str, ".csv")
   }
@@ -410,7 +429,6 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       ambito <- resultado$ambito
       
       message("📥 [DESCARGA CSV] Preparando ", nrow(datos_tabla), " filas para descarga")
-      message("📥 [DESCARGA CSV] Columnas exportadas: ", paste(colnames(datos_tabla), collapse = ", "))
       
       alcance_info <- texto_alcance()
       ambito_display <- if (ambito == "extranjero") "Extranjero" else "Nacional"
@@ -423,18 +441,14 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       ), file)
       
       write.table(datos_tabla, file, 
-                  append = TRUE,
-                  sep = ",", 
-                  row.names = FALSE, 
-                  fileEncoding = "UTF-8", 
-                  quote = TRUE,
-                  na = "")
+                  append = TRUE, sep = ",", row.names = FALSE, 
+                  fileEncoding = "UTF-8", quote = TRUE, na = "")
       
       message("✅ [DESCARGA CSV] Archivo generado exitosamente")
     }
   )
   
-  # ========== ✅ v3.8: DESCARGA CSV MÓVIL (BOTÓN DEBAJO DEL DATATABLE) ==========
+  # ========== DESCARGA CSV MÓVIL ==========
   
   output$download_csv_mobile <- downloadHandler(
     filename = function() {
@@ -460,21 +474,17 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       ), file)
       
       write.table(datos_tabla, file, 
-                  append = TRUE,
-                  sep = ",", 
-                  row.names = FALSE, 
-                  fileEncoding = "UTF-8", 
-                  quote = TRUE,
-                  na = "")
+                  append = TRUE, sep = ",", row.names = FALSE, 
+                  fileEncoding = "UTF-8", quote = TRUE, na = "")
       
       message("✅ [DESCARGA CSV MÓVIL] Archivo generado exitosamente")
     }
   )
   
-  # ========== ✅ v3.7: BOTÓN RESTABLECER - OBSERVER SEPARADO ==========
+  # ========== BOTÓN RESTABLECER ==========
   
   observeEvent(input$reset_config, {
-    message("🔄 [RESTABLECER MAIN] Botón presionado - Actualizando inputs adicionales...")
+    message("🔄 [RESTABLECER MAIN] Botón presionado")
     
     if (exists("LNE_CATALOG", envir = .GlobalEnv)) {
       catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
@@ -495,9 +505,9 @@ lista_nominal_server_main <- function(input, output, session, datos_columnas, co
       message("   ✅ desglose → Sexo")
     }
     
-    message("✅ [RESTABLECER MAIN] Inputs adicionales actualizados correctamente")
+    message("✅ [RESTABLECER MAIN] Inputs actualizados correctamente")
   })
   
-  message("✅ Módulo lista_nominal_server_main v3.8 inicializado")
-  message("   ✅ v3.8: Handler para download_csv_mobile agregado")
+  message("✅ Módulo lista_nominal_server_main v3.11 inicializado")
+  message("   ✅ v3.11: Sin scrollX en DataTable (CSS maneja scroll)")
 }
