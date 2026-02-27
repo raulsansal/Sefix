@@ -1,9 +1,20 @@
 # modules/lista_nominal_ui.R
-# Versión: 3.4 - Encabezado Ámbito/Alcance separado del DataTable
-# Cambios vs v3.3:
-#   - Nuevo uiOutput para Ámbito y Alcance ANTES del DataTable
-#   - Título cambiado a "Tabla de Datos" (español)
-#   - Encabezado dinámico se renderiza desde el server
+# Versión: 3.5 - CORRECCIÓN RAÍZ: graficas_dinamicas cubre historico Y semanal
+#
+# PROBLEMA v3.4:
+#   El uiOutput("graficas_dinamicas") solo estaba bajo condition="historico".
+#   Para semanal, el conditionalPanel mostraba "main-plot_container" y
+#   "main-tasa_inclusion_plot" — outputs que NO existen en el servidor.
+#   Shiny es lazy: si un output no está en el DOM, nunca se solicita al
+#   servidor, y los reactives que lo alimentan nunca se ejecutan.
+#   Resultado: spinners infinitos en vista semanal.
+#
+# CORRECCIÓN v3.5:
+#   - Eliminados los conditionalPanel separados para historico/semanal
+#   - uiOutput("graficas_dinamicas") cubre AMBOS tipos de corte
+#   - graficas_ui_render.R (que ya estaba correcto) decide qué mostrar
+#     internamente según input$tipo_corte
+#   - Eliminados "main-plot_container" y "main-tasa_inclusion_plot" (no existen)
 
 lista_nominal_ui <- function(id) {
   ns <- NS(id)
@@ -34,7 +45,7 @@ lista_nominal_ui <- function(id) {
           inline = TRUE
         ),
         tags$hr(),
-        # ========== FIN SELECTOR NACIONAL/EXTRANJERO ==========
+        
         tags$small(
           style = "color: #000; display: block; font-weight: medium; margin-bottom: 8px; text-align: center; background-color: #CCE4B1; border-color #71A251; padding: 8px; border-radius: 4px;",
           "Configura los filtros y presiona el botón 'Consultar' para actualizar"
@@ -60,6 +71,7 @@ lista_nominal_ui <- function(id) {
           )
         ),
         tags$hr(),
+        
         # Selector de desglose SOLO para datos semanales
         conditionalPanel(
           condition = "input.tipo_corte == 'semanal'",
@@ -77,8 +89,6 @@ lista_nominal_ui <- function(id) {
         ),
         tags$hr(),
         
-        # ========== FIN BOTÓN CONSULTAR ==========
-        
         actionButton(ns("reset_config"), "Restablecer consulta", class = "btn-primary", style = "width: 100%; margin-bottom: 10px;"),
         downloadButton(ns("download_csv"), "Descargar CSV", class = "btn-primary", style = "width:100%")
       ),
@@ -86,48 +96,9 @@ lista_nominal_ui <- function(id) {
       mainPanel(
         width = 8,
         
-        # ========== GRÁFICAS PARA HISTÓRICOS ==========
-        conditionalPanel(
-          condition = "input.tipo_corte == 'historico'",
-          ns = ns,
-          uiOutput(ns("graficas_dinamicas"))
-        ),
-        
-        # ========== GRÁFICAS PARA SEMANALES (CON SPINNERS) ==========
-        conditionalPanel(
-          condition = "input.tipo_corte == 'semanal'",
-          ns = ns,
-          
-          # Gráfico de barras actual
-          fluidRow(
-            column(12, 
-                   div(class = "plot-container",
-                       style = "height: 450px;",
-                       shinycssloaders::withSpinner(
-                         uiOutput(ns("main-plot_container")),
-                         type = 6,
-                         color = "#C0311A",
-                         size = 1
-                       )
-                   )
-            )
-          ),
-          
-          # Gráfico de participación actual
-          fluidRow(
-            column(12,
-                   div(class = "participacion-container",
-                       style = "height: 500px; display: flex; flex-direction: column; align-items: center; justify-content: center;",
-                       shinycssloaders::withSpinner(
-                         plotlyOutput(ns("main-tasa_inclusion_plot"), width = "100%", height = "432px"),
-                         type = 6,
-                         color = "#4CAF50",
-                         size = 1
-                       )
-                   )
-            )
-          )
-        ),
+        # ✅ v3.5: graficas_dinamicas cubre AMBOS tipos de corte
+        # graficas_ui_render.R decide internamente qué mostrar según tipo_corte
+        uiOutput(ns("graficas_dinamicas")),
         
         # ========== ✅ v3.4: DATATABLE CON ENCABEZADO SEPARADO ==========
         fluidRow(
@@ -135,20 +106,16 @@ lista_nominal_ui <- function(id) {
                  div(
                    class = "datatable-section",
                    
-                   # ✅ v3.4: Título "Tabla de Datos" (en español)
                    h3("Tabla de Datos", 
                       align = "center", 
                       style = "margin-top: 40px;",
                       class = "datatable-title"),
                    
-                   # ✅ v3.4: Encabezado con Ámbito y Alcance (renderizado desde server)
-                   # Este div aparece ANTES del DataTable, no como caption interno
                    div(
                      class = "datatable-header",
                      uiOutput(ns("main-table_header"))
                    ),
                    
-                   # DataTable con spinner
                    shinycssloaders::withSpinner(
                      DTOutput(ns("main-table_data")),
                      type = 6,
@@ -175,7 +142,6 @@ lista_nominal_ui <- function(id) {
                  )
           )
         )
-        # ========== FIN BOTÓN DESCARGAR CSV MÓVIL ==========
       )
     ),
     

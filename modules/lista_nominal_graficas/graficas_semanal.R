@@ -1,587 +1,574 @@
 # modules/lista_nominal_graficas/graficas_semanal.R
-# Gráficas semanales: Barras por desglose + Tasa de inclusión
-# Versión: 1.1 - CORRECCIÓN: Usar ambito_reactivo para cambio de vista automático
+# Vista Semanal: 6 gráficas (edad A+B, sexo A+B, origen A+B)
+#                + 3 dataTables con descarga
+#                + análisis textual dinámico integrado (sidebar derecho)
+# Versión: 2.2 — CORRECCIÓN RAÍZ: Eliminado bindEvent de outputs individuales
+#
+# PROBLEMA v2.1:
+#   bindEvent en cada renderPlotly/renderUI ejecutaba el output una vez al
+#   inicializar (tipo_corte="historico"), recibía NULL de es_historico(),
+#   marcaba el output como resuelto y NO lo re-ejecutaba al cambiar a semanal
+#   aunque el renderUI padre lo regenerara. Spinner infinito.
+#
+# CORRECCIÓN v2.2:
+#   - Eliminado bindEvent de TODOS los renders individuales
+#   - Los outputs son reactivos DIRECTOS: leen datos_semanal_*() que ya tienen
+#     su propio bindEvent en el data loader
+#   - Cuando los datos cambian invalidan automáticamente los outputs que los leen
+#   - La guardia es_historico() retorna NULL limpiamente cuando no aplica
 
-graficas_semanal <- function(input, output, session, datos_columnas, combinacion_valida, texto_alcance, ambito_reactivo) {
+graficas_semanal <- function(input, output, session,
+                             datos_semanal_edad,
+                             datos_semanal_sexo,
+                             datos_semanal_origen,
+                             anio_semanal,
+                             fecha_semanal_efectiva,
+                             texto_alcance,
+                             ambito_reactivo,
+                             estado_app) {
   
-  message("📊 Inicializando graficas_semanal v1.1")
+  message("📊 Inicializando graficas_semanal v2.2")
   
-  # ========== RENDERIZADO DE CONTENEDOR DE GRÁFICO PRINCIPAL ==========
+  # ════════════════════════════════════════════════════════════════════════════
+  # CONSTANTES
+  # ════════════════════════════════════════════════════════════════════════════
   
-  output$`main-plot_container` <- renderUI({
-    plotlyOutput(session$ns("main-grafico_barras"), width = "100%", height = "450px")
+  COLORES <- list(
+    nac_padron  = "#003E66", nac_lista   = "#AE0E35",
+    nac_hombres = "#44559B", nac_mujeres = "#C0311A",
+    ext_padron  = "#EAC43E", ext_lista   = "#B3D491",
+    ext_hombres = "#D4A500", ext_mujeres = "#8FB369"
+  )
+  FUENTE_INE <- "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado"
+  ORDEN_EDAD <- c("18","19","20_24","25_29","30_34","35_39",
+                  "40_44","45_49","50_54","55_59","60_64","65_y_mas")
+  
+  # ════════════════════════════════════════════════════════════════════════════
+  # HELPERS
+  # ════════════════════════════════════════════════════════════════════════════
+  
+  fmt_num <- function(x) format(round(as.numeric(x)), big.mark = ",", scientific = FALSE)
+  fmt_pct <- function(x) paste0(sprintf("%.2f", round(as.numeric(x), 2)), "%")
+  
+  color_padron <- function(a) if (a == "extranjero") COLORES$ext_padron  else COLORES$nac_padron
+  color_lista  <- function(a) if (a == "extranjero") COLORES$ext_lista   else COLORES$nac_lista
+  color_h      <- function(a) if (a == "extranjero") COLORES$ext_hombres else COLORES$nac_hombres
+  color_m      <- function(a) if (a == "extranjero") COLORES$ext_mujeres else COLORES$nac_mujeres
+  etiq_ambito  <- function(a) if (a == "extranjero") "Extranjero" else "Nacional"
+  
+  ann_fuente <- function() list(
+    text = FUENTE_INE, x = 0.5, y = -0.18, xref = "paper", yref = "paper",
+    xanchor = "center", yanchor = "top", showarrow = FALSE,
+    font = list(size = 10, color = "#666666", family = "Arial, sans-serif"), align = "center"
+  )
+  ann_alcance <- function(texto, y_pos = 1.10) list(
+    text = texto, x = 0.5, y = y_pos, xref = "paper", yref = "paper",
+    xanchor = "center", yanchor = "top", showarrow = FALSE,
+    font = list(size = 13, color = "#555555", family = "Arial, sans-serif"), align = "center"
+  )
+  plot_vacio <- function(msg = "No hay datos disponibles") {
+    plot_ly() %>% layout(
+      xaxis = list(visible = FALSE), yaxis = list(visible = FALSE),
+      paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
+      annotations = list(list(text = msg, xref = "paper", yref = "paper",
+                              x = 0.5, y = 0.5, xanchor = "center", yanchor = "middle",
+                              showarrow = FALSE, font = list(size = 14, color = "#888")))
+    )
+  }
+  etiqueta_edad <- function(g) gsub("_", "-", gsub("_y_mas", "+", g))
+  
+  # ── Guardia: retorna TRUE si el corte activo NO es semanal ──────────────────
+  es_historico <- function() { tc <- input$tipo_corte %||% "historico"; tc != "semanal" }
+  
+  # ── Filas especiales ─────────────────────────────────────────────────────────
+  fila_totales_nac <- function(df) {
+    if (is.null(df) || !"nombre_entidad" %in% colnames(df)) return(NULL)
+    idx <- which(toupper(trimws(df$nombre_entidad)) == "TOTALES")
+    if (length(idx) > 0) df[idx[1], ] else NULL
+  }
+  fila_ext <- function(df) {
+    if (is.null(df) || !"nombre_entidad" %in% colnames(df)) return(NULL)
+    idx <- which(grepl("RESIDENTES EXTRANJERO", toupper(df$nombre_entidad)))
+    if (length(idx) > 0) df[idx[1], ] else NULL
+  }
+  df_nacional <- function(df) {
+    if (is.null(df)) return(NULL)
+    df[!grepl("RESIDENTES EXTRANJERO|TOTALES", toupper(df$nombre_entidad %||% ""), ignore.case = TRUE), ]
+  }
+  
+  # ── Construcción de datos de edad ─────────────────────────────────────────────
+  sumar_rango <- function(df, grupo, sexo, tipo) {
+    col <- grep(paste0("^", tipo, "_", grupo, "_", sexo, "$"), colnames(df), value = TRUE, ignore.case = TRUE)
+    if (length(col) == 0) return(0L)
+    sum(as.numeric(df[[col[1]]]), na.rm = TRUE)
+  }
+  construir_df_edad <- function(df, ambito) {
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    df_uso <- if (ambito == "extranjero") { f <- fila_ext(df); if (is.null(f)) return(NULL); f } else df_nacional(df)
+    if (is.null(df_uso) || nrow(df_uso) == 0) return(NULL)
+    do.call(rbind, lapply(ORDEN_EDAD, function(g) data.frame(
+      grupo          = etiqueta_edad(g),
+      padron_hombres = sumar_rango(df_uso, g, "hombres", "padron"),
+      padron_mujeres = sumar_rango(df_uso, g, "mujeres", "padron"),
+      lista_hombres  = sumar_rango(df_uso, g, "hombres", "lista"),
+      lista_mujeres  = sumar_rango(df_uso, g, "mujeres", "lista"),
+      stringsAsFactors = FALSE
+    )))
+  }
+  
+  # ── Totales de sexo ───────────────────────────────────────────────────────────
+  extraer_totales_sexo <- function(df, ambito) {
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    fila <- if (ambito == "extranjero") fila_ext(df) else fila_totales_nac(df)
+    if (is.null(fila)) {
+      df_nac <- df_nacional(df)
+      if (is.null(df_nac) || nrow(df_nac) == 0) return(NULL)
+      cols_num <- sapply(df_nac, is.numeric)
+      fila <- as.data.frame(lapply(df_nac[, cols_num, drop = FALSE], function(x) sum(x, na.rm = TRUE)))
+    }
+    cols_sex <- c("padron_hombres","padron_mujeres","padron_no_binario",
+                  "lista_hombres","lista_mujeres","lista_no_binario")
+    res <- list()
+    for (col in cols_sex) {
+      res[[col]] <- if (col %in% colnames(fila)) { val <- as.numeric(fila[[col]][1]); if (is.na(val)) 0 else val } else 0
+    }
+    as.data.frame(res, stringsAsFactors = FALSE)
+  }
+  
+  # ── Tabla de origen ───────────────────────────────────────────────────────────
+  NOM_ORIGEN <- c(
+    "01"="AGUASCALIENTES","02"="BAJA CALIFORNIA","03"="BAJA CALIFORNIA SUR",
+    "04"="CAMPECHE","05"="COAHUILA","06"="COLIMA","07"="CHIAPAS","08"="CHIHUAHUA",
+    "09"="CIUDAD DE MEXICO","10"="DURANGO","11"="GUANAJUATO","12"="GUERRERO",
+    "13"="HIDALGO","14"="JALISCO","15"="MEXICO","16"="MICHOACAN","17"="MORELOS",
+    "18"="NAYARIT","19"="NUEVO LEON","20"="OAXACA","21"="PUEBLA","22"="QUERETARO",
+    "23"="QUINTANA ROO","24"="SAN LUIS POTOSI","25"="SINALOA","26"="SONORA",
+    "27"="TABASCO","28"="TAMAULIPAS","29"="TLAXCALA","30"="VERACRUZ",
+    "31"="YUCATAN","32"="ZACATECAS",
+    "87"="Mexicanos nacidos en el extranjero","88"="Ciudadanos naturalizados"
+  )
+  construir_tabla_origen <- function(df, ambito) {
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    df_uso <- if (ambito == "extranjero")
+      df[grepl("RESIDENTES EXTRANJERO", toupper(df$nombre_entidad %||% ""), ignore.case = TRUE), ]
+    else df_nacional(df)
+    if (is.null(df_uso) || nrow(df_uso) == 0) return(NULL)
+    cols_pad <- grep("^pad_\\d{2}$|^pad8[78]$", colnames(df_uso), value = TRUE, ignore.case = TRUE)
+    if (length(cols_pad) == 0)
+      cols_pad <- grep("^padron_[0-9]", colnames(df_uso), value = TRUE, ignore.case = TRUE)
+    if (length(cols_pad) == 0) { message("⚠️ [origen] Sin columnas de estados"); return(NULL) }
+    res <- do.call(rbind, lapply(cols_pad, function(cp) {
+      clave  <- sprintf("%02s", trimws(gsub("pad_|pad|padron_", "", cp, ignore.case = TRUE)))
+      nombre <- NOM_ORIGEN[clave] %||% paste0("Entidad ", clave)
+      cl     <- gsub("pad", "ln", cp, ignore.case = TRUE)
+      data.frame(
+        entidad_origen = nombre,
+        padron         = sum(as.numeric(df_uso[[cp]]), na.rm = TRUE),
+        lista_nominal  = if (cl %in% colnames(df_uso)) sum(as.numeric(df_uso[[cl]]), na.rm = TRUE) else NA,
+        stringsAsFactors = FALSE
+      )
+    }))
+    res[order(res$lista_nominal, decreasing = TRUE, na.last = TRUE), ]
+  }
+  
+  texto_subtitulo <- function() {
+    if (estado_app() == "restablecido") return("Vista: Nacional — sin filtros aplicados")
+    gsub(" - ", " – ", isolate(texto_alcance()))
+  }
+  
+  # ════════════════════════════════════════════════════════════════════════════
+  # UI: TÍTULO Y SUBTÍTULOS — reactive directo (sin bindEvent)
+  # ════════════════════════════════════════════════════════════════════════════
+  
+  output$semanal_titulo_principal <- renderUI({
+    if (es_historico()) return(NULL)
+    div(style = "text-align:center;margin-bottom:10px;",
+        h3(paste0(anio_semanal(), " - Padrón y Lista Nominal Electoral - ", etiq_ambito(ambito_reactivo())),
+           style = "color:#2c3e50;font-family:Arial,sans-serif;font-weight:700;"))
+  })
+  output$semanal_subtitulo_edad <- renderUI({
+    if (es_historico()) return(NULL)
+    p(class = "text-muted", style = "font-size:13px;text-align:center;margin-bottom:6px;", texto_subtitulo())
+  })
+  output$semanal_subtitulo_sexo <- renderUI({
+    if (es_historico()) return(NULL)
+    p(class = "text-muted", style = "font-size:13px;text-align:center;margin-bottom:6px;", texto_subtitulo())
+  })
+  output$semanal_subtitulo_origen <- renderUI({
+    if (es_historico()) return(NULL)
+    p(class = "text-muted", style = "font-size:13px;text-align:center;margin-bottom:6px;", texto_subtitulo())
   })
   
-  # ========== GRÁFICO PRINCIPAL SEMANALES (BARRAS) ==========
+  # ════════════════════════════════════════════════════════════════════════════
+  # GRÁFICAS — reactive directo (sin bindEvent)
+  # ════════════════════════════════════════════════════════════════════════════
   
-  output$`main-grafico_barras` <- renderPlotly({
-    req(input$tipo_corte == "semanal")
-    
-    # ✅ v1.1: Usar ambito_reactivo en lugar de input$ambito_datos
-    ambito_actual <- ambito_reactivo()
-    
-    req(combinacion_valida())
-    
-    datos <- datos_columnas()
-    
-    message("📊 [GRÁFICA SEMANAL BARRAS] Renderizando - Ámbito: ", ambito_actual)
-    
-    if (is.null(datos) || is.null(datos$datos) || nrow(datos$datos) == 0) {
-      p <- plot_ly() %>%
-        layout(
-          xaxis = list(visible = FALSE),
-          yaxis = list(visible = FALSE),
-          annotations = list(
-            list(
-              text = "No hay datos disponibles con los filtros seleccionados",
-              xref = "paper", yref = "paper",
-              x = 0.5, y = 0.5,
-              xanchor = "center", yanchor = "middle",
-              showarrow = FALSE,
-              font = list(size = 16, color = "#666")
-            )
-          )
-        )
-      return(p)
-    }
-    
-    df <- datos$datos
-    desglose_actual <- isolate(input$desglose) %||% "Sexo"
-    
-    message("   Desglose: ", desglose_actual)
-    
-    # ========== DETERMINAR COLUMNAS SEGÚN ÁMBITO ==========
-    if (ambito_actual == "nacional") {
-      col_padron <- "padron_nacional"
-      col_lista <- "lista_nacional"
-      titulo_base <- "Nacional"
-    } else {
-      col_padron <- "padron_extranjero"
-      col_lista <- "lista_extranjero"
-      titulo_base <- "Extranjero"
-      
-      if (!col_padron %in% colnames(df) || !col_lista %in% colnames(df)) {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = "Datos de extranjero no disponibles para este corte",
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
-      }
-    }
-    
-    # ========== DESGLOSE POR SEXO ==========
-    if (desglose_actual == "Sexo") {
-      
-      if (ambito_actual == "nacional") {
-        cols_sexo <- c("padron_nacional_hombres", "padron_nacional_mujeres", 
-                       "lista_nacional_hombres", "lista_nacional_mujeres")
-      } else {
-        # ✅ v1.1: Para extranjero, verificar si existen columnas de sexo
-        cols_sexo <- c("padron_extranjero_hombres", "padron_extranjero_mujeres", 
-                       "lista_extranjero_hombres", "lista_extranjero_mujeres")
-      }
-      
-      if (all(cols_sexo %in% colnames(df))) {
-        
-        if (ambito_actual == "nacional") {
-          padron_h <- sum(df$padron_nacional_hombres, na.rm = TRUE)
-          padron_m <- sum(df$padron_nacional_mujeres, na.rm = TRUE)
-          lista_h <- sum(df$lista_nacional_hombres, na.rm = TRUE)
-          lista_m <- sum(df$lista_nacional_mujeres, na.rm = TRUE)
-        } else {
-          padron_h <- sum(df$padron_extranjero_hombres, na.rm = TRUE)
-          padron_m <- sum(df$padron_extranjero_mujeres, na.rm = TRUE)
-          lista_h <- sum(df$lista_extranjero_hombres, na.rm = TRUE)
-          lista_m <- sum(df$lista_extranjero_mujeres, na.rm = TRUE)
-        }
-        
-        datos_grafico <- data.frame(
-          Categoria = rep(c("Hombres", "Mujeres"), 2),
-          Tipo = rep(c("Padrón Electoral", "Lista Nominal"), each = 2),
-          Cantidad = c(padron_h, padron_m, lista_h, lista_m),
-          stringsAsFactors = FALSE
-        )
-        
-        # Colores según ámbito
-        colores <- if (ambito_actual == "nacional") {
-          c("#44559B", "#C0311A")
-        } else {
-          c("#EAC43E", "#B3D491")
-        }
-        
-        p <- plot_ly(
-          data = datos_grafico,
-          x = ~Categoria,
-          y = ~Cantidad,
-          color = ~Tipo,
-          type = 'bar',
-          colors = colores,
-          text = ~paste0(format(Cantidad, big.mark = ","), " electores"),
-          hovertemplate = '<b>%{x}</b><br>%{text}<extra></extra>'
-        ) %>%
-          layout(
-            title = list(
-              text = paste0("Padrón Electoral y Lista Nominal por Sexo - ", titulo_base),
-              font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
-              x = 0.5, xanchor = "center"
-            ),
-            xaxis = list(title = ""),
-            yaxis = list(title = "Número de Electores", separatethousands = TRUE),
-            barmode = 'group',
-            margin = list(t = 120, b = 140, l = 90, r = 50),
-            legend = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.15),
-            annotations = list(
-              list(
-                text = isolate(texto_alcance()),
-                x = 0.5, y = 1.12,
-                xref = "paper", yref = "paper",
-                xanchor = "center", yanchor = "top",
-                showarrow = FALSE,
-                font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-                align = "center"
-              ),
-              list(
-                text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-                x = 0.5, y = -0.35,
-                xref = "paper", yref = "paper",
-                xanchor = "left", yanchor = "top",
-                showarrow = FALSE,
-                font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-                align = "left"
-              )
-            )
-          )
-        
-      } else {
-        # Si no hay columnas de sexo, mostrar totales
-        total_padron <- sum(df[[col_padron]], na.rm = TRUE)
-        total_lista <- sum(df[[col_lista]], na.rm = TRUE)
-        
-        datos_grafico <- data.frame(
-          Tipo = c("Padrón Electoral", "Lista Nominal"),
-          Cantidad = c(total_padron, total_lista),
-          stringsAsFactors = FALSE
-        )
-        
-        colores <- if (ambito_actual == "nacional") {
-          c("#003E66", "#AE0E35")
-        } else {
-          c("#EAC43E", "#B3D491")
-        }
-        
-        p <- plot_ly(
-          data = datos_grafico,
-          x = ~Tipo,
-          y = ~Cantidad,
-          type = 'bar',
-          marker = list(color = colores),
-          text = ~paste0(format(Cantidad, big.mark = ","), " electores"),
-          hovertemplate = '<b>%{x}</b><br>%{text}<extra></extra>'
-        ) %>%
-          layout(
-            title = list(
-              text = paste0("Padrón Electoral y Lista Nominal - ", titulo_base),
-              font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
-              x = 0.5, xanchor = "center"
-            ),
-            xaxis = list(title = ""),
-            yaxis = list(title = "Número de Electores", separatethousands = TRUE),
-            margin = list(t = 120, b = 140, l = 90, r = 50),
-            annotations = list(
-              list(
-                text = isolate(texto_alcance()),
-                x = 0.5, y = 1.12,
-                xref = "paper", yref = "paper",
-                xanchor = "center", yanchor = "top",
-                showarrow = FALSE,
-                font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-                align = "center"
-              ),
-              list(
-                text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-                x = 0.5, y = -0.35,
-                xref = "paper", yref = "paper",
-                xanchor = "left", yanchor = "top",
-                showarrow = FALSE,
-                font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-                align = "left"
-              )
-            )
-          )
-      }
-      
-      message("✅ Gráfico semanal por sexo renderizado - ", titulo_base)
-      return(p)
-      
-    } else if (desglose_actual == "Rango de Edad") {
-      
-      # ========== DESGLOSE POR EDAD ==========
-      cols_edad_lista <- grep("^lista_(\\d+|\\d+_\\d+)", colnames(df), value = TRUE, ignore.case = TRUE)
-      
-      if (length(cols_edad_lista) > 0) {
-        
-        grupos_raw <- gsub("lista_", "", cols_edad_lista, ignore.case = TRUE)
-        grupos_raw <- gsub("_(hombres|mujeres|nobinario).*", "", grupos_raw, ignore.case = TRUE)
-        grupos <- unique(grupos_raw)
-        
-        datos_grafico <- data.frame(
-          Grupo = character(),
-          Lista_Nominal = numeric(),
-          stringsAsFactors = FALSE
-        )
-        
-        for (grupo in grupos) {
-          cols_grupo <- grep(paste0("^lista_", grupo, "($|_)"), colnames(df), value = TRUE, ignore.case = TRUE)
-          total <- sum(df[, cols_grupo, drop = FALSE], na.rm = TRUE)
-          nombre_grupo <- gsub("_", "-", grupo)
-          nombre_grupo <- gsub("y-mas", "y más", nombre_grupo, ignore.case = TRUE)
-          
-          datos_grafico <- rbind(
-            datos_grafico, 
-            data.frame(
-              Grupo = nombre_grupo,
-              Lista_Nominal = total,
-              stringsAsFactors = FALSE
-            )
-          )
-        }
-        
-        orden_edad <- c("18", "19", "20-24", "25-29", "30-34", "35-39", "40-44", 
-                        "45-49", "50-54", "55-59", "60-64", "65-y-más", "65-y-mas")
-        datos_grafico$Grupo <- factor(
-          datos_grafico$Grupo, 
-          levels = intersect(orden_edad, datos_grafico$Grupo)
-        )
-        datos_grafico <- datos_grafico[order(datos_grafico$Grupo), ]
-        
-        color_edad <- if (ambito_actual == "nacional") "#C0311A" else "#B3D491"
-        
-        p <- plot_ly(
-          data = datos_grafico,
-          x = ~Grupo,
-          y = ~Lista_Nominal,
-          type = 'bar',
-          marker = list(color = color_edad),
-          text = ~paste0(format(Lista_Nominal, big.mark = ","), " electores"),
-          hovertemplate = '<b>%{x}</b><br>%{text}<extra></extra>'
-        ) %>%
-          layout(
-            title = list(text = paste0("Lista Nominal por Grupo de Edad - ", titulo_base),
-                         font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
-                         x = 0.5,
-                         xanchor = "center"
-            ),
-            xaxis = list(title = "Grupo de Edad"),
-            yaxis = list(
-              title = "Número de Electores",
-              separatethousands = TRUE
-            ),
-            margin = list(t = 120, b = 140, l = 90, r = 50),
-            annotations = list(
-              list(
-                text = isolate(texto_alcance()),
-                x = 0.5, y = 1.12,
-                xref = "paper", yref = "paper",
-                xanchor = "center", yanchor = "top",
-                showarrow = FALSE,
-                font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-                align = "center"
-              ),
-              list(
-                text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-                x = 0.0, y = -0.25,
-                xref = "paper", yref = "paper",
-                xanchor = "left", yanchor = "top",
-                showarrow = FALSE,
-                font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-                align = "left"
-              )
-            )
-          )
-        
-      } else {
-        p <- plot_ly() %>%
-          layout(
-            xaxis = list(visible = FALSE),
-            yaxis = list(visible = FALSE),
-            annotations = list(
-              list(
-                text = "Datos de edad no disponibles para este corte",
-                xref = "paper", yref = "paper",
-                x = 0.5, y = 0.5,
-                showarrow = FALSE,
-                font = list(size = 14, color = "#666")
-              )
-            )
-          )
-      }
-      
-      message("✅ Gráfico semanal por edad renderizado - ", titulo_base)
-      return(p)
-      
-    } else if (desglose_actual == "Entidad de Origen") {
-      
-      # ========== DESGLOSE POR ENTIDAD DE ORIGEN ==========
-      if ("nombre_entidad" %in% colnames(df) && col_lista %in% colnames(df)) {
-        
-        datos_grafico <- df %>%
-          group_by(Entidad = nombre_entidad) %>%
-          summarise(
-            Lista_Nominal = sum(.data[[col_lista]], na.rm = TRUE),
-            .groups = 'drop'
-          ) %>%
-          arrange(desc(Lista_Nominal)) %>%
-          head(10)
-        
-        datos_grafico <- as.data.frame(datos_grafico)
-        
-        color_entidad <- if (ambito_actual == "nacional") "#44559B" else "#EAC43E"
-        
-        p <- plot_ly(
-          data = datos_grafico,
-          y = ~reorder(Entidad, Lista_Nominal),
-          x = ~Lista_Nominal,
-          type = 'bar',
-          orientation = 'h',
-          marker = list(color = color_entidad),
-          text = ~paste0(format(Lista_Nominal, big.mark = ","), " electores"),
-          hovertemplate = '<b>%{y}</b><br>%{text}<extra></extra>'
-        ) %>%
-          layout(
-            title = list(
-              text = paste0("Top 10 Entidades por Lista Nominal - ", titulo_base),
-              font = list(size = 18, color = "#333", family = "Arial, sans-serif"),
-              x = 0.5,
-              xanchor = "center"
-            ),
-            xaxis = list(
-              title = "Número de Electores",
-              separatethousands = TRUE
-            ),
-            yaxis = list(title = ""),
-            margin = list(t = 120, b = 140, l = 180, r = 50),
-            annotations = list(
-              list(
-                text = isolate(texto_alcance()),
-                x = 0.5, y = 1.12,
-                xref = "paper", yref = "paper",
-                xanchor = "center", yanchor = "top",
-                showarrow = FALSE,
-                font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-                align = "center"
-              ),
-              list(
-                text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-                x = 0.5, y = -0.35,
-                xref = "paper", yref = "paper",
-                xanchor = "left", yanchor = "top",
-                showarrow = FALSE,
-                font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-                align = "left"
-              )
-            )
-          )
-        
-      } else {
-        p <- plot_ly() %>%
-          layout(
-            xaxis = list(visible = FALSE),
-            yaxis = list(visible = FALSE),
-            annotations = list(
-              list(
-                text = "Datos de origen no disponibles para este corte",
-                xref = "paper", yref = "paper",
-                x = 0.5, y = 0.5,
-                showarrow = FALSE,
-                font = list(size = 14, color = "#666")
-              )
-            )
-          )
-      }
-      
-      message("✅ Gráfico semanal por entidad de origen renderizado - ", titulo_base)
-      return(p)
-      
-    } else {
-      p <- plot_ly() %>%
-        layout(
-          xaxis = list(visible = FALSE),
-          yaxis = list(visible = FALSE),
-          annotations = list(
-            list(
-              text = "Tipo de desglose no reconocido",
-              xref = "paper", yref = "paper",
-              x = 0.5, y = 0.5,
-              showarrow = FALSE,
-              font = list(size = 14, color = "#666")
-            )
-          )
-        )
-      
-      return(p)
-    }
-  }) %>%
-    # ✅ v1.1: Agregar ambito_reactivo para cambio de vista automático
-    bindEvent(
-      input$btn_consultar,
-      ambito_reactivo(),  # ✅ AGREGADO para cambio de vista
-      input$desglose,
-      ignoreNULL = FALSE,
-      ignoreInit = FALSE
-    )
+  output$semanal_edad_piramide <- renderPlotly({
+    if (es_historico()) return(NULL)
+    message("📊 [semanal_edad_piramide] Renderizando...")
+    ambito <- ambito_reactivo(); alcance <- isolate(texto_alcance()); anio <- anio_semanal()
+    datos  <- datos_semanal_edad()
+    if (is.null(datos)) { message("⚠️ [piramide] datos NULL"); return(plot_vacio()) }
+    df <- construir_df_edad(datos, ambito)
+    if (is.null(df) || nrow(df) == 0) return(plot_vacio("Sin datos de edad"))
+    message("✅ [semanal_edad_piramide] OK")
+    niveles_y <- sapply(rev(ORDEN_EDAD), etiqueta_edad)
+    plot_ly() %>%
+      add_trace(data = df, x = ~(-lista_hombres), y = ~factor(grupo, levels = niveles_y),
+                type = "bar", orientation = "h", name = "LNE Hombres",
+                marker = list(color = color_h(ambito)), customdata = ~lista_hombres,
+                hovertemplate = "<b>%{y}</b><br>LNE Hombres: %{customdata:,.0f}<extra></extra>") %>%
+      add_trace(data = df, x = ~lista_mujeres, y = ~factor(grupo, levels = niveles_y),
+                type = "bar", orientation = "h", name = "LNE Mujeres",
+                marker = list(color = color_m(ambito)),
+                hovertemplate = "<b>%{y}</b><br>LNE Mujeres: %{x:,.0f}<extra></extra>") %>%
+      layout(
+        title   = list(text = paste0("Pirámide de Edad - LNE (", etiq_ambito(ambito), ") ", anio),
+                       font = list(size = 17, color = "#333", family = "Arial, sans-serif"), x = 0.5, xanchor = "center"),
+        barmode = "overlay", bargap = 0.1,
+        xaxis   = list(title = "Número de electores", tickformat = ",.0f", zeroline = TRUE, zerolinecolor = "#999", zerolinewidth = 1.5),
+        yaxis   = list(title = "", categoryorder = "array", categoryarray = niveles_y),
+        legend  = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.15),
+        margin  = list(t = 110, b = 80, l = 75, r = 40), hovermode = "y unified",
+        annotations = list(ann_alcance(alcance), ann_fuente())
+      )
+  })
   
-  # ========== GRÁFICO DE TASA DE INCLUSIÓN (SOLO SEMANALES) ==========
+  output$semanal_edad_distribucion <- renderPlotly({
+    if (es_historico()) return(NULL)
+    message("📊 [semanal_edad_distribucion] Renderizando...")
+    ambito <- ambito_reactivo(); alcance <- isolate(texto_alcance()); anio <- anio_semanal()
+    datos  <- datos_semanal_edad()
+    if (is.null(datos)) return(plot_vacio())
+    df <- construir_df_edad(datos, ambito)
+    if (is.null(df) || nrow(df) == 0) return(plot_vacio("Sin datos de edad"))
+    df$padron_total <- df$padron_hombres + df$padron_mujeres
+    df$lista_total  <- df$lista_hombres  + df$lista_mujeres
+    plot_ly() %>%
+      add_trace(data = df, x = ~grupo, y = ~padron_total, type = "bar",
+                name = "Padrón Electoral", marker = list(color = color_padron(ambito)),
+                hovertemplate = "<b>%{x}</b><br>Padrón: %{y:,.0f}<extra></extra>") %>%
+      add_trace(data = df, x = ~grupo, y = ~lista_total, type = "bar",
+                name = "Lista Nominal", marker = list(color = color_lista(ambito)),
+                hovertemplate = "<b>%{x}</b><br>LNE: %{y:,.0f}<extra></extra>") %>%
+      layout(
+        title   = list(text = paste0("Padrón y LNE por Rango de Edad (", etiq_ambito(ambito), ") ", anio),
+                       font = list(size = 17, color = "#333", family = "Arial, sans-serif"), x = 0.5, xanchor = "center"),
+        barmode = "group",
+        xaxis   = list(title = "Rango de Edad", tickangle = -30),
+        yaxis   = list(title = "Número de electores", separatethousands = TRUE),
+        legend  = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.18),
+        margin  = list(t = 110, b = 100, l = 90, r = 40),
+        annotations = list(ann_alcance(alcance), ann_fuente())
+      )
+  })
   
-  output$`main-tasa_inclusion_plot` <- renderPlotly({
-    req(input$tipo_corte == "semanal")
-    
-    # ✅ v1.1: Usar ambito_reactivo en lugar de input$ambito_datos
-    ambito_actual <- ambito_reactivo()
-    
-    req(combinacion_valida())
-    
-    datos <- datos_columnas()
-    
-    message("📊 [GRÁFICA SEMANAL TASA] Renderizando - Ámbito: ", ambito_actual)
-    
-    if (is.null(datos) || is.null(datos$datos) || nrow(datos$datos) == 0) {
-      return(NULL)
-    }
-    
-    df <- datos$datos
-    
-    if (ambito_actual == "nacional") {
-      col_padron <- "padron_nacional"
-      col_lista <- "lista_nacional"
-      titulo_ambito <- "Nacional"
-      color_lista <- "#4CAF50"
-      color_diferencia <- "#FFC107"
-    } else {
-      col_padron <- "padron_extranjero"
-      col_lista <- "lista_extranjero"
-      titulo_ambito <- "Extranjero"
-      color_lista <- "#8BC34A"
-      color_diferencia <- "#FFB74D"
-      
-      if (!col_padron %in% colnames(df) || !col_lista %in% colnames(df)) {
-        return(plot_ly() %>%
-                 layout(
-                   xaxis = list(visible = FALSE),
-                   yaxis = list(visible = FALSE),
-                   annotations = list(
-                     list(
-                       text = "Datos de extranjero no disponibles para este corte",
-                       xref = "paper", yref = "paper",
-                       x = 0.5, y = 0.5,
-                       showarrow = FALSE,
-                       font = list(size = 14, color = "#666")
-                     )
-                   )
-                 ))
-      }
-    }
-    
-    total_padron <- sum(df[[col_padron]], na.rm = TRUE)
-    total_lista <- sum(df[[col_lista]], na.rm = TRUE)
-    
-    if (total_padron == 0) {
-      return(NULL)
-    }
-    
-    tasa_inclusion <- round((total_lista / total_padron) * 100, 2)
-    tasa_exclusion <- round(100 - tasa_inclusion, 2)
-    
-    datos_grafico <- data.frame(
-      grupo = c(
-        paste0("Lista Nominal:<br>", sprintf("%.2f%%", tasa_inclusion)),
-        sprintf("Diferencia: %.2f%%", tasa_exclusion)
-      ),
-      valor = c(tasa_inclusion, tasa_exclusion),
+  output$semanal_sexo_barras <- renderPlotly({
+    if (es_historico()) return(NULL)
+    message("📊 [semanal_sexo_barras] Renderizando...")
+    ambito <- ambito_reactivo(); alcance <- isolate(texto_alcance()); anio <- anio_semanal()
+    datos  <- datos_semanal_sexo()
+    if (is.null(datos)) return(plot_vacio())
+    tot <- extraer_totales_sexo(datos, ambito)
+    if (is.null(tot)) return(plot_vacio("Sin datos de sexo"))
+    df_g <- data.frame(
+      Sexo     = rep(c("Hombres","Mujeres"), 2),
+      Tipo     = rep(c("Padrón Electoral","Lista Nominal"), each = 2),
+      Cantidad = c(tot$padron_hombres, tot$padron_mujeres, tot$lista_hombres, tot$lista_mujeres),
       stringsAsFactors = FALSE
     )
-    
-    p <- plot_ly(
-      data = datos_grafico,
-      values = ~valor,
-      labels = ~grupo,
-      type = "pie",
-      hole = 0.6,
-      textinfo = "label",
-      textposition = "outside",
-      textfont = list(
-        color = c(color_lista, color_diferencia),
-        size = 14
-      ),
-      marker = list(colors = c(color_lista, color_diferencia)),
-      showlegend = FALSE,
-      hoverinfo = "none"
-    ) %>%
+    p <- plot_ly(data = df_g, x = ~Sexo, y = ~Cantidad, color = ~Tipo,
+                 colors = c("Padrón Electoral" = color_padron(ambito), "Lista Nominal" = color_lista(ambito)),
+                 type = "bar", text = ~paste0(format(Cantidad, big.mark = ","), " electores"),
+                 hovertemplate = "<b>%{x}</b> – %{data.name}<br>%{text}<extra></extra>") %>%
       layout(
-        title = list(
-          text = paste0("Tasa de Inclusión en Lista Nominal - ", titulo_ambito),
-          x = 0.5,
-          xanchor = "center",
-          y = 0.95,
-          yanchor = "top",
-          font = list(size = 20, color = "black", family = "Arial, sans-serif")
-        ),
-        annotations = list(
-          list(
-            text = paste0("Padrón Total: ", format(total_padron, big.mark = ",")),
-            x = 0.5,
-            xref = "paper",
-            y = 1.15,
-            yref = "paper",
-            xanchor = "center",
-            yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 16, color = "black", family = "Arial, sans-serif")
-          ),
-          list(
-            text = isolate(texto_alcance()),
-            x = 0.5,
-            xref = "paper",
-            y = 1.05,
-            yref = "paper",
-            xanchor = "center",
-            yanchor = "top",
-            showarrow = FALSE,
-            font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
-            align = "center"
-          ),
-          list(
-            text = "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado",
-            xref = "paper", yref = "paper",
-            x = 0.5, y = -0.35,
-            font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
-            showarrow = FALSE,
-            align = "left"
-          )
-        ),
-        margin = list(t = 120, b = 140, l = 50, r = 50),
-        showlegend = FALSE
+        title   = list(text = paste0("Padrón y LNE por Sexo (", etiq_ambito(ambito), ") ", anio),
+                       font = list(size = 17, color = "#333", family = "Arial, sans-serif"), x = 0.5, xanchor = "center"),
+        barmode = "group", xaxis = list(title = ""),
+        yaxis   = list(title = "Número de electores", separatethousands = TRUE),
+        legend  = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.15),
+        margin  = list(t = 110, b = 80, l = 90, r = 40),
+        annotations = list(ann_alcance(alcance), ann_fuente())
       )
-    
-    message("✅ Gráfico de tasa de inclusión renderizado - ", titulo_ambito)
-    return(p)
-  }) %>%
-    # ✅ v1.1: Agregar ambito_reactivo para cambio de vista automático
-    bindEvent(
-      input$btn_consultar,
-      ambito_reactivo(),  # ✅ AGREGADO para cambio de vista
-      ignoreNULL = FALSE,
-      ignoreInit = FALSE
-    )
+    nb <- tot$padron_no_binario %||% 0
+    if (!is.na(nb) && nb > 0)
+      p <- p %>% add_annotations(
+        text = paste0("<b>No binario:</b><br>Padrón: ", fmt_num(nb), "<br>LNE: ", fmt_num(tot$lista_no_binario)),
+        x = 1, y = 0.85, xref = "paper", yref = "paper", xanchor = "right", yanchor = "top",
+        showarrow = FALSE, bgcolor = "#f8f9fa", bordercolor = "#6C757D",
+        borderwidth = 1, borderpad = 6, font = list(size = 12, color = "#444")
+      )
+    p
+  })
   
-  message("✅ graficas_semanal v1.1 inicializado")
-  message("   ✅ CORRECCIÓN: ambito_reactivo usado para cambio de vista automático")
+  output$semanal_sexo_dona <- renderPlotly({
+    if (es_historico()) return(NULL)
+    message("📊 [semanal_sexo_dona] Renderizando...")
+    ambito <- ambito_reactivo(); alcance <- isolate(texto_alcance()); anio <- anio_semanal()
+    datos  <- datos_semanal_sexo()
+    if (is.null(datos)) return(plot_vacio())
+    tot <- extraer_totales_sexo(datos, ambito)
+    if (is.null(tot)) return(plot_vacio("Sin datos de sexo"))
+    ph <- tot$padron_hombres; pm <- tot$padron_mujeres
+    lh <- tot$lista_hombres;  lm <- tot$lista_mujeres
+    if ((ph + pm) == 0) return(plot_vacio("Sin datos de padrón"))
+    th <- if (ph > 0) round(lh / ph * 100, 2) else NA
+    tm <- if (pm > 0) round(lm / pm * 100, 2) else NA
+    df_d <- data.frame(Cat = c(paste0("Hombres\n", sprintf("%.2f%%", th)),
+                               paste0("Mujeres\n",  sprintf("%.2f%%", tm))),
+                       Tasa = c(th, tm), stringsAsFactors = FALSE)
+    plot_ly(data = df_d, values = ~Tasa, labels = ~Cat, type = "pie", hole = 0.55,
+            textinfo = "label+percent", textposition = "outside",
+            marker = list(colors = c(color_h(ambito), color_m(ambito))),
+            showlegend = FALSE, hovertemplate = "<b>%{label}</b><br>Tasa: %{value:.2f}%<extra></extra>") %>%
+      layout(
+        title = list(text = paste0("Tasa de Inclusión en LNE por Sexo (", etiq_ambito(ambito), ") ", anio),
+                     font = list(size = 17, color = "#333", family = "Arial, sans-serif"), x = 0.5, xanchor = "center"),
+        annotations = list(
+          list(text = paste0("Padrón total:<br><b>", fmt_num(ph + pm), "</b>"),
+               x = 0.5, y = 0.5, xref = "paper", yref = "paper",
+               xanchor = "center", yanchor = "middle", showarrow = FALSE, font = list(size = 13, color = "#333")),
+          ann_alcance(alcance, y_pos = 1.12), ann_fuente()
+        ),
+        margin = list(t = 120, b = 60, l = 40, r = 40)
+      )
+  })
+  
+  NOM_CORTOS <- c(
+    "01"="AGS","02"="BC","03"="BCS","04"="CAMP","05"="COAH","06"="COL",
+    "07"="CHIS","08"="CHIH","09"="CDMX","10"="DGO","11"="GTO","12"="GRO",
+    "13"="HGO","14"="JAL","15"="MEX","16"="MICH","17"="MOR","18"="NAY",
+    "19"="NL","20"="OAX","21"="PUE","22"="QRO","23"="QROO","24"="SLP",
+    "25"="SIN","26"="SON","27"="TAB","28"="TAMS","29"="TLAX","30"="VER",
+    "31"="YUC","32"="ZAC","87"="MEX.EXT","88"="NAT."
+  )
+  etiq_col <- function(col) {
+    clave <- sprintf("%02s", gsub("ln_|ln|lista_", "", col, ignore.case = TRUE))
+    NOM_CORTOS[clave] %||% col
+  }
+  
+  output$semanal_origen_calor <- renderPlotly({
+    if (es_historico()) return(NULL)
+    message("📊 [semanal_origen_calor] Renderizando...")
+    ambito <- ambito_reactivo(); alcance <- isolate(texto_alcance()); anio <- anio_semanal()
+    datos  <- datos_semanal_origen()
+    if (is.null(datos)) return(plot_vacio())
+    df_uso <- if (ambito == "extranjero")
+      datos[grepl("RESIDENTES EXTRANJERO", toupper(datos$nombre_entidad %||% ""), ignore.case = TRUE), ]
+    else df_nacional(datos)
+    if (is.null(df_uso) || nrow(df_uso) == 0) return(plot_vacio("Sin datos de origen"))
+    cols_ln <- grep("^ln_\\d{2}$|^ln8[78]$", colnames(df_uso), value = TRUE, ignore.case = TRUE)
+    if (length(cols_ln) == 0) cols_ln <- grep("^lista_\\d|^ln_\\d", colnames(df_uso), value = TRUE, ignore.case = TRUE)
+    if (length(cols_ln) == 0) return(plot_vacio("Columnas de origen no encontradas"))
+    df_uso$total_lne <- rowSums(df_uso[, cols_ln, drop = FALSE], na.rm = TRUE)
+    top10_idx  <- order(df_uso$total_lne, decreasing = TRUE)[1:min(10, nrow(df_uso))]
+    df_top     <- df_uso[top10_idx, ]
+    tots_orig  <- colSums(df_uso[, cols_ln, drop = FALSE], na.rm = TRUE)
+    top10_cols <- names(sort(tots_orig, decreasing = TRUE))[1:min(10, length(cols_ln))]
+    mat <- as.matrix(df_top[, top10_cols, drop = FALSE])
+    colnames(mat) <- sapply(top10_cols, etiq_col); rownames(mat) <- df_top$nombre_entidad
+    cs <- if (ambito == "extranjero") list(c(0,"#FFF9E6"), c(0.5,"#EAC43E"), c(1,"#8F6A00"))
+    else list(c(0,"#E8EDF8"), c(0.5,"#44559B"), c(1,"#1A2654"))
+    plot_ly(z = mat, x = colnames(mat), y = rownames(mat), type = "heatmap",
+            colorscale = cs, showscale = TRUE,
+            hovertemplate = "Receptor: <b>%{y}</b><br>Origen: <b>%{x}</b><br>LNE: %{z:,.0f}<extra></extra>") %>%
+      layout(
+        title  = list(text = paste0("Top 10 Receptores vs. Origen (", etiq_ambito(ambito), ") ", anio),
+                      font = list(size = 16, color = "#333", family = "Arial, sans-serif"), x = 0.5, xanchor = "center"),
+        xaxis  = list(title = "Estado de Origen", tickangle = -40),
+        yaxis  = list(title = "Estado Receptor"),
+        margin = list(t = 120, b = 100, l = 160, r = 60),
+        annotations = list(ann_alcance(alcance, y_pos = 1.10), ann_fuente())
+      )
+  })
+  
+  output$semanal_origen_barras <- renderPlotly({
+    if (es_historico()) return(NULL)
+    message("📊 [semanal_origen_barras] Renderizando...")
+    ambito    <- ambito_reactivo(); alcance <- isolate(texto_alcance()); anio <- anio_semanal()
+    datos     <- datos_semanal_origen()
+    top_n_sel <- suppressWarnings(as.integer(input$semanal_top_n %||% "5"))
+    if (is.na(top_n_sel)) top_n_sel <- 0L
+    if (is.null(datos)) return(plot_vacio())
+    tabla <- construir_tabla_origen(datos, ambito)
+    if (is.null(tabla) || nrow(tabla) == 0) return(plot_vacio("Sin datos de estados de origen"))
+    df_plot <- if (top_n_sel > 0) head(tabla, min(top_n_sel, nrow(tabla))) else tabla
+    plot_ly() %>%
+      add_trace(data = df_plot, y = ~reorder(entidad_origen, lista_nominal), x = ~lista_nominal,
+                type = "bar", orientation = "h", name = "Lista Nominal",
+                marker = list(color = color_lista(ambito)),
+                hovertemplate = "<b>%{y}</b><br>LNE: %{x:,.0f}<extra></extra>") %>%
+      add_trace(data = df_plot, y = ~reorder(entidad_origen, lista_nominal), x = ~padron,
+                type = "bar", orientation = "h", name = "Padrón Electoral",
+                marker = list(color = color_padron(ambito)),
+                hovertemplate = "<b>%{y}</b><br>Padrón: %{x:,.0f}<extra></extra>") %>%
+      layout(
+        title   = list(text = paste0("Top ", nrow(df_plot), " Estados de Origen (", etiq_ambito(ambito), ") ", anio),
+                       font = list(size = 17, color = "#333", family = "Arial, sans-serif"), x = 0.5, xanchor = "center"),
+        barmode = "group",
+        xaxis   = list(title = "Número de electores", separatethousands = TRUE),
+        yaxis   = list(title = ""),
+        legend  = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.12),
+        margin  = list(t = 120, b = 80, l = 200, r = 40),
+        annotations = list(ann_alcance(alcance, y_pos = 1.10), ann_fuente())
+      )
+  })
+  
+  # ════════════════════════════════════════════════════════════════════════════
+  # DATATABLES — reactive directo (sin bindEvent)
+  # ════════════════════════════════════════════════════════════════════════════
+  
+  datos_dt_edad_r <- reactive({
+    if (es_historico()) return(NULL)
+    df <- construir_df_edad(datos_semanal_edad(), ambito_reactivo())
+    if (is.null(df)) return(NULL)
+    df$padron_total <- df$padron_hombres + df$padron_mujeres
+    df$lista_total  <- df$lista_hombres  + df$lista_mujeres
+    df$tasa <- round(df$lista_total / df$padron_total * 100, 2)
+    colnames(df) <- c("Rango de Edad","Padrón Hombres","Padrón Mujeres",
+                      "LNE Hombres","LNE Mujeres","Padrón Total","LNE Total","Tasa Inclusión (%)")
+    df
+  })
+  output$semanal_dt_edad <- DT::renderDataTable({
+    df <- datos_dt_edad_r()
+    if (is.null(df)) return(DT::datatable(data.frame(Mensaje = "Sin datos"), options = list(dom = "t")))
+    DT::datatable(df, rownames = FALSE,
+                  options = list(pageLength = 15, scrollX = TRUE, dom = "tip",
+                                 language = list(paginate = list(previous = "Anterior", `next` = "Siguiente"),
+                                                 info = "Mostrando _START_ a _END_ de _TOTAL_ registros"))) %>%
+      DT::formatRound(c("Padrón Hombres","Padrón Mujeres","LNE Hombres","LNE Mujeres","Padrón Total","LNE Total"), digits = 0) %>%
+      DT::formatRound("Tasa Inclusión (%)", digits = 2)
+  })
+  output$semanal_dt_edad_descarga <- downloadHandler(
+    filename = function() paste0("sefix_edad_", etiq_ambito(ambito_reactivo()), "_", anio_semanal(), "_", format(Sys.Date(), "%Y%m%d"), ".csv"),
+    content  = function(file) { df <- datos_dt_edad_r(); if (!is.null(df)) write.csv(df, file, row.names = FALSE) }
+  )
+  
+  datos_dt_sexo_r <- reactive({
+    if (es_historico()) return(NULL)
+    tot <- extraer_totales_sexo(datos_semanal_sexo(), ambito_reactivo())
+    if (is.null(tot)) return(NULL)
+    ph <- tot$padron_hombres; pm <- tot$padron_mujeres
+    lh <- tot$lista_hombres;  lm <- tot$lista_mujeres
+    nb_p <- tot$padron_no_binario; nb_l <- tot$lista_no_binario
+    data.frame(Sexo = c("Hombres","Mujeres","No binario"),
+               `Padrón Electoral` = c(ph, pm, nb_p), `Lista Nominal` = c(lh, lm, nb_l),
+               `Tasa de Inclusión (%)` = c(round(lh/ph*100,2), round(lm/pm*100,2),
+                                           if (!is.na(nb_p) && nb_p > 0) round(nb_l/nb_p*100,2) else NA),
+               stringsAsFactors = FALSE, check.names = FALSE)
+  })
+  output$semanal_dt_sexo <- DT::renderDataTable({
+    df <- datos_dt_sexo_r()
+    if (is.null(df)) return(DT::datatable(data.frame(Mensaje = "Sin datos"), options = list(dom = "t")))
+    DT::datatable(df, rownames = FALSE, options = list(pageLength = 5, dom = "t")) %>%
+      DT::formatRound(c("Padrón Electoral","Lista Nominal"), digits = 0) %>%
+      DT::formatRound("Tasa de Inclusión (%)", digits = 2)
+  })
+  output$semanal_dt_sexo_descarga <- downloadHandler(
+    filename = function() paste0("sefix_sexo_", etiq_ambito(ambito_reactivo()), "_", anio_semanal(), "_", format(Sys.Date(), "%Y%m%d"), ".csv"),
+    content  = function(file) { df <- datos_dt_sexo_r(); if (!is.null(df)) write.csv(df, file, row.names = FALSE) }
+  )
+  
+  datos_dt_origen_r <- reactive({
+    if (es_historico()) return(NULL)
+    tabla <- construir_tabla_origen(datos_semanal_origen(), ambito_reactivo())
+    if (is.null(tabla)) return(NULL)
+    tabla$tasa <- round(tabla$lista_nominal / tabla$padron * 100, 2)
+    colnames(tabla) <- c("Estado de Origen","Padrón Electoral","Lista Nominal","Tasa Inclusión (%)")
+    tabla
+  })
+  output$semanal_dt_origen <- DT::renderDataTable({
+    df <- datos_dt_origen_r()
+    if (is.null(df)) return(DT::datatable(data.frame(Mensaje = "Sin datos"), options = list(dom = "t")))
+    DT::datatable(df, rownames = FALSE,
+                  options = list(pageLength = 15, scrollX = TRUE, dom = "tip",
+                                 language = list(paginate = list(previous = "Anterior", `next` = "Siguiente"),
+                                                 info = "Mostrando _START_ a _END_ de _TOTAL_ registros"))) %>%
+      DT::formatRound(c("Padrón Electoral","Lista Nominal"), digits = 0) %>%
+      DT::formatRound("Tasa Inclusión (%)", digits = 2)
+  })
+  output$semanal_dt_origen_descarga <- downloadHandler(
+    filename = function() paste0("sefix_origen_", etiq_ambito(ambito_reactivo()), "_", anio_semanal(), "_", format(Sys.Date(), "%Y%m%d"), ".csv"),
+    content  = function(file) { df <- datos_dt_origen_r(); if (!is.null(df)) write.csv(df, file, row.names = FALSE) }
+  )
+  
+  # ════════════════════════════════════════════════════════════════════════════
+  # ANÁLISIS TEXTUAL — reactive directo (sin bindEvent)
+  # ════════════════════════════════════════════════════════════════════════════
+  
+  css_h4 <- "margin:22px 0 6px 0;font-size:17px;color:#2c3e50;font-weight:600;border-bottom:1px solid #e0e0e0;padding-bottom:4px;"
+  css_p  <- "margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#333;"
+  css_na <- "text-align:center;color:#999;padding:10px;font-style:italic;font-size:14px;"
+  
+  output$semanal_texto_titulo <- renderUI({
+    if (es_historico()) return(NULL)
+    ambito <- ambito_reactivo(); anio <- anio_semanal()
+    HTML(paste0(
+      "<div style='font-size:16px;line-height:1.6;color:#333;'>",
+      "<h3 style='text-align:center;margin:0 0 2px 0;font-size:18px;color:#2c3e50;font-weight:600;'>",
+      "Análisis Semanal – Padrón y Lista Nominal ", etiq_ambito(ambito),
+      " <span style='display:block;text-align:center;color:#1a5276;font-weight:700;font-size:20px;margin-top:4px;margin-bottom:10px;'>",
+      anio, "</span></h3>",
+      "<p style='margin:16px 0 2px 0;font-size:14px;color:#555;font-weight:600;text-align:left;'>Alcance del análisis:</p>",
+      "<p style='text-align:left;margin:0;font-size:14px;color:#777;line-height:1.4;'>",
+      gsub(" - ", " – ", isolate(texto_alcance())), "</p></div>"
+    ))
+  })
+  
+  output$semanal_texto_analisis <- renderUI({
+    if (es_historico()) return(NULL)
+    ambito <- ambito_reactivo(); etiq <- etiq_ambito(ambito)
+    
+    blq_sexo <- tryCatch({
+      tot <- extraer_totales_sexo(datos_semanal_sexo(), ambito)
+      if (is.null(tot)) return(paste0("<p style='", css_na, "'>Sin datos de sexo.</p>"))
+      ph <- tot$padron_hombres; pm <- tot$padron_mujeres
+      lh <- tot$lista_hombres;  lm <- tot$lista_mujeres
+      pt <- ph + pm; lt <- lh + lm; ti <- round(lt / pt * 100, 2)
+      sm_pad <- if (pm >= ph) "mujeres" else "hombres"
+      sm_ln  <- if (lm >= lh) "mujeres" else "hombres"
+      nb <- tot$padron_no_binario %||% 0
+      txt_nb <- if (!is.na(nb) && nb > 0) paste0(" El Padrón registra <strong>", fmt_num(nb), "</strong> personas no binarias.") else ""
+      paste0("<h4 style='", css_h4, "'>Distribución por sexo</h4>",
+             "<p style='", css_p, "'>El Padrón Electoral ", etiq, " asciende a <strong>", fmt_num(pt),
+             "</strong>, con mayor presencia de <strong>", sm_pad, "</strong>. La Lista Nominal totaliza <strong>",
+             fmt_num(lt), "</strong> con tasa de inclusión de <strong>", fmt_pct(ti),
+             "</strong>. En la LNE predominan las/los <strong>", sm_ln, "</strong>.", txt_nb, "</p>")
+    }, error = function(e) paste0("<p style='", css_na, "'>Error en datos de sexo.</p>"))
+    
+    blq_edad <- tryCatch({
+      df <- construir_df_edad(datos_semanal_edad(), ambito)
+      if (is.null(df) || nrow(df) == 0) return(paste0("<p style='", css_na, "'>Sin datos de edad.</p>"))
+      df$lst <- df$lista_hombres + df$lista_mujeres
+      gm <- df$grupo[which.max(df$lst)]; mx <- max(df$lst); tot_lne <- sum(df$lst, na.rm = TRUE)
+      lne_18 <- sum(df$lst[df$grupo %in% c("18","19")], na.rm = TRUE)
+      pct_jov <- if (tot_lne > 0) round(lne_18 / tot_lne * 100, 2) else NA
+      txt_jov <- if (!is.na(pct_jov)) paste0(" Los electores de 18 y 19 años representan el <strong>", fmt_pct(pct_jov), "</strong> de la LNE.") else ""
+      paste0("<h4 style='", css_h4, "'>Rango de edad</h4>",
+             "<p style='", css_p, "'>El grupo con mayor representación es el de <strong>", gm,
+             " años</strong> con <strong>", fmt_num(mx), "</strong> electores.", txt_jov, "</p>")
+    }, error = function(e) paste0("<p style='", css_na, "'>Error en datos de edad.</p>"))
+    
+    blq_orig <- tryCatch({
+      tabla <- construir_tabla_origen(datos_semanal_origen(), ambito)
+      if (is.null(tabla) || nrow(tabla) < 3) return(paste0("<p style='", css_na, "'>Sin datos suficientes de origen.</p>"))
+      top3 <- head(tabla, 3)
+      txt_top3 <- paste(sapply(1:3, function(i)
+        paste0("<strong>", i, ". ", top3$entidad_origen[i], "</strong> (", fmt_num(top3$lista_nominal[i]), " en LNE)")),
+        collapse = "; ")
+      r87 <- tabla[grepl("nacidos en el extranjero", tabla$entidad_origen, ignore.case = TRUE), ]
+      tlt <- sum(tabla$lista_nominal, na.rm = TRUE)
+      txt_87 <- if (nrow(r87) > 0 && !is.na(r87$lista_nominal[1]) && r87$lista_nominal[1] > 0)
+        paste0(" Los ciudadanos mexicanos nacidos en el extranjero representan el <strong>",
+               fmt_pct(round(r87$lista_nominal[1] / tlt * 100, 2)), "</strong> de la LNE.") else ""
+      paste0("<h4 style='", css_h4, "'>Entidad de origen</h4>",
+             "<p style='", css_p, "'>Los tres principales estados de origen son: ", txt_top3, ".", txt_87, "</p>")
+    }, error = function(e) paste0("<p style='", css_na, "'>Error en datos de origen.</p>"))
+    
+    HTML(paste0("<div style='font-size:16px;line-height:1.6;color:#333;'>", blq_sexo, blq_edad, blq_orig, "</div>"))
+  })
+  
+  message("✅ graficas_semanal v2.2 inicializado")
+  message("   ✅ CORRECCIÓN RAÍZ: bindEvent eliminado de todos los outputs → reactividad directa")
+  message("   ✅ 6 gráficas + 3 dataTables + análisis textual")
 }
