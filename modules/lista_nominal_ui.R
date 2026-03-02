@@ -1,20 +1,13 @@
 # modules/lista_nominal_ui.R
-# Versión: 3.5 - CORRECCIÓN RAÍZ: graficas_dinamicas cubre historico Y semanal
+# Versión: 3.6 - Fase 1a: Desglose reposicionado como filtro principal en semanal
 #
-# PROBLEMA v3.4:
-#   El uiOutput("graficas_dinamicas") solo estaba bajo condition="historico".
-#   Para semanal, el conditionalPanel mostraba "main-plot_container" y
-#   "main-tasa_inclusion_plot" — outputs que NO existen en el servidor.
-#   Shiny es lazy: si un output no está en el DOM, nunca se solicita al
-#   servidor, y los reactives que lo alimentan nunca se ejecutan.
-#   Resultado: spinners infinitos en vista semanal.
-#
-# CORRECCIÓN v3.5:
-#   - Eliminados los conditionalPanel separados para historico/semanal
-#   - uiOutput("graficas_dinamicas") cubre AMBOS tipos de corte
-#   - graficas_ui_render.R (que ya estaba correcto) decide qué mostrar
-#     internamente según input$tipo_corte
-#   - Eliminados "main-plot_container" y "main-tasa_inclusion_plot" (no existen)
+# CAMBIOS vs v3.5:
+#   - selector_desglose movido DESPUÉS de "Año" y ANTES de "Entidad"
+#   - Solo visible cuando tipo_corte == 'semanal' (conditionalPanel)
+#   - Default del desglose: "Rango de Edad" (definido en servidor)
+#   - Eliminado el bloque de desglose duplicado que estaba al final del sidebar
+#   - Orden del sidebar para semanal:
+#       Tipo de datos → Ámbito → Año → [Desglose] → Entidad → Distrito → Municipio → Sección
 
 lista_nominal_ui <- function(id) {
   ns <- NS(id)
@@ -25,6 +18,7 @@ lista_nominal_ui <- function(id) {
         id = ns("sidebar_panel"),
         width = 4,
         
+        # ── Tipo de corte ────────────────────────────────────────────────────
         radioButtons(
           ns("tipo_corte"), 
           "Tipo de datos:",
@@ -35,7 +29,7 @@ lista_nominal_ui <- function(id) {
         uiOutput(ns("info_tipo_corte")),
         tags$hr(),
         
-        # ========== SELECTOR NACIONAL/EXTRANJERO ==========
+        # ── Ámbito Nacional / Extranjero ─────────────────────────────────────
         radioButtons(
           ns("ambito_datos"), 
           "Ámbito de datos:",
@@ -46,11 +40,27 @@ lista_nominal_ui <- function(id) {
         ),
         tags$hr(),
         
+        # ── Aviso ─────────────────────────────────────────────────────────────
         tags$small(
-          style = "color: #000; display: block; font-weight: medium; margin-bottom: 8px; text-align: center; background-color: #CCE4B1; border-color #71A251; padding: 8px; border-radius: 4px;",
-          "Configura los filtros y presiona el botón 'Consultar' para actualizar"
+          style = paste0(
+            "color:#000; display:block; font-weight:medium; margin-bottom:8px;",
+            " text-align:center; background-color:#CCE4B1; padding:8px; border-radius:4px;"
+          ),
+          "Configura los filtros y presiona 'Consultar' para actualizar"
         ),
+        
+        # ── Año ───────────────────────────────────────────────────────────────
         selectInput(ns("year"), "Año:", choices = NULL, selected = NULL),
+        
+        # ── Desglose (solo semanal) — ANTES de Entidad ────────────────────────
+        conditionalPanel(
+          condition = "input.tipo_corte == 'semanal'",
+          ns = ns,
+          uiOutput(ns("selector_desglose")),
+          tags$hr()
+        ),
+        
+        # ── Filtros geográficos ───────────────────────────────────────────────
         selectInput(ns("entidad"), "Entidad:", choices = c("Nacional"), selected = "Nacional"),
         conditionalPanel(
           condition = "input.entidad != 'Nacional'",
@@ -60,84 +70,79 @@ lista_nominal_ui <- function(id) {
           selectizeInput(
             ns("seccion"), 
             "Sección Electoral:", 
-            choices = c("Todas"), 
+            choices  = c("Todas"), 
             selected = "Todas", 
             multiple = TRUE,
-            options = list(
+            options  = list(
               placeholder = "Selecciona una o más secciones",
-              plugins = list("remove_button"),
-              maxItems = NULL
+              plugins     = list("remove_button"),
+              maxItems    = NULL
             )
           )
         ),
         tags$hr(),
         
-        # Selector de desglose SOLO para datos semanales
-        conditionalPanel(
-          condition = "input.tipo_corte == 'semanal'",
-          ns = ns,
-          uiOutput(ns("selector_desglose"))
-        ),
-        
-        # ========== BOTÓN CONSULTAR ==========
+        # ── Acciones ─────────────────────────────────────────────────────────
         actionButton(
           ns("btn_consultar"), 
           "Consultar", 
-          icon = icon("search"),
+          icon  = icon("search"),
           class = "btn-success",
-          style = "width: 100%; margin-bottom: 10px; font-weight: bold; font-size: 16px;"
+          style = "width:100%; margin-bottom:10px; font-weight:bold; font-size:16px;"
         ),
         tags$hr(),
-        
-        actionButton(ns("reset_config"), "Restablecer consulta", class = "btn-primary", style = "width: 100%; margin-bottom: 10px;"),
-        downloadButton(ns("download_csv"), "Descargar CSV", class = "btn-primary", style = "width:100%")
+        actionButton(
+          ns("reset_config"), 
+          "Restablecer consulta", 
+          class = "btn-primary", 
+          style = "width:100%; margin-bottom:10px;"
+        ),
+        downloadButton(
+          ns("download_csv"), 
+          "Descargar CSV", 
+          class = "btn-primary", 
+          style = "width:100%"
+        )
       ),
       
       mainPanel(
         width = 8,
         
-        # ✅ v3.5: graficas_dinamicas cubre AMBOS tipos de corte
-        # graficas_ui_render.R decide internamente qué mostrar según tipo_corte
+        # ── Gráficas (historico y semanal via graficas_ui_render.R) ───────────
         uiOutput(ns("graficas_dinamicas")),
         
-        # ========== ✅ v3.4: DATATABLE CON ENCABEZADO SEPARADO ==========
+        # ── DataTable ─────────────────────────────────────────────────────────
         fluidRow(
           column(12, 
                  div(
                    class = "datatable-section",
-                   
                    h3("Tabla de Datos", 
                       align = "center", 
-                      style = "margin-top: 40px;",
+                      style = "margin-top:40px;",
                       class = "datatable-title"),
-                   
-                   div(
-                     class = "datatable-header",
-                     uiOutput(ns("main-table_header"))
-                   ),
-                   
+                   div(class = "datatable-header",
+                       uiOutput(ns("main-table_header"))),
                    shinycssloaders::withSpinner(
                      DTOutput(ns("main-table_data")),
-                     type = 6,
+                     type  = 6,
                      color = "#44559B",
-                     size = 0.8
+                     size  = 0.8
                    )
                  )
           )
         ),
-        # ========== FIN DATATABLE ==========
         
-        # ========== BOTÓN DESCARGAR CSV PARA MÓVIL ==========
+        # ── Descarga móvil ────────────────────────────────────────────────────
         fluidRow(
           column(12,
                  div(
                    class = "mobile-download-container mobile-only",
-                   style = "margin-top: 20px; margin-bottom: 80px; padding: 0 10px;",
+                   style = "margin-top:20px; margin-bottom:80px; padding:0 10px;",
                    downloadButton(
                      ns("download_csv_mobile"), 
                      "Descargar CSV", 
                      class = "btn-primary mobile-download-btn",
-                     style = "width: 100%; font-size: 16px; padding: 12px; font-weight: bold;"
+                     style = "width:100%; font-size:16px; padding:12px; font-weight:bold;"
                    )
                  )
           )
@@ -145,17 +150,19 @@ lista_nominal_ui <- function(id) {
       )
     ),
     
+    # ── Toggle sidebar derecho ────────────────────────────────────────────────
     div(class = "toggle-container",
         actionButton(
           inputId = ns("toggle-sidebar-lista"), 
-          label = ">>", 
-          class = "toggle-sidebar-btn", 
+          label   = ">>", 
+          class   = "toggle-sidebar-btn", 
           `data-sidebar-id` = ns("sidebar-right-lista")
         )
     ),
     
+    # ── Sidebar derecho: análisis textual ─────────────────────────────────────
     div(
-      id = ns("sidebar-right-lista"), 
+      id    = ns("sidebar-right-lista"), 
       class = "sidebar-right",
       uiOutput(ns("text_analysis-titulo_lista")),
       uiOutput(ns("text_analysis-alcance_lista")),

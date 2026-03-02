@@ -1,21 +1,14 @@
 # modules/lista_nominal_graficas/graficas_semanal.R
-# Vista Semanal: 6 gráficas (edad A+B, sexo A+B, origen A+B)
-#                + 3 dataTables con descarga
-#                + análisis textual dinámico integrado (sidebar derecho)
-# Versión: 2.2 — CORRECCIÓN RAÍZ: Eliminado bindEvent de outputs individuales
+# Vista Semanal: gráficas + dataTables + análisis textual sidebar derecho
+# Versión: 2.3 — Fase 2: sidebar derecho condicional por desglose
 #
-# PROBLEMA v2.1:
-#   bindEvent en cada renderPlotly/renderUI ejecutaba el output una vez al
-#   inicializar (tipo_corte="historico"), recibía NULL de es_historico(),
-#   marcaba el output como resuelto y NO lo re-ejecutaba al cambiar a semanal
-#   aunque el renderUI padre lo regenerara. Spinner infinito.
-#
-# CORRECCIÓN v2.2:
-#   - Eliminado bindEvent de TODOS los renders individuales
-#   - Los outputs son reactivos DIRECTOS: leen datos_semanal_*() que ya tienen
-#     su propio bindEvent en el data loader
-#   - Cuando los datos cambian invalidan automáticamente los outputs que los leen
-#   - La guardia es_historico() retorna NULL limpiamente cuando no aplica
+# CAMBIOS vs v2.2:
+#   - Análisis textual del sidebar derecho (semanal_texto_titulo,
+#     semanal_texto_analisis) ahora muestra SOLO el bloque correspondiente
+#     al desglose activo (edad / sexo / origen)
+#   - Cada bloque de análisis tiene su propia función auxiliar para
+#     mantener el código organizado y facilitar ajustes futuros
+#   - Gráficas y DataTables sin cambios (ya estaban correctos en v2.2)
 
 graficas_semanal <- function(input, output, session,
                              datos_semanal_edad,
@@ -27,7 +20,7 @@ graficas_semanal <- function(input, output, session,
                              ambito_reactivo,
                              estado_app) {
   
-  message("📊 Inicializando graficas_semanal v2.2")
+  message("📊 Inicializando graficas_semanal v2.3")
   
   # ════════════════════════════════════════════════════════════════════════════
   # CONSTANTES
@@ -77,10 +70,9 @@ graficas_semanal <- function(input, output, session,
   }
   etiqueta_edad <- function(g) gsub("_", "-", gsub("_y_mas", "+", g))
   
-  # ── Guardia: retorna TRUE si el corte activo NO es semanal ──────────────────
   es_historico <- function() { tc <- input$tipo_corte %||% "historico"; tc != "semanal" }
+  desglose_activo <- function() input$desglose %||% "edad"
   
-  # ── Filas especiales ─────────────────────────────────────────────────────────
   fila_totales_nac <- function(df) {
     if (is.null(df) || !"nombre_entidad" %in% colnames(df)) return(NULL)
     idx <- which(toupper(trimws(df$nombre_entidad)) == "TOTALES")
@@ -96,7 +88,6 @@ graficas_semanal <- function(input, output, session,
     df[!grepl("RESIDENTES EXTRANJERO|TOTALES", toupper(df$nombre_entidad %||% ""), ignore.case = TRUE), ]
   }
   
-  # ── Construcción de datos de edad ─────────────────────────────────────────────
   sumar_rango <- function(df, grupo, sexo, tipo) {
     col <- grep(paste0("^", tipo, "_", grupo, "_", sexo, "$"), colnames(df), value = TRUE, ignore.case = TRUE)
     if (length(col) == 0) return(0L)
@@ -116,7 +107,6 @@ graficas_semanal <- function(input, output, session,
     )))
   }
   
-  # ── Totales de sexo ───────────────────────────────────────────────────────────
   extraer_totales_sexo <- function(df, ambito) {
     if (is.null(df) || nrow(df) == 0) return(NULL)
     fila <- if (ambito == "extranjero") fila_ext(df) else fila_totales_nac(df)
@@ -135,7 +125,6 @@ graficas_semanal <- function(input, output, session,
     as.data.frame(res, stringsAsFactors = FALSE)
   }
   
-  # ── Tabla de origen ───────────────────────────────────────────────────────────
   NOM_ORIGEN <- c(
     "01"="AGUASCALIENTES","02"="BAJA CALIFORNIA","03"="BAJA CALIFORNIA SUR",
     "04"="CAMPECHE","05"="COAHUILA","06"="COLIMA","07"="CHIAPAS","08"="CHIHUAHUA",
@@ -177,7 +166,7 @@ graficas_semanal <- function(input, output, session,
   }
   
   # ════════════════════════════════════════════════════════════════════════════
-  # UI: TÍTULO Y SUBTÍTULOS — reactive directo (sin bindEvent)
+  # UI: TÍTULO Y SUBTÍTULOS
   # ════════════════════════════════════════════════════════════════════════════
   
   output$semanal_titulo_principal <- renderUI({
@@ -200,7 +189,7 @@ graficas_semanal <- function(input, output, session,
   })
   
   # ════════════════════════════════════════════════════════════════════════════
-  # GRÁFICAS — reactive directo (sin bindEvent)
+  # GRÁFICAS — sin cambios vs v2.2
   # ════════════════════════════════════════════════════════════════════════════
   
   output$semanal_edad_piramide <- renderPlotly({
@@ -415,7 +404,7 @@ graficas_semanal <- function(input, output, session,
   })
   
   # ════════════════════════════════════════════════════════════════════════════
-  # DATATABLES — reactive directo (sin bindEvent)
+  # DATATABLES
   # ════════════════════════════════════════════════════════════════════════════
   
   datos_dt_edad_r <- reactive({
@@ -493,82 +482,151 @@ graficas_semanal <- function(input, output, session,
   )
   
   # ════════════════════════════════════════════════════════════════════════════
-  # ANÁLISIS TEXTUAL — reactive directo (sin bindEvent)
+  # SIDEBAR DERECHO — Análisis textual condicional por desglose
+  # Fase 2: cada renderUI muestra solo el bloque del desglose activo
   # ════════════════════════════════════════════════════════════════════════════
   
   css_h4 <- "margin:22px 0 6px 0;font-size:17px;color:#2c3e50;font-weight:600;border-bottom:1px solid #e0e0e0;padding-bottom:4px;"
   css_p  <- "margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#333;"
   css_na <- "text-align:center;color:#999;padding:10px;font-style:italic;font-size:14px;"
   
+  # ── Título del sidebar (siempre muestra el desglose activo) ─────────────────
   output$semanal_texto_titulo <- renderUI({
     if (es_historico()) return(NULL)
-    ambito <- ambito_reactivo(); anio <- anio_semanal()
+    ambito  <- ambito_reactivo()
+    anio    <- anio_semanal()
+    desglose <- desglose_activo()
+    etiq_des <- switch(desglose,
+                       "edad"   = "Rango de Edad",
+                       "sexo"   = "Distribución por Sexo",
+                       "origen" = "Entidad de Origen",
+                       "Rango de Edad"
+    )
     HTML(paste0(
       "<div style='font-size:16px;line-height:1.6;color:#333;'>",
       "<h3 style='text-align:center;margin:0 0 2px 0;font-size:18px;color:#2c3e50;font-weight:600;'>",
-      "Análisis Semanal – Padrón y Lista Nominal ", etiq_ambito(ambito),
-      " <span style='display:block;text-align:center;color:#1a5276;font-weight:700;font-size:20px;margin-top:4px;margin-bottom:10px;'>",
-      anio, "</span></h3>",
-      "<p style='margin:16px 0 2px 0;font-size:14px;color:#555;font-weight:600;text-align:left;'>Alcance del análisis:</p>",
+      "Análisis Semanal — ", etiq_des, "<br>",
+      "<span style='display:block;text-align:center;color:#1a5276;font-weight:700;font-size:20px;margin-top:4px;margin-bottom:4px;'>",
+      etiq_ambito(ambito), " ", anio, "</span></h3>",
+      "<p style='margin:12px 0 2px 0;font-size:14px;color:#555;font-weight:600;text-align:left;'>Alcance:</p>",
       "<p style='text-align:left;margin:0;font-size:14px;color:#777;line-height:1.4;'>",
       gsub(" - ", " – ", isolate(texto_alcance())), "</p></div>"
     ))
   })
   
+  # ── Análisis textual condicional por desglose ────────────────────────────────
   output$semanal_texto_analisis <- renderUI({
     if (es_historico()) return(NULL)
-    ambito <- ambito_reactivo(); etiq <- etiq_ambito(ambito)
+    ambito   <- ambito_reactivo()
+    etiq     <- etiq_ambito(ambito)
+    desglose <- desglose_activo()
     
-    blq_sexo <- tryCatch({
-      tot <- extraer_totales_sexo(datos_semanal_sexo(), ambito)
-      if (is.null(tot)) return(paste0("<p style='", css_na, "'>Sin datos de sexo.</p>"))
-      ph <- tot$padron_hombres; pm <- tot$padron_mujeres
-      lh <- tot$lista_hombres;  lm <- tot$lista_mujeres
-      pt <- ph + pm; lt <- lh + lm; ti <- round(lt / pt * 100, 2)
-      sm_pad <- if (pm >= ph) "mujeres" else "hombres"
-      sm_ln  <- if (lm >= lh) "mujeres" else "hombres"
-      nb <- tot$padron_no_binario %||% 0
-      txt_nb <- if (!is.na(nb) && nb > 0) paste0(" El Padrón registra <strong>", fmt_num(nb), "</strong> personas no binarias.") else ""
-      paste0("<h4 style='", css_h4, "'>Distribución por sexo</h4>",
-             "<p style='", css_p, "'>El Padrón Electoral ", etiq, " asciende a <strong>", fmt_num(pt),
-             "</strong>, con mayor presencia de <strong>", sm_pad, "</strong>. La Lista Nominal totaliza <strong>",
-             fmt_num(lt), "</strong> con tasa de inclusión de <strong>", fmt_pct(ti),
-             "</strong>. En la LNE predominan las/los <strong>", sm_ln, "</strong>.", txt_nb, "</p>")
-    }, error = function(e) paste0("<p style='", css_na, "'>Error en datos de sexo.</p>"))
+    contenido <- switch(desglose,
+                        
+                        # ── Bloque EDAD ──────────────────────────────────────────────────────────
+                        "edad" = tryCatch({
+                          df <- construir_df_edad(datos_semanal_edad(), ambito)
+                          if (is.null(df) || nrow(df) == 0)
+                            return(HTML(paste0("<p style='", css_na, "'>Sin datos de edad disponibles.</p>")))
+                          df$lst <- df$lista_hombres + df$lista_mujeres
+                          df$pad <- df$padron_hombres + df$padron_mujeres
+                          tot_lne <- sum(df$lst, na.rm = TRUE)
+                          tot_pad <- sum(df$pad, na.rm = TRUE)
+                          gm  <- df$grupo[which.max(df$lst)]
+                          mx  <- max(df$lst)
+                          gm2 <- df$grupo[order(df$lst, decreasing = TRUE)[2]]
+                          lne_18_19 <- sum(df$lst[df$grupo %in% c("18","19")], na.rm = TRUE)
+                          lne_65p   <- sum(df$lst[df$grupo %in% c("65+")], na.rm = TRUE)
+                          pct_jov <- if (tot_lne > 0) round(lne_18_19 / tot_lne * 100, 2) else NA
+                          pct_65  <- if (tot_lne > 0) round(lne_65p   / tot_lne * 100, 2) else NA
+                          tasa_inc <- if (tot_pad > 0) round(tot_lne / tot_pad * 100, 2) else NA
+                          paste0(
+                            "<h4 style='", css_h4, "'>Rango de edad — ", etiq, "</h4>",
+                            "<p style='", css_p, "'>La Lista Nominal ", etiq, " registra <strong>",
+                            fmt_num(tot_lne), "</strong> electores, con una tasa de inclusión de <strong>",
+                            fmt_pct(tasa_inc), "</strong> respecto al Padrón Electoral.</p>",
+                            "<p style='", css_p, "'>El grupo de edad con mayor representación es el de <strong>",
+                            gm, " años</strong> (<strong>", fmt_num(mx), "</strong> electores), seguido por el grupo de <strong>",
+                            gm2, " años</strong>.</p>",
+                            if (!is.na(pct_jov)) paste0("<p style='", css_p, "'>Los electores de 18 y 19 años representan el <strong>",
+                                                        fmt_pct(pct_jov), "</strong> de la LNE — el segmento más joven del padrón.</p>") else "",
+                            if (!is.na(pct_65)) paste0("<p style='", css_p, "'>Los electores de 65 años o más representan el <strong>",
+                                                       fmt_pct(pct_65), "</strong> de la LNE.</p>") else ""
+                          )
+                        }, error = function(e) paste0("<p style='", css_na, "'>Error al procesar datos de edad.</p>")),
+                        
+                        # ── Bloque SEXO ──────────────────────────────────────────────────────────
+                        "sexo" = tryCatch({
+                          tot <- extraer_totales_sexo(datos_semanal_sexo(), ambito)
+                          if (is.null(tot))
+                            return(HTML(paste0("<p style='", css_na, "'>Sin datos de sexo disponibles.</p>")))
+                          ph <- tot$padron_hombres; pm <- tot$padron_mujeres
+                          lh <- tot$lista_hombres;  lm <- tot$lista_mujeres
+                          pt <- ph + pm; lt <- lh + lm
+                          ti   <- if (pt > 0) round(lt / pt * 100, 2) else NA
+                          ti_h <- if (ph > 0) round(lh / ph * 100, 2) else NA
+                          ti_m <- if (pm > 0) round(lm / pm * 100, 2) else NA
+                          pct_h_lne <- if (lt > 0) round(lh / lt * 100, 2) else NA
+                          pct_m_lne <- if (lt > 0) round(lm / lt * 100, 2) else NA
+                          sm_pad <- if (pm >= ph) "mujeres" else "hombres"
+                          sm_ln  <- if (lm >= lh) "mujeres" else "hombres"
+                          nb_p <- tot$padron_no_binario %||% 0
+                          nb_l <- tot$lista_no_binario  %||% 0
+                          txt_nb <- if (!is.na(nb_p) && nb_p > 0)
+                            paste0("<p style='", css_p, "'>El Padrón registra <strong>", fmt_num(nb_p),
+                                   "</strong> personas no binarias, con <strong>", fmt_num(nb_l),
+                                   "</strong> en la Lista Nominal.</p>") else ""
+                          paste0(
+                            "<h4 style='", css_h4, "'>Distribución por sexo — ", etiq, "</h4>",
+                            "<p style='", css_p, "'>El Padrón Electoral ", etiq, " asciende a <strong>", fmt_num(pt),
+                            "</strong>, con mayor presencia de <strong>", sm_pad, "</strong>. ",
+                            "La Lista Nominal totaliza <strong>", fmt_num(lt),
+                            "</strong> con tasa de inclusión global de <strong>", fmt_pct(ti), "</strong>.</p>",
+                            "<p style='", css_p, "'>En la LNE predominan las/los <strong>", sm_ln, "</strong>: ",
+                            "<strong>", fmt_pct(pct_m_lne), "</strong> son mujeres y <strong>",
+                            fmt_pct(pct_h_lne), "</strong> son hombres.</p>",
+                            "<p style='", css_p, "'>Tasas de inclusión por sexo: hombres <strong>",
+                            fmt_pct(ti_h), "</strong> — mujeres <strong>", fmt_pct(ti_m), "</strong>.</p>",
+                            txt_nb
+                          )
+                        }, error = function(e) paste0("<p style='", css_na, "'>Error al procesar datos de sexo.</p>")),
+                        
+                        # ── Bloque ORIGEN ────────────────────────────────────────────────────────
+                        "origen" = tryCatch({
+                          tabla <- construir_tabla_origen(datos_semanal_origen(), ambito)
+                          if (is.null(tabla) || nrow(tabla) < 3)
+                            return(HTML(paste0("<p style='", css_na, "'>Sin datos suficientes de origen.</p>")))
+                          top3    <- head(tabla, 3)
+                          tlt     <- sum(tabla$lista_nominal, na.rm = TRUE)
+                          txt_top3 <- paste(sapply(1:3, function(i)
+                            paste0("<strong>", i, ". ", top3$entidad_origen[i], "</strong> (",
+                                   fmt_num(top3$lista_nominal[i]), " en LNE — ",
+                                   fmt_pct(round(top3$lista_nominal[i] / tlt * 100, 2)), ")")),
+                            collapse = "; ")
+                          r87 <- tabla[grepl("nacidos en el extranjero", tabla$entidad_origen, ignore.case = TRUE), ]
+                          r88 <- tabla[grepl("naturalizados", tabla$entidad_origen, ignore.case = TRUE), ]
+                          txt_87 <- if (nrow(r87) > 0 && !is.na(r87$lista_nominal[1]) && r87$lista_nominal[1] > 0)
+                            paste0("<p style='", css_p, "'>Los ciudadanos mexicanos nacidos en el extranjero suman <strong>",
+                                   fmt_num(r87$lista_nominal[1]), "</strong> en la LNE (<strong>",
+                                   fmt_pct(round(r87$lista_nominal[1] / tlt * 100, 2)), "</strong>).</p>") else ""
+                          txt_88 <- if (nrow(r88) > 0 && !is.na(r88$lista_nominal[1]) && r88$lista_nominal[1] > 0)
+                            paste0("<p style='", css_p, "'>Los ciudadanos naturalizados representan <strong>",
+                                   fmt_num(r88$lista_nominal[1]), "</strong> electores en la LNE.</p>") else ""
+                          paste0(
+                            "<h4 style='", css_h4, "'>Entidad de origen — ", etiq, "</h4>",
+                            "<p style='", css_p, "'>Los tres principales estados de origen son: ", txt_top3, ".</p>",
+                            txt_87, txt_88
+                          )
+                        }, error = function(e) paste0("<p style='", css_na, "'>Error al procesar datos de origen.</p>")),
+                        
+                        # fallback
+                        paste0("<p style='", css_na, "'>Selecciona un desglose para ver el análisis.</p>")
+    )
     
-    blq_edad <- tryCatch({
-      df <- construir_df_edad(datos_semanal_edad(), ambito)
-      if (is.null(df) || nrow(df) == 0) return(paste0("<p style='", css_na, "'>Sin datos de edad.</p>"))
-      df$lst <- df$lista_hombres + df$lista_mujeres
-      gm <- df$grupo[which.max(df$lst)]; mx <- max(df$lst); tot_lne <- sum(df$lst, na.rm = TRUE)
-      lne_18 <- sum(df$lst[df$grupo %in% c("18","19")], na.rm = TRUE)
-      pct_jov <- if (tot_lne > 0) round(lne_18 / tot_lne * 100, 2) else NA
-      txt_jov <- if (!is.na(pct_jov)) paste0(" Los electores de 18 y 19 años representan el <strong>", fmt_pct(pct_jov), "</strong> de la LNE.") else ""
-      paste0("<h4 style='", css_h4, "'>Rango de edad</h4>",
-             "<p style='", css_p, "'>El grupo con mayor representación es el de <strong>", gm,
-             " años</strong> con <strong>", fmt_num(mx), "</strong> electores.", txt_jov, "</p>")
-    }, error = function(e) paste0("<p style='", css_na, "'>Error en datos de edad.</p>"))
-    
-    blq_orig <- tryCatch({
-      tabla <- construir_tabla_origen(datos_semanal_origen(), ambito)
-      if (is.null(tabla) || nrow(tabla) < 3) return(paste0("<p style='", css_na, "'>Sin datos suficientes de origen.</p>"))
-      top3 <- head(tabla, 3)
-      txt_top3 <- paste(sapply(1:3, function(i)
-        paste0("<strong>", i, ". ", top3$entidad_origen[i], "</strong> (", fmt_num(top3$lista_nominal[i]), " en LNE)")),
-        collapse = "; ")
-      r87 <- tabla[grepl("nacidos en el extranjero", tabla$entidad_origen, ignore.case = TRUE), ]
-      tlt <- sum(tabla$lista_nominal, na.rm = TRUE)
-      txt_87 <- if (nrow(r87) > 0 && !is.na(r87$lista_nominal[1]) && r87$lista_nominal[1] > 0)
-        paste0(" Los ciudadanos mexicanos nacidos en el extranjero representan el <strong>",
-               fmt_pct(round(r87$lista_nominal[1] / tlt * 100, 2)), "</strong> de la LNE.") else ""
-      paste0("<h4 style='", css_h4, "'>Entidad de origen</h4>",
-             "<p style='", css_p, "'>Los tres principales estados de origen son: ", txt_top3, ".", txt_87, "</p>")
-    }, error = function(e) paste0("<p style='", css_na, "'>Error en datos de origen.</p>"))
-    
-    HTML(paste0("<div style='font-size:16px;line-height:1.6;color:#333;'>", blq_sexo, blq_edad, blq_orig, "</div>"))
+    HTML(paste0("<div style='font-size:16px;line-height:1.6;color:#333;'>", contenido, "</div>"))
   })
   
-  message("✅ graficas_semanal v2.2 inicializado")
-  message("   ✅ CORRECCIÓN RAÍZ: bindEvent eliminado de todos los outputs → reactividad directa")
-  message("   ✅ 6 gráficas + 3 dataTables + análisis textual")
+  message("✅ graficas_semanal v2.3 inicializado")
+  message("   ✅ Fase 2: sidebar derecho condicional por desglose (edad / sexo / origen)")
+  message("   ✅ Gráficas y DataTables sin cambios")
 }
