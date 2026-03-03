@@ -1,148 +1,247 @@
 # modules/lista_nominal_graficas/graficas_ui_render.R
 # Renderizado dinámico de UI para gráficas históricas Y semanales
-# Versión: 2.6
+# Versión: 2.8 — Fase 3: ui_seccion_origen actualizada para O1 y O2
 #
-# CAMBIOS vs v2.5:
-#   - Fase 2: Renderizado condicional por desglose en vista semanal
-#     - desglose == "edad"   → solo sección Rango de Edad   + DataTable + análisis
-#     - desglose == "sexo"   → solo sección Distribución por Sexo + DataTable + análisis
-#     - desglose == "origen" → solo sección Entidad de Origen + DataTable + análisis
-#   - input$desglose agregado al bindEvent para que el UI reaccione al cambio
-#   - Vista histórica intacta (sin cambios)
+# CAMBIOS vs v2.7:
+#   - ui_seccion_edad(): sustituye semanal_edad_piramide y semanal_edad_distribucion
+#     por semanal_e1_proyeccion (+ widget semanal_e1_rangos_ui),
+#     semanal_e2_grupos y semanal_e3_barras
+#   - ui_seccion_sexo(): sustituye semanal_sexo_barras y semanal_sexo_dona
+#     por semanal_s1_piramide, semanal_s2_mujeres, semanal_s3_hombres,
+#     semanal_s4_nobinario, semanal_s5_barras, semanal_s6_dona, semanal_s7_proyeccion
+#   - ui_seccion_origen(): sin cambios
+#   - Vista histórica: sin cambios
 
 graficas_ui_render <- function(input, output, session, estado_app,
                                mostrar_graficas_anuales,
                                mostrar_graficas_consultadas,
                                ambito_reactivo) {
   
-  message("📊 Inicializando graficas_ui_render v2.6")
+  message("📊 Inicializando graficas_ui_render v2.8")
   ns <- session$ns
   
-  # ── Bloque UI: Sección Rango de Edad ─────────────────────────────────────────
+  # ════════════════════════════════════════════════════════════════════════════
+  # BLOQUES UI — VISTA SEMANAL
+  # ════════════════════════════════════════════════════════════════════════════
+  
+  # ── Sección EDAD: E1 (proyección + widget), E2 (grupos), E3 (barras) ────────
   ui_seccion_edad <- function(ns) {
     tagList(
-      hr(style = "border-top:2px solid #dee2e6;margin:20px 0 12px 0;"),
-      h4("Rango de Edad",
-         style = "font-weight:700;color:#2c3e50;font-family:Arial,sans-serif;margin-bottom:4px;"),
+      
       uiOutput(ns("semanal_subtitulo_edad")),
-      fluidRow(
-        column(6,
-               div(class = "plot-container",
-                   shinycssloaders::withSpinner(
-                     plotlyOutput(ns("semanal_edad_piramide"), width = "100%", height = "100%"),
-                     type = 6, color = "#44559B", size = 0.8
-                   )
-               )
-        ),
-        column(6,
-               div(class = "plot-container",
-                   shinycssloaders::withSpinner(
-                     plotlyOutput(ns("semanal_edad_distribucion"), width = "100%", height = "100%"),
-                     type = 6, color = "#44559B", size = 0.8
-                   )
-               )
+      
+      # E1: Proyección por rango de edad + widget selector
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        uiOutput(ns("semanal_e1_rangos_ui")),
+        withSpinner(
+          plotlyOutput(ns("semanal_e1_proyeccion"), height = "420px"),
+          type = 4, color = "#003E66", size = 0.8
         )
       ),
-      div(style = "margin-top:24px;",
-          h5("Tabla de datos — Rango de Edad",
-             style = "text-align:center;font-weight:700;color:#2c3e50;margin-bottom:2px;"),
-          uiOutput(ns("semanal_subtitulo_edad")),
-          div(style = "margin-top:8px;", DT::dataTableOutput(ns("semanal_dt_edad"))),
-          div(style = "text-align:right;margin-top:8px;",
-              downloadButton(ns("semanal_dt_edad_descarga"),
-                             label = "Descargar tabla de Edad",
-                             class = "btn btn-sm btn-outline-secondary")
+      
+      # E2: LNE por grupos etarios (Jóvenes / Adultos / Mayores)
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        withSpinner(
+          plotlyOutput(ns("semanal_e2_grupos"), height = "320px"),
+          type = 4, color = "#003E66", size = 0.8
+        )
+      ),
+      
+      # E3: Padrón y LNE por rango individual
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        withSpinner(
+          plotlyOutput(ns("semanal_e3_barras"), height = "380px"),
+          type = 4, color = "#003E66", size = 0.8
+        )
+      ),
+      
+      # DataTable + descarga
+      div(
+        style = "margin-top:10px;",
+        div(
+          style = "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
+          tags$h5(
+            style = "margin:0;font-size:14px;color:#2c3e50;font-weight:600;",
+            icon("table"), " Detalle por Rango de Edad"
+          ),
+          downloadButton(
+            ns("semanal_dt_edad_descarga"),
+            label = "Descargar CSV",
+            icon  = icon("download"),
+            class = "btn btn-xs btn-outline-secondary",
+            style = "font-size:11px;"
           )
+        ),
+        DT::dataTableOutput(ns("semanal_dt_edad"))
       )
     )
   }
   
-  # ── Bloque UI: Sección Distribución por Sexo ─────────────────────────────────
+  # ── Sección SEXO: S1–S7 ──────────────────────────────────────────────────────
   ui_seccion_sexo <- function(ns) {
     tagList(
-      hr(style = "border-top:2px solid #dee2e6;margin:20px 0 12px 0;"),
-      h4("Distribución por Sexo",
-         style = "font-weight:700;color:#2c3e50;font-family:Arial,sans-serif;margin-bottom:4px;"),
+      
       uiOutput(ns("semanal_subtitulo_sexo")),
-      fluidRow(
-        column(6,
-               div(class = "plot-container",
-                   shinycssloaders::withSpinner(
-                     plotlyOutput(ns("semanal_sexo_barras"), width = "100%", height = "100%"),
-                     type = 6, color = "#44559B", size = 0.8
+      
+      # S1: Pirámide por 12 rangos individuales (H vs M)
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        withSpinner(
+          plotlyOutput(ns("semanal_s1_piramide"), height = "480px"),
+          type = 4, color = "#44559B", size = 0.8
+        )
+      ),
+      
+      # S2 / S3 / S4: LNE por grupo etario × sexo (3 columnas)
+      div(
+        style = "margin-bottom:18px;",
+        tags$h6(
+          style = "font-size:13px;font-weight:600;color:#555;margin-bottom:8px;text-align:center;",
+          "Lista Nominal Electoral por Grupo Etario y Sexo"
+        ),
+        fluidRow(
+          column(4,
+                 div(
+                   class = "well well-sm",
+                   style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:10px;",
+                   withSpinner(
+                     plotlyOutput(ns("semanal_s2_mujeres"), height = "280px"),
+                     type = 4, color = "#C0311A", size = 0.6
                    )
+                 )
+          ),
+          column(4,
+                 div(
+                   class = "well well-sm",
+                   style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:10px;",
+                   withSpinner(
+                     plotlyOutput(ns("semanal_s3_hombres"), height = "280px"),
+                     type = 4, color = "#44559B", size = 0.6
+                   )
+                 )
+          ),
+          column(4,
+                 div(
+                   class = "well well-sm",
+                   style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:10px;",
+                   withSpinner(
+                     plotlyOutput(ns("semanal_s4_nobinario"), height = "280px"),
+                     type = 4, color = "#9B59B6", size = 0.6
+                   )
+                 )
+          )
+        )
+      ),
+      
+      # S5: Barras agrupadas Padrón/LNE por sexo
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        withSpinner(
+          plotlyOutput(ns("semanal_s5_barras"), height = "380px"),
+          type = 4, color = "#44559B", size = 0.8
+        )
+      ),
+      
+      # S6 + S7: Dona y proyección (columnas 5/7)
+      fluidRow(
+        column(5,
+               div(
+                 class = "well well-sm",
+                 style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+                 withSpinner(
+                   plotlyOutput(ns("semanal_s6_dona"), height = "380px"),
+                   type = 4, color = "#44559B", size = 0.8
+                 )
                )
         ),
-        column(6,
-               div(class = "plot-container",
-                   shinycssloaders::withSpinner(
-                     plotlyOutput(ns("semanal_sexo_dona"), width = "100%", height = "100%"),
-                     type = 6, color = "#44559B", size = 0.8
-                   )
+        column(7,
+               div(
+                 class = "well well-sm",
+                 style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+                 withSpinner(
+                   plotlyOutput(ns("semanal_s7_proyeccion"), height = "380px"),
+                   type = 4, color = "#44559B", size = 0.8
+                 )
                )
         )
       ),
-      div(style = "margin-top:24px;",
-          h5("Tabla de datos — Distribución por Sexo",
-             style = "text-align:center;font-weight:700;color:#2c3e50;margin-bottom:2px;"),
-          uiOutput(ns("semanal_subtitulo_sexo")),
-          div(style = "margin-top:8px;", DT::dataTableOutput(ns("semanal_dt_sexo"))),
-          div(style = "text-align:right;margin-top:8px;",
-              downloadButton(ns("semanal_dt_sexo_descarga"),
-                             label = "Descargar tabla de Sexo",
-                             class = "btn btn-sm btn-outline-secondary")
+      
+      # DataTable + descarga
+      div(
+        style = "margin-top:10px;",
+        div(
+          style = "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
+          tags$h5(
+            style = "margin:0;font-size:14px;color:#2c3e50;font-weight:600;",
+            icon("table"), " Detalle por Sexo"
+          ),
+          downloadButton(
+            ns("semanal_dt_sexo_descarga"),
+            label = "Descargar CSV",
+            icon  = icon("download"),
+            class = "btn btn-xs btn-outline-secondary",
+            style = "font-size:11px;"
           )
+        ),
+        DT::dataTableOutput(ns("semanal_dt_sexo"))
       )
     )
   }
   
-  # ── Bloque UI: Sección Entidad de Origen ─────────────────────────────────────
+  # ── Sección ORIGEN: O1 (mapa de calor) + O2 (proyección) ────────────────────
   ui_seccion_origen <- function(ns) {
     tagList(
-      hr(style = "border-top:2px solid #dee2e6;margin:20px 0 12px 0;"),
-      h4("Entidad de Origen",
-         style = "font-weight:700;color:#2c3e50;font-family:Arial,sans-serif;margin-bottom:4px;"),
+      
       uiOutput(ns("semanal_subtitulo_origen")),
+      
+      # O1: Mapa de calor — widget top N inline
       div(
-        style = "display:flex;align-items:center;gap:12px;margin-bottom:10px;",
-        span("Top estados de origen (gráfica derecha):",
-             style = "font-size:13px;color:#555;white-space:nowrap;"),
-        selectInput(
-          ns("semanal_top_n"),
-          label   = NULL,
-          choices = c("5" = "5", "10" = "10", "15" = "15", "Todos" = "0"),
-          selected = "5",
-          width   = "100px"
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        uiOutput(ns("semanal_o1_topn_ui")),
+        withSpinner(
+          plotlyOutput(ns("semanal_o1_calor"), height = "500px"),
+          type = 4, color = "#44559B", size = 0.8
         )
       ),
-      fluidRow(
-        column(6,
-               div(class = "plot-container",
-                   shinycssloaders::withSpinner(
-                     plotlyOutput(ns("semanal_origen_calor"), width = "100%", height = "100%"),
-                     type = 6, color = "#44559B", size = 0.8
-                   )
-               )
-        ),
-        column(6,
-               div(class = "plot-container",
-                   shinycssloaders::withSpinner(
-                     plotlyOutput(ns("semanal_origen_barras"), width = "100%", height = "100%"),
-                     type = 6, color = "#44559B", size = 0.8
-                   )
-               )
+      
+      # O2: Proyección por entidad de origen — widget top N + checks 87/88 inline
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        uiOutput(ns("semanal_o2_controles_ui")),
+        withSpinner(
+          plotlyOutput(ns("semanal_o2_proyeccion"), height = "460px"),
+          type = 4, color = "#44559B", size = 0.8
         )
       ),
-      div(style = "margin-top:24px;",
-          h5("Tabla de datos — Entidad de Origen",
-             style = "text-align:center;font-weight:700;color:#2c3e50;margin-bottom:2px;"),
-          uiOutput(ns("semanal_subtitulo_origen")),
-          div(style = "margin-top:8px;", DT::dataTableOutput(ns("semanal_dt_origen"))),
-          div(style = "text-align:right;margin-top:8px;",
-              downloadButton(ns("semanal_dt_origen_descarga"),
-                             label = "Descargar tabla de Origen",
-                             class = "btn btn-sm btn-outline-secondary")
+      
+      # DataTable + descarga
+      div(
+        style = "margin-top:10px;",
+        div(
+          style = "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
+          tags$h5(
+            style = "margin:0;font-size:14px;color:#2c3e50;font-weight:600;",
+            icon("table"), " Detalle por Entidad de Origen"
+          ),
+          downloadButton(
+            ns("semanal_dt_origen_descarga"),
+            label = "Descargar CSV",
+            icon  = icon("download"),
+            class = "btn btn-xs btn-outline-secondary",
+            style = "font-size:11px;"
           )
+        ),
+        DT::dataTableOutput(ns("semanal_dt_origen"))
       )
     )
   }
@@ -153,11 +252,11 @@ graficas_ui_render <- function(input, output, session, estado_app,
   
   output$graficas_dinamicas <- renderUI({
     
-    estado_actual      <- estado_app()
-    tipo_corte_actual  <- input$tipo_corte %||% "historico"
-    desglose_actual    <- input$desglose   %||% "edad"
+    estado_actual     <- estado_app()
+    tipo_corte_actual <- input$tipo_corte %||% "historico"
+    desglose_actual   <- input$desglose   %||% "edad"
     
-    message("🔄 [UI RENDER v2.6] Estado: ", estado_actual,
+    message("🔄 [UI RENDER v2.7] Estado: ", estado_actual,
             " | tipo_corte: ", tipo_corte_actual,
             " | desglose: ", desglose_actual)
     
@@ -178,7 +277,6 @@ graficas_ui_render <- function(input, output, session, estado_app,
       
       message("✅ [UI RENDER] Semanal — desglose: ", desglose_actual)
       
-      # Bloque de sección según desglose activo
       bloque_desglose <- switch(desglose_actual,
                                 "edad"   = ui_seccion_edad(ns),
                                 "sexo"   = ui_seccion_sexo(ns),
@@ -187,15 +285,13 @@ graficas_ui_render <- function(input, output, session, estado_app,
       )
       
       return(tagList(
-        # Título principal dinámico (siempre visible)
         uiOutput(ns("semanal_titulo_principal")),
-        # Solo el bloque del desglose seleccionado
         bloque_desglose
       ))
     }
     
     # ══════════════════════════════════════════════════════════════════════════
-    # VISTA HISTÓRICA — intacta
+    # VISTA HISTÓRICA — sin cambios vs v2.6
     # ══════════════════════════════════════════════════════════════════════════
     
     if (estado_actual == "inicial") {
@@ -232,12 +328,14 @@ graficas_ui_render <- function(input, output, session, estado_app,
                               type = 6, color = "#44559B", size = 0.8
                             )
                         ),
-                        div(class = "metodologia-btn-container",
-                            style = "display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:4px 8px 12px 0;",
-                            actionButton(ns("info_grafica1"), label = "Metodología",
-                                         icon = icon("info-circle"), class = "btn-sm btn-outline-info metodologia-btn",
-                                         style = "font-size:11px;padding:3px 10px;border-radius:12px;cursor:pointer;",
-                                         title = "Ver metodología de proyección")
+                        div(
+                          class = "metodologia-btn-container",
+                          style = "display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:4px 8px 12px 0;",
+                          actionButton(ns("info_grafica1"), label = "Metodología",
+                                       icon  = icon("info-circle"),
+                                       class = "btn-sm btn-outline-info metodologia-btn",
+                                       style = "font-size:11px;padding:3px 10px;border-radius:12px;cursor:pointer;",
+                                       title = "Ver metodología de proyección")
                         )
         )),
         fluidRow(column(12,
@@ -294,13 +392,13 @@ graficas_ui_render <- function(input, output, session, estado_app,
       estado_app(),
       input$btn_consultar,
       input$tipo_corte,
-      input$desglose,          # ← NUEVO: re-renderiza al cambiar desglose
+      input$desglose,
       ambito_reactivo(),
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_ui_render v2.6 inicializado")
-  message("   ✅ Fase 2: renderizado condicional por desglose (edad / sexo / origen)")
-  message("   ✅ Vista histórica intacta")
+  message("✅ graficas_ui_render v2.7 inicializado")
+  message("   ✅ Fase 3: E1–E3 (edad), S1–S7 (sexo), O1–O2 (origen) en UI")
+  message("   ✅ Vista histórica sin cambios")
 }
