@@ -53,8 +53,8 @@ graficas_semanal <- function(input, output, session,
   color_m      <- function(a) if (a == "extranjero") COLORES$ext_mujeres else COLORES$nac_mujeres
   etiq_ambito  <- function(a) if (a == "extranjero") "Extranjero" else "Nacional"
   
-  ann_fuente <- function() list(
-    text = FUENTE_INE, x = 0.5, y = -0.18, xref = "paper", yref = "paper",
+  ann_fuente <- function(y_pos = -0.18) list(
+    text = FUENTE_INE, x = 0.5, y = y_pos, xref = "paper", yref = "paper",
     xanchor = "center", yanchor = "top", showarrow = FALSE,
     font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
     align = "center"
@@ -271,10 +271,9 @@ graficas_semanal <- function(input, output, session,
     )
   })
   output$semanal_subtitulo_edad <- renderUI({
-    if (es_historico()) return(NULL)
-    p(class = "text-muted",
-      style = "font-size:13px;text-align:center;margin-bottom:6px;",
-      texto_subtitulo())
+    # Eliminado en v3.1: el texto de alcance aparece como anotación
+    # dentro de cada gráfica (ann_alcance). No se duplica en el encabezado.
+    return(NULL)
   })
   output$semanal_subtitulo_sexo <- renderUI({
     if (es_historico()) return(NULL)

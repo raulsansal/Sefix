@@ -1,14 +1,12 @@
 # modules/lista_nominal_graficas/graficas_ui_render.R
 # Renderizado dinámico de UI para gráficas históricas Y semanales
-# Versión: 2.8 — Fase 3: ui_seccion_origen actualizada para O1 y O2
+# Versión: 2.9 — Fase 3: ui_seccion_edad actualizada para E1–E4
 #
-# CAMBIOS vs v2.7:
-#   - ui_seccion_edad(): sustituye semanal_edad_piramide y semanal_edad_distribucion
-#     por semanal_e1_proyeccion (+ widget semanal_e1_rangos_ui),
-#     semanal_e2_grupos y semanal_e3_barras
-#   - ui_seccion_sexo(): sustituye semanal_sexo_barras y semanal_sexo_dona
-#     por semanal_s1_piramide, semanal_s2_mujeres, semanal_s3_hombres,
-#     semanal_s4_nobinario, semanal_s5_barras, semanal_s6_dona, semanal_s7_proyeccion
+# CAMBIOS vs v2.8:
+#   - ui_seccion_edad(): agrega E3 (proyección por grupo etario) entre E2 y E4
+#     E3 incluye widget semanal_e3_grupos_ui + plotly semanal_e3_proyeccion_grupos
+#     E4 (era E3): semanal_e4_barras (renombrado desde semanal_e3_barras)
+#   - ui_seccion_sexo(): sin cambios
 #   - ui_seccion_origen(): sin cambios
 #   - Vista histórica: sin cambios
 
@@ -17,20 +15,21 @@ graficas_ui_render <- function(input, output, session, estado_app,
                                mostrar_graficas_consultadas,
                                ambito_reactivo) {
   
-  message("📊 Inicializando graficas_ui_render v2.8")
+  message("📊 Inicializando graficas_ui_render v2.9")
   ns <- session$ns
   
   # ════════════════════════════════════════════════════════════════════════════
   # BLOQUES UI — VISTA SEMANAL
   # ════════════════════════════════════════════════════════════════════════════
   
-  # ── Sección EDAD: E1 (proyección + widget), E2 (grupos), E3 (barras) ────────
+  # ── Sección EDAD: E1 (proyección rangos + widget), E2 (grupos barras),
+  #                  E3 (proyección grupos + widget), E4 (barras rangos) ────────
   ui_seccion_edad <- function(ns) {
     tagList(
       
       uiOutput(ns("semanal_subtitulo_edad")),
       
-      # E1: Proyección por rango de edad + widget selector
+      # E1: Proyección por rango de edad (12 rangos) + widget selector
       div(
         class = "well well-sm",
         style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
@@ -41,7 +40,7 @@ graficas_ui_render <- function(input, output, session, estado_app,
         )
       ),
       
-      # E2: LNE por grupos etarios (Jóvenes / Adultos / Mayores)
+      # E2: LNE por grupos etarios (barras horizontales)
       div(
         class = "well well-sm",
         style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
@@ -51,12 +50,23 @@ graficas_ui_render <- function(input, output, session, estado_app,
         )
       ),
       
-      # E3: Padrón y LNE por rango individual
+      # E3: Proyección por grupo etario (Jóvenes / Adultos / Mayores) + widget
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        uiOutput(ns("semanal_e3_grupos_ui")),
+        withSpinner(
+          plotlyOutput(ns("semanal_e3_proyeccion_grupos"), height = "420px"),
+          type = 4, color = "#003E66", size = 0.8
+        )
+      ),
+      
+      # E4: Padrón y LNE por rango individual (barras agrupadas)
       div(
         class = "well well-sm",
         style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
         withSpinner(
-          plotlyOutput(ns("semanal_e3_barras"), height = "380px"),
+          plotlyOutput(ns("semanal_e4_barras"), height = "380px"),
           type = 4, color = "#003E66", size = 0.8
         )
       ),
@@ -398,7 +408,7 @@ graficas_ui_render <- function(input, output, session, estado_app,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_ui_render v2.7 inicializado")
-  message("   ✅ Fase 3: E1–E3 (edad), S1–S7 (sexo), O1–O2 (origen) en UI")
+  message("✅ graficas_ui_render v2.9 inicializado")
+  message("   ✅ Fase 3: E1–E4 (edad), S1–S7 (sexo), O1–O2 (origen) en UI")
   message("   ✅ Vista histórica sin cambios")
 }

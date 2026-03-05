@@ -1,13 +1,19 @@
 # modules/lista_nominal_graficas/graficas_semanal_edad.R
-# Vista Semanal — Gráficas de Edad: E1, E2, E3
-# Versión: 1.0
+# Vista Semanal — Gráficas de Edad: E1, E2, E3, E4
+# Versión: 1.2
+#
+# CAMBIOS vs v1.1:
+#   E3 (nueva) — Evolución y Proyección Semanal por Grupo Etario
+#              — Misma lógica que E1 pero agrupando rangos en Jóvenes/Adultos/Mayores
+#              — Widget: 3 checks en fila única + Restablecer + Metodología
+#              — Paleta: mismos colores que E2 (COLOR_GRUPOS_NAC / COLOR_GRUPOS_EXT)
+#   E4 (era E3) — Padrón y LNE por rango individual (barras agrupadas) — sin cambios
 #
 # Gráficas:
-#   E1 (semanal_e1_proyeccion)  — Serie temporal + proyección por rango de edad
-#                                  Widget inline de selección de rangos + botón Restablecer
-#   E2 (semanal_e2_grupos)      — LNE por grupos etarios agregados
-#                                  (Jóvenes 18-29 / Adultos 30-59 / Mayores 60+)
-#   E3 (semanal_e3_barras)      — Padrón y LNE por rango individual (barras agrupadas)
+#   E1 (semanal_e1_proyeccion)  — Serie temporal + proyección por rango de edad (12 rangos)
+#   E2 (semanal_e2_grupos)      — LNE por grupos etarios agregados (barras horizontales)
+#   E3 (semanal_e3_proyeccion_grupos) — Serie temporal + proyección por grupo etario (3 grupos)
+#   E4 (semanal_e4_barras)      — Padrón y LNE por rango individual (barras agrupadas)
 #
 # Dependencias del entorno padre (graficas_semanal.R):
 #   COLORES, ORDEN_EDAD, FUENTE_INE
@@ -15,7 +21,7 @@
 #   ann_fuente(), ann_alcance(), plot_vacio()
 #   color_padron(), color_lista()
 #   es_historico(), desglose_activo()
-#   construir_df_edad()   ← usa datos del corte único (E2, E3)
+#   construir_df_edad()
 #
 # Dependencias de datos (pasadas como argumentos):
 #   datos_semanal_edad()       ← corte único (E2, E3)
@@ -32,7 +38,7 @@ graficas_semanal_edad <- function(input, output, session,
                                   ambito_reactivo,
                                   estado_app) {
   
-  message("📊 Inicializando graficas_semanal_edad v1.0")
+  message("📊 Inicializando graficas_semanal_edad v1.1")
   
   # ══════════════════════════════════════════════════════════════════════════
   # CONSTANTES LOCALES
@@ -42,34 +48,54 @@ graficas_semanal_edad <- function(input, output, session,
                    "40_44","45_49","50_54","55_59","60_64","65_y_mas")
   
   ETIQ_RANGOS <- c(
-    "18"      = "18 años",
-    "19"      = "19 años",
-    "20_24"   = "20–24 años",
-    "25_29"   = "25–29 años",
-    "30_34"   = "30–34 años",
-    "35_39"   = "35–39 años",
-    "40_44"   = "40–44 años",
-    "45_49"   = "45–49 años",
-    "50_54"   = "50–54 años",
-    "55_59"   = "55–59 años",
-    "60_64"   = "60–64 años",
-    "65_y_mas"= "65+ años"
+    "18"       = "18 años",
+    "19"       = "19 años",
+    "20_24"    = "20–24 años",
+    "25_29"    = "25–29 años",
+    "30_34"    = "30–34 años",
+    "35_39"    = "35–39 años",
+    "40_44"    = "40–44 años",
+    "45_49"    = "45–49 años",
+    "50_54"    = "50–54 años",
+    "55_59"    = "55–59 años",
+    "60_64"    = "60–64 años",
+    "65_y_mas" = "65+ años"
   )
   
-  # Paleta de 12 colores para trazas por rango
-  # Nacional: azules → rojos; Extranjero: dorados → verdes
-  PALETA_NAC <- c(
-    "#003E66","#005F99","#1A7ABF","#4A90E2",  # azules
-    "#44559B","#6B6BB3","#9B59B6","#C0392B",  # violetas → rojo
-    "#AE0E35","#D4666C","#E88080","#F5B7B1"   # rojos/rosados
-  )
-  PALETA_EXT <- c(
-    "#8F6A00","#B38A00","#D4A500","#EAC43E",  # dorados oscuros → claros
-    "#6B8F00","#8FB369","#B3D491","#CCE4B1",  # verdes oscuros → claros
-    "#5C9900","#7FBF3F","#A8D870","#C8ECA0"   # verdes medios
-  )
+  # ── Paletas coherentes: azules = Padrón, Rojos = LNE (Nacional) ───────────
+  # Modo por rango: 12 tonos alternando azules (pad) y rojos (lne)
+  # Los índices impares = padrón (azul), pares = lne (rojo)
+  # Para que cada RANGO tenga su par de colores: tono_i para pad, tono_i para lne
+  # usamos 9 tonos de cada familia y los 12 rangos consumen 9 → cicla
   
-  paleta_rangos <- function(ambito) if (ambito == "extranjero") PALETA_EXT else PALETA_NAC
+  AZULES  <- c("#B3CDE5","#90B8D6","#6BA4C6","#4891B3",
+               "#277592","#015378","#003E66","#012A51","#00193B")
+  ROJOS   <- c("#FFA0A0","#F87FA8","#F15F8E","#E05F7F",
+               "#D10F3F","#D3103F","#AE0E35","#8B0A2B","#71001B")
+  DORADOS <- c("#FFF2CC","#FFEAA9","#FFE48A","#FFDE6F",
+               "#FFD14A","#F5CA45","#EAC43E","#E0BD39","#D6B632")
+  VERDES  <- c("#CCE4B1","#B3D491","#99C374","#7EAF5A",
+               "#71A251","#518033","#49732C","#3E6625","#37591F")
+  
+  # Función que devuelve el color de padrón y LNE para el rango i (1-indexed)
+  # Nacional: padrón=azul[i], LNE=rojo[i]; Extranjero: pad=dorado[i], lne=verde[i]
+  color_rango_pad <- function(i, ambito) {
+    pal <- if (ambito == "extranjero") DORADOS else AZULES
+    pal[((i - 1) %% length(pal)) + 1]
+  }
+  color_rango_lne <- function(i, ambito) {
+    pal <- if (ambito == "extranjero") VERDES else ROJOS
+    pal[((i - 1) %% length(pal)) + 1]
+  }
+  
+  # Colores modo total
+  COLOR_PAD_NAC_TOTAL <- "#277592"   # azul medio
+  COLOR_LNE_NAC_TOTAL <- "#D10F3F"   # rojo medio
+  COLOR_PAD_EXT_TOTAL <- "#EAC43E"   # dorado medio
+  COLOR_LNE_EXT_TOTAL <- "#71A251"   # verde medio
+  
+  color_total_pad <- function(a) if (a == "extranjero") COLOR_PAD_EXT_TOTAL else COLOR_PAD_NAC_TOTAL
+  color_total_lne <- function(a) if (a == "extranjero") COLOR_LNE_EXT_TOTAL else COLOR_LNE_NAC_TOTAL
   
   # Grupos etarios para E2
   GRUPOS_ETARIOS <- list(
@@ -77,60 +103,155 @@ graficas_semanal_edad <- function(input, output, session,
     "Adultos\n(30–59)"    = c("30_34","35_39","40_44","45_49","50_54","55_59"),
     "Mayores\n(60+)"      = c("60_64","65_y_mas")
   )
-  COLOR_GRUPOS_NAC <- c("#003E66","#44559B","#AE0E35")
-  COLOR_GRUPOS_EXT <- c("#8F6A00","#D4A500","#B3D491")
+  COLOR_GRUPOS_NAC <- c("#6BA4C6","#277592","#F15F8E")
+  COLOR_GRUPOS_EXT <- c("#FFDE6F","#EAC43E","#7EAF5A")
+  
+  # Grupos etarios para E3 (widget + gráfica)
+  GRUPOS_E3        <- c("jovenes", "adultos", "mayores")
+  ETIQ_GRUPOS_E3   <- c(jovenes = "Jóvenes (18–29)", adultos = "Adultos (30–59)", mayores = "Mayores (60+)")
+  RANGOS_GRUPOS_E3 <- list(
+    jovenes = c("18","19","20_24","25_29"),
+    adultos = c("30_34","35_39","40_44","45_49","50_54","55_59"),
+    mayores = c("60_64","65_y_mas")
+  )
+  
+  # ── Helper: formato de fecha en español ───────────────────────────────────
+  fecha_es <- function(d) {
+    meses <- c("Enero","Febrero","Marzo","Abril","Mayo","Junio",
+               "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre")
+    paste(as.integer(format(d, "%d")),
+          meses[as.integer(format(d, "%m"))],
+          format(d, "%Y"))
+  }
   
   # ══════════════════════════════════════════════════════════════════════════
-  # E1 — WIDGET: selector de rangos de edad
-  # Renderiza el checkboxGroupInput + botón Restablecer que aparece
-  # sobre/dentro de la gráfica E1 (vía uiOutput en graficas_ui_render.R)
+  # E1 — WIDGET: selector de rangos + botones Restablecer y Metodología
+  # Layout: [checks fila 1 | checks fila 2] [btn_reset] [btn_metodologia]
+  # Los checks se distribuyen en 2 filas de 6 con lógica responsive
   # ══════════════════════════════════════════════════════════════════════════
   
   output$semanal_e1_rangos_ui <- renderUI({
     if (es_historico() || desglose_activo() != "edad") return(NULL)
     
     tagList(
+      # CSS para dividir el checkboxGroupInput en 2 filas de 6
+      tags$style(HTML(paste0(
+        "#", session$ns("semanal_e1_rangos"),
+        " .shiny-options-group { display:flex; flex-wrap:wrap; gap:4px 0; }",
+        "#", session$ns("semanal_e1_rangos"),
+        " .shiny-options-group .checkbox { width:calc(100%/6); min-width:90px;",
+        " margin:0; padding:1px 4px; box-sizing:border-box; }",
+        "#", session$ns("semanal_e1_rangos"),
+        " label { font-size:12px; color:#333; cursor:pointer; }",
+        "#", session$ns("semanal_e1_rangos"),
+        " input[type='checkbox'] { accent-color:#277592; cursor:pointer; }"
+      ))),
+      
       div(
         style = paste(
-          "background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;",
-          "padding:10px 14px 6px 14px;margin-bottom:10px;"
+          "background:#f4f6f8;border:1px solid #d0d7de;border-radius:7px;",
+          "padding:10px 14px 8px 14px;margin-bottom:10px;"
         ),
         div(
-          style = "display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;",
-          tags$span(
-            style = "font-size:13px;font-weight:600;color:#2c3e50;",
-            icon("filter"), " Rango de Edad"
+          style = "display:flex;align-items:flex-start;gap:12px;",
+          
+          # Izquierda: label + checks nativos (2 filas × 6 via CSS)
+          div(
+            style = "flex:1;min-width:0;",
+            div(
+              style = "margin-bottom:5px;",
+              tags$span(
+                style = "font-size:11px;font-weight:600;color:#555;",
+                "Rangos de edad:"
+              )
+            ),
+            checkboxGroupInput(
+              inputId  = session$ns("semanal_e1_rangos"),
+              label    = NULL,
+              choices  = setNames(RANGOS_EDAD, ETIQ_RANGOS[RANGOS_EDAD]),
+              selected = RANGOS_EDAD,
+              inline   = FALSE   # inline=FALSE para que el CSS de columnas funcione
+            )
           ),
-          actionButton(
-            inputId = session$ns("semanal_e1_btn_reset"),
-            label   = "Restablecer",
-            icon    = icon("undo"),
-            class   = "btn btn-xs btn-outline-secondary",
-            style   = "font-size:11px;padding:2px 8px;"
+          
+          # Derecha: botones apilados
+          div(
+            style = "display:flex;flex-direction:column;gap:5px;flex-shrink:0;padding-top:16px;",
+            actionButton(
+              inputId = session$ns("semanal_e1_btn_reset"),
+              label   = tagList(icon("undo"), " Restablecer"),
+              class   = "btn btn-sm",
+              style   = paste(
+                "background-color:#6c757d;color:#fff;border:none;",
+                "font-size:11px;padding:4px 10px;border-radius:4px;",
+                "white-space:nowrap;width:110px;"
+              )
+            ),
+            actionButton(
+              inputId = session$ns("semanal_e1_btn_metodologia"),
+              label   = tagList(icon("info-circle"), " Metodología"),
+              class   = "btn btn-sm btn-outline-info",
+              style   = paste(
+                "font-size:11px;padding:4px 10px;border-radius:4px;",
+                "white-space:nowrap;width:110px;"
+              )
+            )
           )
-        ),
-        checkboxGroupInput(
-          inputId  = session$ns("semanal_e1_rangos"),
-          label    = NULL,
-          choices  = setNames(RANGOS_EDAD, ETIQ_RANGOS[RANGOS_EDAD]),
-          selected = RANGOS_EDAD,
-          inline   = TRUE
         )
       )
     )
   })
   
-  # Botón Restablecer → seleccionar todos los rangos
+  # Restablecer → todos los rangos seleccionados
   observeEvent(input$semanal_e1_btn_reset, {
     updateCheckboxGroupInput(
-      session  = session,
-      inputId  = "semanal_e1_rangos",
+      session = session,
+      inputId = "semanal_e1_rangos",
       selected = RANGOS_EDAD
     )
   }, ignoreNULL = TRUE, ignoreInit = TRUE)
   
+  # Metodología → showModal directo con el mismo contenido que gráfica histórica 1
+  # (el botón info_grafica1 no existe en el DOM durante la vista semanal)
+  observeEvent(input$semanal_e1_btn_metodologia, {
+    showModal(modalDialog(
+      title = tagList(
+        icon("calculator"), " Metodología de Proyección"
+      ),
+      size   = "l",
+      easyClose = TRUE,
+      footer = modalButton("Cerrar"),
+      tagList(
+        h4("Proyección por Tasa de Crecimiento",
+           style = "color:#2c3e50;font-weight:600;margin-top:0;"),
+        p("La proyección del Padrón Electoral y la Lista Nominal se calcula
+          aplicando la tasa de crecimiento promedio mensual observada en los
+          cortes semanales disponibles del año en curso."),
+        tags$hr(),
+        h5("Procedimiento:", style = "font-weight:600;color:#2c3e50;"),
+        tags$ol(
+          tags$li("Se calcula la variación porcentual entre el primer y último
+                   corte semanal disponible del año."),
+          tags$li("Se obtiene la tasa de crecimiento mensual equivalente."),
+          tags$li("Se proyecta el valor para los meses restantes hasta diciembre,
+                   aplicando la tasa compuesta mes a mes."),
+          tags$li("La línea punteada representa la proyección; la línea sólida,
+                   los datos observados.")
+        ),
+        tags$hr(),
+        div(
+          style = "background:#f8f9fa;border-left:4px solid #277592;padding:10px 14px;border-radius:4px;",
+          tags$strong("Nota: "),
+          "La proyección es referencial. Los valores reales pueden diferir
+           en función de movimientos en el Padrón Electoral (altas, bajas,
+           correcciones) que se registren en cortes futuros."
+        )
+      )
+    ))
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+  
   # ══════════════════════════════════════════════════════════════════════════
-  # E1 — GRÁFICA: proyección por rango de edad
+  # E1 — GRÁFICA: evolución y proyección semanal por rango de edad
   # ══════════════════════════════════════════════════════════════════════════
   
   output$semanal_e1_proyeccion <- renderPlotly({
@@ -146,48 +267,51 @@ graficas_semanal_edad <- function(input, output, session,
       return(plot_vacio("Sin datos de serie temporal para proyección"))
     }
     
-    # Rangos seleccionados por el usuario (default = todos)
+    # Fecha de la última semana disponible en la serie
+    ultima_fecha <- max(serie$fecha)
+    etiq_fecha   <- fecha_es(ultima_fecha)
+    
+    # Rangos seleccionados
     rangos_sel <- input$semanal_e1_rangos %||% RANGOS_EDAD
     if (length(rangos_sel) == 0) rangos_sel <- RANGOS_EDAD
-    todos_seleccionados <- length(rangos_sel) == length(RANGOS_EDAD) ||
-      setequal(rangos_sel, RANGOS_EDAD)
+    todos_sel  <- setequal(sort(rangos_sel), sort(RANGOS_EDAD))
     
-    message("📊 [E1] Rangos seleccionados: ", paste(rangos_sel, collapse=", "),
-            " | Ámbito: ", ambito)
+    message("📊 [E1 v1.1] Rangos: ", paste(rangos_sel, collapse=","),
+            " | Ámbito: ", ambito, " | Última fecha: ", etiq_fecha)
     
-    # Calcular meses restantes para proyección
-    ultima_fecha  <- max(serie$fecha)
-    ultimo_mes    <- as.integer(format(ultima_fecha, "%m"))
-    meses_rest    <- 12L - ultimo_mes
+    # Meses restantes para proyección
+    ultimo_mes <- as.integer(format(ultima_fecha, "%m"))
+    meses_rest <- 12L - ultimo_mes
     
-    colores <- paleta_rangos(ambito)
     p <- plot_ly()
     
-    if (todos_seleccionados) {
-      # ── Modo total: 2 trazas (padrón total + lista total) ──────────────────
+    if (todos_sel) {
+      # ── Modo total: Padrón Total (azul) + LNE Total (rojo) ─────────────────
+      col_pad <- color_total_pad(ambito)
+      col_lne <- color_total_lne(ambito)
       
-      # Proyección de totales
       proy <- NULL
       if (meses_rest > 0) {
-        serie_proy          <- serie
-        serie_proy$lista_nominal   <- serie_proy$lista_total
-        serie_proy$padron_electoral <- serie_proy$padron_total
-        proy <- proyectar_con_tasa_crecimiento(serie_proy, meses_rest)
+        sp                   <- serie
+        sp$lista_nominal     <- sp$lista_total
+        sp$padron_electoral  <- sp$padron_total
+        proy <- tryCatch(proyectar_con_tasa_crecimiento(sp, meses_rest),
+                         error = function(e) NULL)
       }
       
       p <- p %>%
         add_trace(
           data = serie, x = ~fecha, y = ~padron_total,
           type = "scatter", mode = "lines+markers", name = "Padrón Total",
-          line   = list(color = color_padron(ambito), width = 3),
-          marker = list(size = 7, color = color_padron(ambito)),
+          line   = list(color = col_pad, width = 3),
+          marker = list(size = 7, color = col_pad, symbol = "circle"),
           hovertemplate = "<b>%{x|%d %b %Y}</b><br>Padrón Total: %{y:,.0f}<extra></extra>"
         ) %>%
         add_trace(
           data = serie, x = ~fecha, y = ~lista_total,
           type = "scatter", mode = "lines+markers", name = "LNE Total",
-          line   = list(color = color_lista(ambito), width = 3),
-          marker = list(size = 7, color = color_lista(ambito)),
+          line   = list(color = col_lne, width = 3),
+          marker = list(size = 7, color = col_lne, symbol = "square"),
           hovertemplate = "<b>%{x|%d %b %Y}</b><br>LNE Total: %{y:,.0f}<extra></extra>"
         )
       
@@ -196,57 +320,56 @@ graficas_semanal_edad <- function(input, output, session,
           add_trace(
             data = proy, x = ~fecha, y = ~padron_proyectado,
             type = "scatter", mode = "lines", name = "Proyección Padrón",
-            line = list(color = color_padron(ambito), width = 2, dash = "dash"),
+            line = list(color = col_pad, width = 2, dash = "dash"),
+            showlegend = TRUE,
             hovertemplate = "<b>%{x|%d %b %Y}</b><br>Proy. Padrón: %{y:,.0f}<extra></extra>"
           ) %>%
           add_trace(
             data = proy, x = ~fecha, y = ~lista_proyectada,
             type = "scatter", mode = "lines", name = "Proyección LNE",
-            line = list(color = color_lista(ambito), width = 2, dash = "dash"),
+            line = list(color = col_lne, width = 2, dash = "dash"),
+            showlegend = TRUE,
             hovertemplate = "<b>%{x|%d %b %Y}</b><br>Proy. LNE: %{y:,.0f}<extra></extra>"
           )
       }
       
-      titulo_graf <- paste0("Proyección Semanal — Padrón y LNE Total (", etiq, ") ", anio)
-      
     } else {
-      # ── Modo por rango: 2 trazas por rango seleccionado ───────────────────
-      
+      # ── Modo por rango: tono azul i para padrón, tono rojo i para LNE ──────
       for (i in seq_along(rangos_sel)) {
-        rango  <- rangos_sel[i]
-        color  <- colores[((i - 1) %% length(colores)) + 1]
-        etiq_r <- ETIQ_RANGOS[rango] %||% rango
+        rango   <- rangos_sel[i]
+        etiq_r  <- ETIQ_RANGOS[rango] %||% rango
+        col_pad <- color_rango_pad(i, ambito)
+        col_lne <- color_rango_lne(i, ambito)
+        col_pad_pad <- paste0("padron_", rango)
+        col_lne_lne <- paste0("lista_",  rango)
         
-        col_pad <- paste0("padron_", rango)
-        col_lst <- paste0("lista_",  rango)
+        if (!col_pad_pad %in% colnames(serie)) next
         
-        if (!col_pad %in% colnames(serie)) next
-        
-        # Proyección por rango
         proy_r <- NULL
         if (meses_rest > 0) {
-          serie_r                   <- serie
-          serie_r$lista_nominal     <- serie_r[[col_lst]]
-          serie_r$padron_electoral  <- serie_r[[col_pad]]
-          proy_r <- proyectar_con_tasa_crecimiento(serie_r, meses_rest)
+          sr                   <- serie
+          sr$lista_nominal     <- sr[[col_lne_lne]]
+          sr$padron_electoral  <- sr[[col_pad_pad]]
+          proy_r <- tryCatch(proyectar_con_tasa_crecimiento(sr, meses_rest),
+                             error = function(e) NULL)
         }
         
         p <- p %>%
           add_trace(
-            data = serie, x = ~fecha, y = serie[[col_pad]],
+            data = serie, x = ~fecha, y = serie[[col_pad_pad]],
             type = "scatter", mode = "lines+markers",
             name = paste0("Padrón ", etiq_r),
-            line   = list(color = color, width = 2.5),
-            marker = list(size = 6, color = color),
+            line   = list(color = col_pad, width = 2.5),
+            marker = list(size = 6, color = col_pad, symbol = "circle"),
             hovertemplate = paste0("<b>%{x|%d %b %Y}</b><br>Padrón ", etiq_r,
                                    ": %{y:,.0f}<extra></extra>")
           ) %>%
           add_trace(
-            data = serie, x = ~fecha, y = serie[[col_lst]],
+            data = serie, x = ~fecha, y = serie[[col_lne_lne]],
             type = "scatter", mode = "lines+markers",
             name = paste0("LNE ", etiq_r),
-            line   = list(color = color, width = 2.5, dash = "dot"),
-            marker = list(size = 6, color = color, symbol = "square"),
+            line   = list(color = col_lne, width = 2.5, dash = "dot"),
+            marker = list(size = 6, color = col_lne, symbol = "square"),
             hovertemplate = paste0("<b>%{x|%d %b %Y}</b><br>LNE ", etiq_r,
                                    ": %{y:,.0f}<extra></extra>")
           )
@@ -257,7 +380,7 @@ graficas_semanal_edad <- function(input, output, session,
               data = proy_r, x = ~fecha, y = ~padron_proyectado,
               type = "scatter", mode = "lines",
               name = paste0("Proy. Padrón ", etiq_r),
-              line = list(color = color, width = 1.5, dash = "dash"),
+              line = list(color = col_pad, width = 1.5, dash = "dash"),
               showlegend = FALSE,
               hovertemplate = paste0("<b>%{x|%d %b %Y}</b><br>Proy. Padrón ",
                                      etiq_r, ": %{y:,.0f}<extra></extra>")
@@ -266,45 +389,52 @@ graficas_semanal_edad <- function(input, output, session,
               data = proy_r, x = ~fecha, y = ~lista_proyectada,
               type = "scatter", mode = "lines",
               name = paste0("Proy. LNE ", etiq_r),
-              line = list(color = color, width = 1.5, dash = "dashdot"),
+              line = list(color = col_lne, width = 1.5, dash = "dashdot"),
               showlegend = FALSE,
               hovertemplate = paste0("<b>%{x|%d %b %Y}</b><br>Proy. LNE ",
                                      etiq_r, ": %{y:,.0f}<extra></extra>")
             )
         }
       }
-      
-      titulo_graf <- paste0(
-        "Proyección Semanal — Rangos de Edad (", etiq, ") ", anio
-      )
     }
     
-    # Eje X: fechas reales + proyectadas
-    fechas_reales <- serie$fecha
-    fechas_eje    <- fechas_reales
-    if (meses_rest > 0) {
-      anio_chr  <- as.character(anio)
-      dic_31    <- as.Date(paste0(anio_chr, "-12-31"))
-      fechas_eje <- c(fechas_reales, seq(max(fechas_reales) + 7, dic_31, by = "week"))
-    }
+    # Título con fecha de último corte
+    titulo_graf <- paste0(
+      "Evolución y Proyección Semanal del Padrón y LNE — ",
+      etiq_fecha, " — ", etiq
+    )
     
     p %>% layout(
-      title  = list(
+      title = list(
         text = titulo_graf,
-        font = list(size = 17, color = "#333", family = "Arial, sans-serif"),
+        font = list(size = 16, color = "#333", family = "Arial, sans-serif"),
         x = 0.5, xanchor = "center"
       ),
-      xaxis  = list(
-        title = "", type = "date",
+      xaxis = list(
+        title      = "",
+        type       = "date",
         tickformat = "%d %b",
-        range = c(min(fechas_reales) - 3,
-                  as.Date(paste0(anio, "-12-31")))
+        range      = c(min(serie$fecha) - 3,
+                       as.Date(paste0(anio, "-12-31")))
       ),
-      yaxis  = list(title = "Número de electores", separatethousands = TRUE),
-      legend = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.22),
-      margin = list(t = 110, b = 100, l = 90, r = 40),
-      hovermode  = "x unified",
-      annotations = list(ann_alcance(alcance), ann_fuente())
+      yaxis = list(
+        title             = "Número de electores",
+        separatethousands = TRUE
+      ),
+      # Leyenda con separación visual respecto a la fuente
+      legend = list(
+        orientation = "h",
+        xanchor     = "center",
+        x           = 0.5,
+        y           = -0.28,          # más abajo para dejar espacio a fuente
+        font        = list(size = 11)
+      ),
+      margin    = list(t = 120, b = 120, l = 90, r = 40),
+      hovermode = "x unified",
+      annotations = list(
+        ann_alcance(alcance, y_pos = 1.10),   # alcance bajo el título
+        ann_fuente()                           # fuente sobre la leyenda
+      )
     )
   }) %>%
     bindEvent(
@@ -325,82 +455,409 @@ graficas_semanal_edad <- function(input, output, session,
     ambito  <- ambito_reactivo()
     alcance <- isolate(texto_alcance())
     anio    <- anio_semanal()
-    etiq    <- etiq_ambito(ambito)
+    etiq    <- etiq_ambito(ambito)   # "Nacional" o "Extranjero"
+    
+    # Fecha del último corte disponible (misma lógica que E1)
+    serie <- datos_semanal_serie_edad()
+    etiq_fecha <- if (!is.null(serie) && nrow(serie) > 0)
+      fecha_es(max(serie$fecha))
+    else
+      as.character(anio)
     
     datos <- datos_semanal_edad()
     if (is.null(datos)) return(plot_vacio())
     
     df_rango <- construir_df_edad(datos, ambito)
-    if (is.null(df_rango) || nrow(df_rango) == 0) {
+    if (is.null(df_rango) || nrow(df_rango) == 0)
       return(plot_vacio("Sin datos de grupos de edad"))
-    }
     
-    # Agregar por grupos etarios (solo LNE, sin distinción de sexo)
     nombres_grupos <- names(GRUPOS_ETARIOS)
     colores_grupos <- if (ambito == "extranjero") COLOR_GRUPOS_EXT else COLOR_GRUPOS_NAC
     
     df_grupos <- do.call(rbind, lapply(seq_along(GRUPOS_ETARIOS), function(i) {
-      grupo_nombre <- nombres_grupos[i]
-      rangos       <- GRUPOS_ETARIOS[[i]]
-      etiq_rangos  <- sapply(rangos, etiqueta_edad)
-      
-      filas <- df_rango[df_rango$grupo %in% etiq_rangos, ]
-      lne   <- sum(filas$lista_hombres + filas$lista_mujeres, na.rm = TRUE)
-      
-      data.frame(
-        grupo  = grupo_nombre,
-        lne    = lne,
-        color  = colores_grupos[i],
-        stringsAsFactors = FALSE
-      )
+      rangos      <- GRUPOS_ETARIOS[[i]]
+      etiq_rangos <- sapply(rangos, etiqueta_edad)
+      filas       <- df_rango[df_rango$grupo %in% etiq_rangos, ]
+      lne         <- sum(filas$lista_hombres + filas$lista_mujeres, na.rm = TRUE)
+      data.frame(grupo = nombres_grupos[i], lne = lne,
+                 color = colores_grupos[i], stringsAsFactors = FALSE)
     }))
     
-    # Calcular porcentajes
-    total_lne    <- sum(df_grupos$lne, na.rm = TRUE)
+    total_lne     <- sum(df_grupos$lne, na.rm = TRUE)
     df_grupos$pct <- if (total_lne > 0) round(df_grupos$lne / total_lne * 100, 1) else 0
     
+    x_max <- max(df_grupos$lne, na.rm = TRUE) * 1.32
+    
+    # Título con fecha dinámica y ámbito
+    titulo_e2 <- paste0(
+      "Lista Nominal Electoral por Grupo Etario — ",
+      etiq_fecha, " — ", etiq
+    )
+    
+    # Posiciones Y normalizadas para las 3 barras (de abajo a arriba: 0, 0.5, 1)
+    # yref="paper" dentro del domain [0.20, 0.78]:
+    #   barra 0 (Jóvenes)  → y_paper = 0.20 + 0/2 * 0.58 = 0.20
+    #   barra 1 (Adultos)  → y_paper = 0.20 + 1/2 * 0.58 = 0.49
+    #   barra 2 (Mayores)  → y_paper = 0.20 + 2/2 * 0.58 = 0.78
+    # El factor rev() en el eje invierte el orden: Mayores arriba, Jóvenes abajo
+    n_grupos   <- length(nombres_grupos)
+    dom_lo     <- 0.20; dom_hi <- 0.78
+    y_paper_pos <- dom_lo + ((seq_len(n_grupos) - 1) / (n_grupos - 1)) * (dom_hi - dom_lo)
+    # rev: Mayores=index 1 está abajo (dom_lo), Jóvenes=index 3 arriba (dom_hi)
+    # pero factor(rev(nombres_grupos)) pone Jóvenes arriba en el plot
+    # entonces: nombres_grupos[1]=Jóvenes → y más alto → dom_hi
+    y_paper_pos <- rev(y_paper_pos)
+    
+    etiq_y_anns <- lapply(seq_len(n_grupos), function(i) {
+      list(
+        text      = gsub("\n", "<br>", nombres_grupos[i]),
+        x         = 0.155,              # justo a la izquierda del domain (0.18)
+        y         = y_paper_pos[i],
+        xref      = "paper",
+        yref      = "paper",
+        xanchor   = "right",
+        yanchor   = "middle",
+        showarrow = FALSE,
+        font      = list(size = 12, color = "#333", family = "Arial, sans-serif"),
+        align     = "right"
+      )
+    })
+    
     plot_ly(
-      data        = df_grupos,
-      y           = ~factor(grupo, levels = rev(nombres_grupos)),
-      x           = ~lne,
-      type        = "bar",
-      orientation = "h",
-      marker      = list(color = ~color),
-      text        = ~paste0(format(lne, big.mark = ","), "  (", pct, "%)"),
+      data         = df_grupos,
+      y            = ~factor(grupo, levels = rev(nombres_grupos)),
+      x            = ~lne,
+      type         = "bar",
+      orientation  = "h",
+      marker       = list(color = ~color),
+      text         = ~paste0(format(lne, big.mark = ","), "  (", pct, "%)"),
       textposition = "outside",
+      cliponaxis   = FALSE,
       hovertemplate = "<b>%{y}</b><br>LNE: %{x:,.0f}<extra></extra>"
     ) %>%
       layout(
-        title  = list(
-          text = paste0("LNE por Grupo Etario (", etiq, ") ", anio),
-          font = list(size = 17, color = "#333", family = "Arial, sans-serif"),
-          x = 0.5, xanchor = "center"
+        title = list(
+          text = titulo_e2,
+          font = list(size = 16, color = "#333", family = "Arial, sans-serif"),
+          x    = 0.5, xanchor = "center"
         ),
-        xaxis  = list(
-          title = "Lista Nominal Electoral",
-          separatethousands = TRUE,
-          # Espacio para etiquetas externas
-          range = c(0, max(df_grupos$lne, na.rm = TRUE) * 1.25)
+        xaxis = list(
+          title    = "",
+          range    = c(0, x_max),
+          tickfont = list(size = 11),
+          domain   = c(0.18, 1)
         ),
-        yaxis  = list(title = ""),
-        legend = list(showlegend = FALSE),
-        margin = list(t = 110, b = 80, l = 140, r = 60),
-        annotations = list(ann_alcance(alcance), ann_fuente())
+        yaxis = list(
+          title          = "",
+          showticklabels = FALSE,    # ocultamos ticks nativos; usamos anotaciones
+          domain         = c(0.20, 0.78)
+        ),
+        showlegend = FALSE,
+        margin     = list(t = 60, b = 60, l = 20, r = 90),
+        hovermode  = "closest",
+        annotations = c(
+          etiq_y_anns,
+          list(
+            list(
+              text    = alcance,
+              x = 0.5, y = 0.96,
+              xref = "paper", yref = "paper",
+              xanchor = "center", yanchor = "top",
+              showarrow = FALSE,
+              font = list(size = 13, color = "#555555", family = "Arial, sans-serif"),
+              align = "center"
+            ),
+            list(
+              text = FUENTE_INE,
+              x = 0.5, y = 0.05,
+              xref = "paper", yref = "paper",
+              xanchor = "center", yanchor = "top",
+              showarrow = FALSE,
+              font = list(size = 10, color = "#666666", family = "Arial, sans-serif"),
+              align = "center"
+            )
+          )
+        )
       )
+  }) %>%
+    bindEvent(
+      estado_app(), input$btn_consultar, ambito_reactivo(),
+      ignoreNULL = FALSE, ignoreInit = FALSE
+    )
+  
+  # ══════════════════════════════════════════════════════════════════════════
+  # E3 — WIDGET: selector de grupos etarios + botones Restablecer y Metodología
+  # Layout: 3 checks en fila única + botones al lado derecho
+  # ══════════════════════════════════════════════════════════════════════════
+  
+  output$semanal_e3_grupos_ui <- renderUI({
+    if (es_historico() || desglose_activo() != "edad") return(NULL)
+    
+    tagList(
+      tags$style(HTML(paste0(
+        "#", session$ns("semanal_e3_grupos"),
+        " .shiny-options-group { display:flex; flex-wrap:nowrap; gap:4px 0; }",
+        "#", session$ns("semanal_e3_grupos"),
+        " .shiny-options-group .checkbox { margin:0; padding:1px 12px 1px 4px;",
+        " box-sizing:border-box; }",
+        "#", session$ns("semanal_e3_grupos"),
+        " label { font-size:12px; color:#333; cursor:pointer; }",
+        "#", session$ns("semanal_e3_grupos"),
+        " input[type='checkbox'] { accent-color:#277592; cursor:pointer; }"
+      ))),
+      
+      div(
+        style = paste(
+          "background:#f4f6f8;border:1px solid #d0d7de;border-radius:7px;",
+          "padding:10px 14px 8px 14px;margin-bottom:10px;"
+        ),
+        div(
+          style = "display:flex;align-items:center;gap:12px;",
+          
+          # Izquierda: label + 3 checks en fila única
+          div(
+            style = "flex:1;min-width:0;",
+            div(
+              style = "margin-bottom:5px;",
+              tags$span(
+                style = "font-size:11px;font-weight:600;color:#555;",
+                "Grupos etarios:"
+              )
+            ),
+            checkboxGroupInput(
+              inputId  = session$ns("semanal_e3_grupos"),
+              label    = NULL,
+              choices  = setNames(GRUPOS_E3, ETIQ_GRUPOS_E3[GRUPOS_E3]),
+              selected = GRUPOS_E3,
+              inline   = FALSE
+            )
+          ),
+          
+          # Derecha: botones apilados
+          div(
+            style = "display:flex;flex-direction:column;gap:5px;flex-shrink:0;",
+            actionButton(
+              inputId = session$ns("semanal_e3_btn_reset"),
+              label   = tagList(icon("undo"), " Restablecer"),
+              class   = "btn btn-sm",
+              style   = paste(
+                "background-color:#6c757d;color:#fff;border:none;",
+                "font-size:11px;padding:4px 10px;border-radius:4px;",
+                "white-space:nowrap;width:110px;"
+              )
+            ),
+            actionButton(
+              inputId = session$ns("semanal_e3_btn_metodologia"),
+              label   = tagList(icon("info-circle"), " Metodología"),
+              class   = "btn btn-sm btn-outline-info",
+              style   = paste(
+                "font-size:11px;padding:4px 10px;border-radius:4px;",
+                "white-space:nowrap;width:110px;"
+              )
+            )
+          )
+        )
+      )
+    )
+  })
+  
+  observeEvent(input$semanal_e3_btn_reset, {
+    req(input$semanal_e3_btn_reset)
+    updateCheckboxGroupInput(session, "semanal_e3_grupos", selected = GRUPOS_E3)
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+  
+  observeEvent(input$semanal_e3_btn_metodologia, {
+    req(input$semanal_e3_btn_metodologia)
+    showModal(modalDialog(
+      title     = tagList(icon("calculator"), " Metodología de Proyección"),
+      size      = "l",
+      easyClose = TRUE,
+      footer    = modalButton("Cerrar"),
+      tagList(
+        h4("Proyección por Tasa de Crecimiento",
+           style = "color:#2c3e50;font-weight:600;margin-top:0;"),
+        p("La proyección del Padrón Electoral y la Lista Nominal se calcula
+          aplicando la tasa de crecimiento promedio mensual observada en los
+          cortes semanales disponibles del año en curso."),
+        tags$hr(),
+        h5("Procedimiento:", style = "font-weight:600;color:#2c3e50;"),
+        tags$ol(
+          tags$li("Se calcula la variación porcentual entre el primer y último
+                   corte semanal disponible del año."),
+          tags$li("Se obtiene la tasa de crecimiento mensual equivalente."),
+          tags$li("Se proyecta el valor para los meses restantes hasta diciembre,
+                   aplicando la tasa compuesta mes a mes."),
+          tags$li("La línea punteada representa la proyección; la línea sólida,
+                   los datos observados.")
+        ),
+        tags$hr(),
+        div(
+          style = "background:#f8f9fa;border-left:4px solid #277592;padding:10px 14px;border-radius:4px;",
+          tags$strong("Nota: "),
+          "La proyección es referencial. Los valores reales pueden diferir
+           en función de movimientos en el Padrón Electoral (altas, bajas,
+           correcciones) que se registren en cortes futuros."
+        )
+      )
+    ))
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+  
+  # ══════════════════════════════════════════════════════════════════════════
+  # E3 — GRÁFICA: evolución y proyección semanal por grupo etario
+  # Agrega rangos en: Jóvenes / Adultos / Mayores
+  # Misma mecánica que E1; paleta = COLOR_GRUPOS_NAC / COLOR_GRUPOS_EXT
+  # ══════════════════════════════════════════════════════════════════════════
+  
+  # Colores de línea para E3: cada grupo tiene un color para Padrón y otro para LNE
+  # Nacional: Jóvenes=azul claro, Adultos=azul oscuro, Mayores=rojo
+  # Extranjero: Jóvenes=dorado claro, Adultos=dorado oscuro, Mayores=verde
+  COLOR_E3_PAD_NAC <- c(jovenes = "#6BA4C6", adultos = "#277592", mayores = "#D10F3F")
+  COLOR_E3_LNE_NAC <- c(jovenes = "#4891B3", adultos = "#003E66", mayores = "#8B0A2B")
+  COLOR_E3_PAD_EXT <- c(jovenes = "#FFDE6F", adultos = "#EAC43E", mayores = "#7EAF5A")
+  COLOR_E3_LNE_EXT <- c(jovenes = "#F5CA45", adultos = "#D6B632", mayores = "#518033")
+  
+  output$semanal_e3_proyeccion_grupos <- renderPlotly({
+    if (es_historico() || desglose_activo() != "edad") return(NULL)
+    
+    ambito  <- ambito_reactivo()
+    alcance <- isolate(texto_alcance())
+    anio    <- anio_semanal()
+    etiq    <- etiq_ambito(ambito)
+    
+    serie <- datos_semanal_serie_edad()
+    if (is.null(serie) || nrow(serie) < 2)
+      return(plot_vacio("Sin datos de serie temporal para proyección"))
+    
+    ultima_fecha <- max(serie$fecha)
+    etiq_fecha   <- fecha_es(ultima_fecha)
+    ultimo_mes   <- as.integer(format(ultima_fecha, "%m"))
+    meses_rest   <- 12L - ultimo_mes
+    
+    grupos_sel <- input$semanal_e3_grupos %||% GRUPOS_E3
+    if (length(grupos_sel) == 0) grupos_sel <- GRUPOS_E3
+    
+    pal_pad <- if (ambito == "extranjero") COLOR_E3_PAD_EXT else COLOR_E3_PAD_NAC
+    pal_lne <- if (ambito == "extranjero") COLOR_E3_LNE_EXT else COLOR_E3_LNE_NAC
+    
+    p <- plot_ly()
+    
+    for (grupo_key in grupos_sel) {
+      rangos   <- RANGOS_GRUPOS_E3[[grupo_key]]
+      etiq_g   <- ETIQ_GRUPOS_E3[grupo_key]
+      col_pad  <- pal_pad[grupo_key]
+      col_lne  <- pal_lne[grupo_key]
+      
+      # Sumar columnas de la serie para este grupo
+      cols_pad <- paste0("padron_", rangos)
+      cols_lne <- paste0("lista_",  rangos)
+      cols_pad_ok <- cols_pad[cols_pad %in% colnames(serie)]
+      cols_lne_ok <- cols_lne[cols_lne %in% colnames(serie)]
+      
+      if (length(cols_pad_ok) == 0) next
+      
+      serie_g <- serie
+      serie_g$padron_grupo <- rowSums(serie[, cols_pad_ok, drop = FALSE], na.rm = TRUE)
+      serie_g$lista_grupo  <- if (length(cols_lne_ok) > 0)
+        rowSums(serie[, cols_lne_ok, drop = FALSE], na.rm = TRUE) else 0
+      
+      proy_g <- NULL
+      if (meses_rest > 0) {
+        sg                  <- serie_g
+        sg$padron_electoral <- sg$padron_grupo
+        sg$lista_nominal    <- sg$lista_grupo
+        proy_g <- tryCatch(proyectar_con_tasa_crecimiento(sg, meses_rest),
+                           error = function(e) NULL)
+      }
+      
+      p <- p %>%
+        add_trace(
+          data = serie_g, x = ~fecha, y = ~padron_grupo,
+          type = "scatter", mode = "lines+markers",
+          name = paste0("Padrón ", etiq_g),
+          line   = list(color = col_pad, width = 3),
+          marker = list(size = 7, color = col_pad, symbol = "circle"),
+          hovertemplate = paste0("<b>%{x|%d %b %Y}</b><br>Padrón ", etiq_g,
+                                 ": %{y:,.0f}<extra></extra>")
+        ) %>%
+        add_trace(
+          data = serie_g, x = ~fecha, y = ~lista_grupo,
+          type = "scatter", mode = "lines+markers",
+          name = paste0("LNE ", etiq_g),
+          line   = list(color = col_lne, width = 3, dash = "dot"),
+          marker = list(size = 7, color = col_lne, symbol = "square"),
+          hovertemplate = paste0("<b>%{x|%d %b %Y}</b><br>LNE ", etiq_g,
+                                 ": %{y:,.0f}<extra></extra>")
+        )
+      
+      if (!is.null(proy_g) && nrow(proy_g) > 0) {
+        p <- p %>%
+          add_trace(
+            data = proy_g, x = ~fecha, y = ~padron_proyectado,
+            type = "scatter", mode = "lines",
+            name = paste0("Proy. Padrón ", etiq_g),
+            line = list(color = col_pad, width = 2, dash = "dash"),
+            showlegend = FALSE,
+            hovertemplate = paste0("<b>%{x|%d %b %Y}</b><br>Proy. Padrón ", etiq_g,
+                                   ": %{y:,.0f}<extra></extra>")
+          ) %>%
+          add_trace(
+            data = proy_g, x = ~fecha, y = ~lista_proyectada,
+            type = "scatter", mode = "lines",
+            name = paste0("Proy. LNE ", etiq_g),
+            line = list(color = col_lne, width = 2, dash = "dashdot"),
+            showlegend = FALSE,
+            hovertemplate = paste0("<b>%{x|%d %b %Y}</b><br>Proy. LNE ", etiq_g,
+                                   ": %{y:,.0f}<extra></extra>")
+          )
+      }
+    }
+    
+    p %>% layout(
+      title = list(
+        text = paste0("Evolución y Proyección Semanal por Grupo Etario — ",
+                      etiq_fecha, " — ", etiq),
+        font = list(size = 16, color = "#333", family = "Arial, sans-serif"),
+        x = 0.5, xanchor = "center"
+      ),
+      xaxis = list(
+        title      = "",
+        type       = "date",
+        tickformat = "%d %b",
+        range      = c(min(serie$fecha) - 3,
+                       as.Date(paste0(anio, "-12-31")))
+      ),
+      yaxis = list(
+        title             = "Número de electores",
+        separatethousands = TRUE
+      ),
+      legend = list(
+        orientation = "h",
+        xanchor     = "center",
+        x           = 0.5,
+        y           = -0.28,
+        font        = list(size = 11)
+      ),
+      margin    = list(t = 120, b = 120, l = 90, r = 40),
+      hovermode = "x unified",
+      annotations = list(
+        ann_alcance(alcance, y_pos = 1.10),
+        ann_fuente()
+      )
+    )
   }) %>%
     bindEvent(
       estado_app(),
       input$btn_consultar,
+      input$semanal_e3_grupos,
       ambito_reactivo(),
       ignoreNULL = FALSE, ignoreInit = FALSE
     )
   
   # ══════════════════════════════════════════════════════════════════════════
-  # E3 — GRÁFICA: Padrón y LNE por rango individual (barras agrupadas)
-  # Equivale a semanal_edad_distribucion de graficas_semanal.R v2.3
+  # E4 — GRÁFICA: Padrón y LNE por rango individual (barras agrupadas)
   # ══════════════════════════════════════════════════════════════════════════
   
-  output$semanal_e3_barras <- renderPlotly({
+  output$semanal_e4_barras <- renderPlotly({
     if (es_historico() || desglose_activo() != "edad") return(NULL)
     
     ambito  <- ambito_reactivo()
@@ -445,14 +902,13 @@ graficas_semanal_edad <- function(input, output, session,
       )
   }) %>%
     bindEvent(
-      estado_app(),
-      input$btn_consultar,
-      ambito_reactivo(),
+      estado_app(), input$btn_consultar, ambito_reactivo(),
       ignoreNULL = FALSE, ignoreInit = FALSE
     )
   
-  message("✅ graficas_semanal_edad v1.0 inicializado")
-  message("   E1: proyección por rango con widget selector")
-  message("   E2: LNE por grupos etarios (Jóvenes / Adultos / Mayores)")
-  message("   E3: Padrón y LNE por rango individual (barras agrupadas)")
+  message("✅ graficas_semanal_edad v1.2 inicializado")
+  message("   E1: evolución/proyección por rango de edad (12 rangos, widget 2 filas)")
+  message("   E2: LNE por grupos etarios (barras horizontales)")
+  message("   E3: evolución/proyección por grupo etario (3 grupos, widget fila única)")
+  message("   E4: Padrón y LNE por rango individual (barras agrupadas)")
 }
