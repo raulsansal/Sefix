@@ -1,6 +1,31 @@
 # modules/lista_nominal_graficas/graficas_semanal_edad.R
 # Vista Semanal — Gráficas de Edad: E1, E2, E3, E4
-# Versión: 1.2
+# Versión: 1.7
+#
+# CAMBIOS vs v1.6:
+#   E1/E3/E4 — ann_fuente() removida del layout de Plotly;
+#              fuente ahora es div HTML estático en graficas_ui_render.R
+#              (evita solapamiento con leyenda dinámica)
+#   E1/E3/E4 — margin b reducido a 80 (leyenda y=-0.10, sin anotación extra)
+#
+# CAMBIOS vs v1.5:
+#   E4 — título con fecha dinámica y ámbito, colores pad/lne de E1,
+#        eje X sin título, márgenes y espaciado corregidos
+#   E1/E3/E4 — orden leyenda/fuente corregido: leyenda y=-0.18, fuente y=-0.30
+#   COLOR_GRUPOS_NAC — paleta fija c("#6BA4C6","#277592","#D10F3F")
+#
+# CAMBIOS vs v1.4:
+#   Modal E1 y E3 — padding-left:24px en ol/ul para corregir sangría dentro del modal
+#
+# CAMBIOS vs v1.3:
+#   Modal E1 y E3 — rediseño visual coherente con modal histórico:
+#     icono chart-line, pasos con negrita, bloque fórmula, sección consideraciones,
+#     botón Cerrar azul sólido
+#
+# CAMBIOS vs v1.2:
+#   Fix E3 — observeEvent semanal_e3_btn_reset y semanal_e3_btn_metodologia:
+#            eliminado req() redundante dentro del handler; session = session
+#            explícito en updateCheckboxGroupInput (patrón idéntico a E1)
 #
 # CAMBIOS vs v1.1:
 #   E3 (nueva) — Evolución y Proyección Semanal por Grupo Etario
@@ -38,7 +63,7 @@ graficas_semanal_edad <- function(input, output, session,
                                   ambito_reactivo,
                                   estado_app) {
   
-  message("📊 Inicializando graficas_semanal_edad v1.1")
+  message("📊 Inicializando graficas_semanal_edad v1.7")
   
   # ══════════════════════════════════════════════════════════════════════════
   # CONSTANTES LOCALES
@@ -103,7 +128,7 @@ graficas_semanal_edad <- function(input, output, session,
     "Adultos\n(30–59)"    = c("30_34","35_39","40_44","45_49","50_54","55_59"),
     "Mayores\n(60+)"      = c("60_64","65_y_mas")
   )
-  COLOR_GRUPOS_NAC <- c("#6BA4C6","#277592","#F15F8E")
+  COLOR_GRUPOS_NAC <- c("#6BA4C6","#277592","#D10F3F")
   COLOR_GRUPOS_EXT <- c("#FFDE6F","#EAC43E","#7EAF5A")
   
   # Grupos etarios para E3 (widget + gráfica)
@@ -215,36 +240,57 @@ graficas_semanal_edad <- function(input, output, session,
   # (el botón info_grafica1 no existe en el DOM durante la vista semanal)
   observeEvent(input$semanal_e1_btn_metodologia, {
     showModal(modalDialog(
-      title = tagList(
-        icon("calculator"), " Metodología de Proyección"
-      ),
-      size   = "l",
+      title     = tagList(icon("chart-line"), " Metodología de Proyección"),
+      size      = "l",
       easyClose = TRUE,
-      footer = modalButton("Cerrar"),
+      footer    = tagList(
+        tags$button(
+          type = "button", class = "btn btn-primary",
+          style = "background-color:#277592;border-color:#277592;padding:8px 32px;font-size:14px;border-radius:6px;",
+          `data-dismiss` = "modal", "Cerrar"
+        )
+      ),
       tagList(
-        h4("Proyección por Tasa de Crecimiento",
-           style = "color:#2c3e50;font-weight:600;margin-top:0;"),
-        p("La proyección del Padrón Electoral y la Lista Nominal se calcula
-          aplicando la tasa de crecimiento promedio mensual observada en los
-          cortes semanales disponibles del año en curso."),
-        tags$hr(),
-        h5("Procedimiento:", style = "font-weight:600;color:#2c3e50;"),
+        div(
+          style = "margin-bottom:16px;",
+          h4(tags$span(style = "color:#1a3a5c;font-weight:700;",
+                       "¿Cómo se calcula la proyección?"),
+             style = "margin-top:0;"),
+          p("La proyección utiliza un ",
+            tags$strong("modelo de tasa de crecimiento mensual promedio"),
+            " basado en los cortes semanales disponibles del año en curso.")
+        ),
+        h5(tags$span(style = "color:#1a3a5c;font-weight:700;", "Pasos del cálculo:"),
+           style = "margin-bottom:8px;"),
         tags$ol(
-          tags$li("Se calcula la variación porcentual entre el primer y último
-                   corte semanal disponible del año."),
-          tags$li("Se obtiene la tasa de crecimiento mensual equivalente."),
-          tags$li("Se proyecta el valor para los meses restantes hasta diciembre,
-                   aplicando la tasa compuesta mes a mes."),
-          tags$li("La línea punteada representa la proyección; la línea sólida,
-                   los datos observados.")
+          style = "padding-left:24px;margin-bottom:12px;",
+          tags$li(tagList(tags$strong("Datos base:"),       " Cortes semanales del año actual.")),
+          tags$li(tagList(tags$strong("Tasa de crecimiento:"), " Promedio mensual entre el primer y último corte disponible.")),
+          tags$li(tagList(tags$strong("Proyección:"),       " Se aplica la tasa compuesta hasta diciembre.")),
+          tags$li(tagList(tags$strong("Visualización:"),    " Líneas punteadas = valores proyectados."))
+        ),
+        tags$hr(),
+        h5(tags$span(style = "color:#1a3a5c;font-weight:700;", "Fórmula:"),
+           style = "margin-bottom:8px;"),
+        div(
+          style = "background:#eef4fb;border-left:4px solid #277592;padding:10px 16px;border-radius:4px;font-family:monospace;font-size:13px;color:#D10F3F;margin-bottom:16px;",
+          div("Tasa = (Valor_final / Valor_inicial)^(1/(n-1)) — 1"),
+          div("Proyección(i) = Último_valor × (1 + tasa)^i")
+        ),
+        div(style = "color:#c0392b;font-weight:700;margin-bottom:6px;",
+            icon("triangle-exclamation"), " Consideraciones:"),
+        tags$ul(
+          style = "padding-left:24px;margin-bottom:12px;",
+          tags$li(tagList("Asume crecimiento ", tags$strong("constante"), ".")),
+          tags$li(tagList("Es una ", tags$strong("estimación estadística"), ".")),
+          tags$li(tagList("Proyecta hasta ", tags$strong("diciembre"), " del año.")),
+          tags$li("Los datos oficiales del INE prevalecen.")
         ),
         tags$hr(),
         div(
-          style = "background:#f8f9fa;border-left:4px solid #277592;padding:10px 14px;border-radius:4px;",
-          tags$strong("Nota: "),
-          "La proyección es referencial. Los valores reales pueden diferir
-           en función de movimientos en el Padrón Electoral (altas, bajas,
-           correcciones) que se registren en cortes futuros."
+          style = "text-align:center;font-size:12px;color:#666;",
+          icon("circle-info"),
+          " Esta es una herramienta de referencia. Los datos oficiales son los publicados por el INE."
         )
       )
     ))
@@ -421,19 +467,17 @@ graficas_semanal_edad <- function(input, output, session,
         title             = "Número de electores",
         separatethousands = TRUE
       ),
-      # Leyenda con separación visual respecto a la fuente
       legend = list(
         orientation = "h",
         xanchor     = "center",
         x           = 0.5,
-        y           = -0.28,          # más abajo para dejar espacio a fuente
+        y           = -0.10,
         font        = list(size = 11)
       ),
-      margin    = list(t = 120, b = 120, l = 90, r = 40),
+      margin    = list(t = 120, b = 80, l = 90, r = 40),
       hovermode = "x unified",
       annotations = list(
-        ann_alcance(alcance, y_pos = 1.10),   # alcance bajo el título
-        ann_fuente()                           # fuente sobre la leyenda
+        ann_alcance(alcance, y_pos = 1.10)
       )
     )
   }) %>%
@@ -662,41 +706,66 @@ graficas_semanal_edad <- function(input, output, session,
   })
   
   observeEvent(input$semanal_e3_btn_reset, {
-    req(input$semanal_e3_btn_reset)
-    updateCheckboxGroupInput(session, "semanal_e3_grupos", selected = GRUPOS_E3)
+    updateCheckboxGroupInput(
+      session = session,
+      inputId = "semanal_e3_grupos",
+      selected = GRUPOS_E3
+    )
   }, ignoreNULL = TRUE, ignoreInit = TRUE)
   
   observeEvent(input$semanal_e3_btn_metodologia, {
-    req(input$semanal_e3_btn_metodologia)
     showModal(modalDialog(
-      title     = tagList(icon("calculator"), " Metodología de Proyección"),
+      title     = tagList(icon("chart-line"), " Metodología de Proyección"),
       size      = "l",
       easyClose = TRUE,
-      footer    = modalButton("Cerrar"),
+      footer    = tagList(
+        tags$button(
+          type = "button", class = "btn btn-primary",
+          style = "background-color:#277592;border-color:#277592;padding:8px 32px;font-size:14px;border-radius:6px;",
+          `data-dismiss` = "modal", "Cerrar"
+        )
+      ),
       tagList(
-        h4("Proyección por Tasa de Crecimiento",
-           style = "color:#2c3e50;font-weight:600;margin-top:0;"),
-        p("La proyección del Padrón Electoral y la Lista Nominal se calcula
-          aplicando la tasa de crecimiento promedio mensual observada en los
-          cortes semanales disponibles del año en curso."),
-        tags$hr(),
-        h5("Procedimiento:", style = "font-weight:600;color:#2c3e50;"),
+        div(
+          style = "margin-bottom:16px;",
+          h4(tags$span(style = "color:#1a3a5c;font-weight:700;",
+                       "¿Cómo se calcula la proyección?"),
+             style = "margin-top:0;"),
+          p("La proyección utiliza un ",
+            tags$strong("modelo de tasa de crecimiento mensual promedio"),
+            " basado en los cortes semanales disponibles del año en curso.")
+        ),
+        h5(tags$span(style = "color:#1a3a5c;font-weight:700;", "Pasos del cálculo:"),
+           style = "margin-bottom:8px;"),
         tags$ol(
-          tags$li("Se calcula la variación porcentual entre el primer y último
-                   corte semanal disponible del año."),
-          tags$li("Se obtiene la tasa de crecimiento mensual equivalente."),
-          tags$li("Se proyecta el valor para los meses restantes hasta diciembre,
-                   aplicando la tasa compuesta mes a mes."),
-          tags$li("La línea punteada representa la proyección; la línea sólida,
-                   los datos observados.")
+          style = "padding-left:24px;margin-bottom:12px;",
+          tags$li(tagList(tags$strong("Datos base:"),       " Cortes semanales del año actual.")),
+          tags$li(tagList(tags$strong("Tasa de crecimiento:"), " Promedio mensual entre el primer y último corte disponible.")),
+          tags$li(tagList(tags$strong("Proyección:"),       " Se aplica la tasa compuesta hasta diciembre.")),
+          tags$li(tagList(tags$strong("Visualización:"),    " Líneas punteadas = valores proyectados."))
+        ),
+        tags$hr(),
+        h5(tags$span(style = "color:#1a3a5c;font-weight:700;", "Fórmula:"),
+           style = "margin-bottom:8px;"),
+        div(
+          style = "background:#eef4fb;border-left:4px solid #277592;padding:10px 16px;border-radius:4px;font-family:monospace;font-size:13px;color:#D10F3F;margin-bottom:16px;",
+          div("Tasa = (Valor_final / Valor_inicial)^(1/(n-1)) — 1"),
+          div("Proyección(i) = Último_valor × (1 + tasa)^i")
+        ),
+        div(style = "color:#c0392b;font-weight:700;margin-bottom:6px;",
+            icon("triangle-exclamation"), " Consideraciones:"),
+        tags$ul(
+          style = "padding-left:24px;margin-bottom:12px;",
+          tags$li(tagList("Asume crecimiento ", tags$strong("constante"), ".")),
+          tags$li(tagList("Es una ", tags$strong("estimación estadística"), ".")),
+          tags$li(tagList("Proyecta hasta ", tags$strong("diciembre"), " del año.")),
+          tags$li("Los datos oficiales del INE prevalecen.")
         ),
         tags$hr(),
         div(
-          style = "background:#f8f9fa;border-left:4px solid #277592;padding:10px 14px;border-radius:4px;",
-          tags$strong("Nota: "),
-          "La proyección es referencial. Los valores reales pueden diferir
-           en función de movimientos en el Padrón Electoral (altas, bajas,
-           correcciones) que se registren en cortes futuros."
+          style = "text-align:center;font-size:12px;color:#666;",
+          icon("circle-info"),
+          " Esta es una herramienta de referencia. Los datos oficiales son los publicados por el INE."
         )
       )
     ))
@@ -834,14 +903,13 @@ graficas_semanal_edad <- function(input, output, session,
         orientation = "h",
         xanchor     = "center",
         x           = 0.5,
-        y           = -0.28,
+        y           = -0.10,
         font        = list(size = 11)
       ),
-      margin    = list(t = 120, b = 120, l = 90, r = 40),
+      margin    = list(t = 120, b = 80, l = 90, r = 40),
       hovermode = "x unified",
       annotations = list(
-        ann_alcance(alcance, y_pos = 1.10),
-        ann_fuente()
+        ann_alcance(alcance, y_pos = 1.10)
       )
     )
   }) %>%
@@ -865,6 +933,13 @@ graficas_semanal_edad <- function(input, output, session,
     anio    <- anio_semanal()
     etiq    <- etiq_ambito(ambito)
     
+    # Fecha del último corte disponible (mismo patrón que E1/E3)
+    serie      <- datos_semanal_serie_edad()
+    etiq_fecha <- if (!is.null(serie) && nrow(serie) > 0)
+      fecha_es(max(serie$fecha))
+    else
+      as.character(anio)
+    
     datos <- datos_semanal_edad()
     if (is.null(datos)) return(plot_vacio())
     
@@ -874,31 +949,38 @@ graficas_semanal_edad <- function(input, output, session,
     df$padron_total <- df$padron_hombres + df$padron_mujeres
     df$lista_total  <- df$lista_hombres  + df$lista_mujeres
     
+    col_pad <- color_total_pad(ambito)
+    col_lne <- color_total_lne(ambito)
+    
     plot_ly() %>%
       add_trace(
         data = df, x = ~grupo, y = ~padron_total,
         type = "bar", name = "Padrón Electoral",
-        marker = list(color = color_padron(ambito)),
+        marker = list(color = col_pad),
         hovertemplate = "<b>%{x}</b><br>Padrón: %{y:,.0f}<extra></extra>"
       ) %>%
       add_trace(
         data = df, x = ~grupo, y = ~lista_total,
         type = "bar", name = "Lista Nominal",
-        marker = list(color = color_lista(ambito)),
+        marker = list(color = col_lne),
         hovertemplate = "<b>%{x}</b><br>LNE: %{y:,.0f}<extra></extra>"
       ) %>%
       layout(
         title   = list(
-          text = paste0("Padrón y LNE por Rango de Edad (", etiq, ") ", anio),
-          font = list(size = 17, color = "#333", family = "Arial, sans-serif"),
+          text = paste0("Padrón y LNE por Rango de Edad — ", etiq_fecha, " — ", etiq),
+          font = list(size = 16, color = "#333", family = "Arial, sans-serif"),
           x = 0.5, xanchor = "center"
         ),
         barmode = "group",
-        xaxis   = list(title = "Rango de Edad", tickangle = -30),
+        xaxis   = list(title = "", tickangle = 0, tickfont = list(size = 11)),
         yaxis   = list(title = "Número de electores", separatethousands = TRUE),
-        legend  = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.22),
-        margin  = list(t = 110, b = 100, l = 90, r = 40),
-        annotations = list(ann_alcance(alcance), ann_fuente())
+        legend  = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.10,
+                       font = list(size = 11)),
+        margin  = list(t = 120, b = 80, l = 90, r = 40),
+        hovermode = "closest",
+        annotations = list(
+          ann_alcance(alcance, y_pos = 1.10)
+        )
       )
   }) %>%
     bindEvent(
@@ -906,7 +988,7 @@ graficas_semanal_edad <- function(input, output, session,
       ignoreNULL = FALSE, ignoreInit = FALSE
     )
   
-  message("✅ graficas_semanal_edad v1.2 inicializado")
+  message("✅ graficas_semanal_edad v1.7 inicializado")
   message("   E1: evolución/proyección por rango de edad (12 rangos, widget 2 filas)")
   message("   E2: LNE por grupos etarios (barras horizontales)")
   message("   E3: evolución/proyección por grupo etario (3 grupos, widget fila única)")

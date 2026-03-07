@@ -1,6 +1,10 @@
 # modules/lista_nominal_graficas/graficas_ui_render.R
 # Renderizado dinámico de UI para gráficas históricas Y semanales
-# Versión: 2.9 — Fase 3: ui_seccion_edad actualizada para E1–E4
+# Versión: 2.11 — Fuente como div HTML estático en E1/E3/E4 (evita solapamiento con leyenda)
+#
+# CAMBIOS vs v2.10:
+#   ui_seccion_edad(): agrega div fuente estático debajo de plotlyOutput en E1, E3 y E4
+#     La fuente ya no es anotación Plotly; queda siempre debajo de leyenda dinámica
 #
 # CAMBIOS vs v2.8:
 #   - ui_seccion_edad(): agrega E3 (proyección por grupo etario) entre E2 y E4
@@ -15,7 +19,7 @@ graficas_ui_render <- function(input, output, session, estado_app,
                                mostrar_graficas_consultadas,
                                ambito_reactivo) {
   
-  message("📊 Inicializando graficas_ui_render v2.9")
+  message("📊 Inicializando graficas_ui_render v2.11")
   ns <- session$ns
   
   # ════════════════════════════════════════════════════════════════════════════
@@ -33,10 +37,17 @@ graficas_ui_render <- function(input, output, session, estado_app,
       div(
         class = "well well-sm",
         style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
-        uiOutput(ns("semanal_e1_rangos_ui")),
+        div(
+          style = "position:relative;z-index:10;",
+          uiOutput(ns("semanal_e1_rangos_ui"))
+        ),
         withSpinner(
           plotlyOutput(ns("semanal_e1_proyeccion"), height = "420px"),
           type = 4, color = "#003E66", size = 0.8
+        ),
+        div(
+          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:4px 0 2px 0;",
+          "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado"
         )
       ),
       
@@ -54,10 +65,17 @@ graficas_ui_render <- function(input, output, session, estado_app,
       div(
         class = "well well-sm",
         style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
-        uiOutput(ns("semanal_e3_grupos_ui")),
+        div(
+          style = "position:relative;z-index:10;",
+          uiOutput(ns("semanal_e3_grupos_ui"))
+        ),
         withSpinner(
           plotlyOutput(ns("semanal_e3_proyeccion_grupos"), height = "420px"),
           type = 4, color = "#003E66", size = 0.8
+        ),
+        div(
+          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:4px 0 2px 0;",
+          "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado"
         )
       ),
       
@@ -68,6 +86,10 @@ graficas_ui_render <- function(input, output, session, estado_app,
         withSpinner(
           plotlyOutput(ns("semanal_e4_barras"), height = "380px"),
           type = 4, color = "#003E66", size = 0.8
+        ),
+        div(
+          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:4px 0 2px 0;",
+          "Fuente: INE. Estadística de Padrón Electoral y Lista Nominal del Electorado"
         )
       ),
       
@@ -408,7 +430,7 @@ graficas_ui_render <- function(input, output, session, estado_app,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_ui_render v2.9 inicializado")
+  message("✅ graficas_ui_render v2.11 inicializado")
   message("   ✅ Fase 3: E1–E4 (edad), S1–S7 (sexo), O1–O2 (origen) en UI")
   message("   ✅ Vista histórica sin cambios")
 }
