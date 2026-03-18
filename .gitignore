@@ -32,6 +32,7 @@ rsconnect/
 *.tmp
 *.bak
 *.swp
+*.git
 *~
 
 # Sistema Windows
@@ -46,3 +47,9 @@ data/
 *.xlsx
 *.rds
 
+# Archivos temporales de R
+.RData
+.RDataTmp*
+.Rhistory
+.Ruserdata
+*.Rproj.user

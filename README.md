@@ -1,8 +1,8 @@
-# Dashboard Electoral | Raúl Sánchez Salgado
+# | Sefix | Dashboard Electoral | Raúl Sánchez Salgado
 
 Visualización interactiva de resultados electorales federales en México (2006-2023), basada en datos oficiales del [Instituto Nacional Electoral (INE)](https://siceen21.ine.mx/home).
 
-Este dashboard permite explorar, comparar y analizar los resultados de las elecciones federales desde 2006 hasta 2023, con filtros por año, cargo, estado, distrito, municipio y sección electoral.
+Sefix permite explorar, comparar y analizar los resultados de las elecciones federales desde 2006 hasta 2024, con filtros por año, cargo, estado, distrito, municipio y sección electoral.
 
 ## 📊 Funcionalidades principales
 
@@ -49,8 +49,8 @@ Los datos provienen del [Sistema de Consulta de la Estadística de las Eleccione
 
 ## 📂 Notas sobre privacidad y datos
 
-La carpeta `data/` no se incluye en el repositorio por su tamaño y naturaleza. Para ejecutar la app localmente, asegúrate de tener los archivos CSV en `data/results/`.
+La carpeta `data/` no se incluye en el repositorio por su tamaño y naturaleza. Para ejecutar la app localmente, asegúrate de tener los archivos CSV en `data/results/` y en `data/pdln/`.
 
 ---
 
-> Desarrollado con RStudio por Raúl Sánchez Salgado | 2025
+> Desarrollado con RStudio por Raúl Sánchez Salgado | 2026
