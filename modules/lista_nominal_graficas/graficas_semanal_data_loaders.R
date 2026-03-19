@@ -372,17 +372,12 @@ graficas_semanal_data_loaders <- function(input, output, session,
     
     resultado <- list(fecha = fecha)
     
-    cols_pad <- grep("^pad_\\d{2}$|^pad8[78]$", colnames(fila),
+    # Columnas origen: los CSVs usan nombres de estado completos (ln_aguascalientes,
+    # pad_baja_california, etc.) más los códigos especiales pad87/pad88/ln87/ln88.
+    cols_pad <- grep("^pad_[a-z]|^pad87$|^pad88$", colnames(fila),
                      value = TRUE, ignore.case = TRUE)
-    cols_ln  <- grep("^ln_\\d{2}$|^ln8[78]$",  colnames(fila),
+    cols_ln  <- grep("^ln_[a-z]|^ln87$|^ln88$",   colnames(fila),
                      value = TRUE, ignore.case = TRUE)
-    
-    if (length(cols_pad) == 0)
-      cols_pad <- grep("^padron_\\d{2}$|^padron_8[78]$", colnames(fila),
-                       value = TRUE, ignore.case = TRUE)
-    if (length(cols_ln) == 0)
-      cols_ln  <- grep("^lista_\\d{2}$|^lista_8[78]$|^ln_\\d", colnames(fila),
-                       value = TRUE, ignore.case = TRUE)
     
     for (col in cols_pad) {
       resultado[[col]] <- as.numeric(fila[[col]])

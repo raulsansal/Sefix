@@ -1,14 +1,13 @@
 # modules/lista_nominal_graficas/graficas_ui_render.R
 # Renderizado dinámico de UI para gráficas históricas Y semanales
-# Versión: 2.14 — ui_seccion_sexo: DataTable homologado con patrón Edad
+# Versión: 2.15 — ui_seccion_origen: O1 ajustado, O2 nuevo, O3 (era O2)
 #
-# CAMBIOS vs v2.13:
-#   ui_seccion_sexo(): DataTable rediseñado con estructura idéntica al de Edad:
-#     - class="datatable-section", margin-top:30px
-#     - h3 "Tabla de Datos" centrado
-#     - uiOutput(semanal_dt_sexo_header): header con ámbito + alcance
-#     - downloadButton azul (btn-primary) alineado a la derecha
-#     - withSpinner (type=6, #44559B) sobre DT::dataTableOutput
+# CAMBIOS vs v2.14:
+#   ui_seccion_origen(): reestructurada completamente:
+#     - O1: widget top N (default Todos) + plotly altura dinámica + leyenda LN87/LN88
+#     - O2: nueva gráfica calor Padrón vs LNE (absoluto lado a lado | diferencial)
+#     - O3: proyección semanal por entidad de origen (era O2 v1.0)
+#     - DataTable: homologado con patrón Edad/Sexo (h3 centrado, btn-primary)
 
 graficas_ui_render <- function(input, output, session, estado_app,
                                mostrar_graficas_anuales,
@@ -220,52 +219,98 @@ graficas_ui_render <- function(input, output, session, estado_app,
     )
   }
   
-  # ── Sección ORIGEN: O1 (mapa de calor) + O2 (proyección) ────────────────────
+  # ── Sección ORIGEN: O1, O2 (nuevo), O3 (antes O2) ───────────────────────────
   ui_seccion_origen <- function(ns) {
     tagList(
-      
-      uiOutput(ns("semanal_subtitulo_origen")),
-      
-      # O1: Mapa de calor — widget top N inline
+
+      # O1: Mapa de calor LNE — widget top N + gráfica dinámica + leyenda LN87/88
       div(
         class = "well well-sm",
         style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
-        uiOutput(ns("semanal_o1_topn_ui")),
-        withSpinner(
-          plotlyOutput(ns("semanal_o1_calor"), height = "500px"),
-          type = 4, color = "#44559B", size = 0.8
-        )
-      ),
-      
-      # O2: Proyección por entidad de origen — widget top N + checks 87/88 inline
-      div(
-        class = "well well-sm",
-        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
-        uiOutput(ns("semanal_o2_controles_ui")),
-        withSpinner(
-          plotlyOutput(ns("semanal_o2_proyeccion"), height = "460px"),
-          type = 4, color = "#44559B", size = 0.8
-        )
-      ),
-      
-      # DataTable + descarga
-      div(
-        style = "margin-top:10px;",
         div(
-          style = "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
-          tags$h5(
-            style = "margin:0;font-size:14px;color:#2c3e50;font-weight:600;",
-            icon("table"), " Detalle por Entidad de Origen"
+          style = "position:relative;z-index:10;",
+          uiOutput(ns("semanal_o1_widget_ui"))
+        ),
+        uiOutput(ns("semanal_o1_grafica_ui")),
+        div(
+          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:6px 0 2px 0;line-height:1.9;",
+          tags$div(
+            tags$b("LN87:"), " Lista Nominal Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad",
+            "\u2003|\u2003",
+            tags$b("LN88:"), " Lista Nominal de ciudadanos naturalizados mexicanos, residentes en la entidad"
           ),
+          tags$div(style = "margin-top:4px;",
+            "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
+          )
+        )
+      ),
+
+      # O2: Comparación Padrón vs LNE — widget top N + radio + gráfica dinámica
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        div(
+          style = "position:relative;z-index:10;",
+          uiOutput(ns("semanal_o2_widget_ui"))
+        ),
+        uiOutput(ns("semanal_o2_grafica_ui")),
+        div(
+          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:6px 0 2px 0;line-height:1.9;",
+          tags$div(
+            tags$b("PAD87:"), " Padr\u00f3n Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad",
+            "\u2003|\u2003",
+            tags$b("PAD88:"), " Padr\u00f3n Electoral de ciudadanos naturalizados mexicanos, residentes en la entidad"
+          ),
+          tags$div(style = "margin-top:4px;",
+            "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
+          )
+        )
+      ),
+
+      # O3: Proyección semanal por entidad de origen (antes O2)
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        div(
+          style = "position:relative;z-index:10;",
+          uiOutput(ns("semanal_o3_controles_ui"))
+        ),
+        withSpinner(
+          plotlyOutput(ns("semanal_o3_proyeccion"), height = "460px"),
+          type = 4, color = "#44559B", size = 0.8
+        ),
+        div(
+          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:4px 0 2px 0;",
+          "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
+        )
+      ),
+
+      # DataTable: estructura homologada con Edad / Sexo
+      div(
+        class = "datatable-section",
+        style = "margin-top:30px;",
+        h3("Tabla de Datos",
+           align = "center",
+           style = "margin-top:0;margin-bottom:15px;",
+           class = "datatable-title"),
+        div(class = "datatable-header",
+            uiOutput(ns("semanal_dt_origen_header"))),
+        div(
+          style = "display:flex;justify-content:flex-end;align-items:center;margin:10px 0 6px 0;",
           downloadButton(
             ns("semanal_dt_origen_descarga"),
             label = "Descargar CSV",
             icon  = icon("download"),
-            class = "btn btn-xs btn-outline-secondary",
-            style = "font-size:11px;"
+            class = "btn btn-primary btn-sm",
+            style = "font-size:12px;padding:5px 12px;"
           )
         ),
-        DT::dataTableOutput(ns("semanal_dt_origen"))
+        shinycssloaders::withSpinner(
+          DT::dataTableOutput(ns("semanal_dt_origen")),
+          type  = 6,
+          color = "#44559B",
+          size  = 0.8
+        )
       )
     )
   }
@@ -422,8 +467,9 @@ graficas_ui_render <- function(input, output, session, estado_app,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_ui_render v2.14 inicializado")
-  message("   ✅ ui_seccion_edad: tabla con header ámbito+alcance, descarga azul, dom=lfrtip")
+  message("✅ graficas_ui_render v2.15 inicializado")
+  message("   ✅ ui_seccion_edad: tabla con header ámbito+alcance, descarga azul")
   message("   ✅ ui_seccion_sexo: S1-S4 + DataTable homologado con Edad")
+  message("   ✅ ui_seccion_origen: O1 (dinámico+LN87/88), O2 (absoluto|dif.), O3")
   message("   ✅ Vista histórica sin cambios")
 }
