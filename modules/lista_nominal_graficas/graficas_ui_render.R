@@ -1,19 +1,21 @@
 # modules/lista_nominal_graficas/graficas_ui_render.R
 # Renderizado dinámico de UI para gráficas históricas Y semanales
-# Versión: 2.13 — ui_seccion_sexo: S3 (proyección+widget) y S4 (barras) reemplazan S5/S6/S7
+# Versión: 2.14 — ui_seccion_sexo: DataTable homologado con patrón Edad
 #
-# CAMBIOS vs v2.12:
-#   ui_seccion_sexo(): reestructuración S3/S4/S6:
-#     - Eliminados: semanal_s5_barras (div), fluidRow S6+S7 (columnas 5/7)
-#     - Nueva S3 (ancho completo): widget centrado + plotlyOutput semanal_s3_proyeccion + fuente
-#     - Nueva S4 (ancho completo): plotlyOutput semanal_s4_barras + fuente
+# CAMBIOS vs v2.13:
+#   ui_seccion_sexo(): DataTable rediseñado con estructura idéntica al de Edad:
+#     - class="datatable-section", margin-top:30px
+#     - h3 "Tabla de Datos" centrado
+#     - uiOutput(semanal_dt_sexo_header): header con ámbito + alcance
+#     - downloadButton azul (btn-primary) alineado a la derecha
+#     - withSpinner (type=6, #44559B) sobre DT::dataTableOutput
 
 graficas_ui_render <- function(input, output, session, estado_app,
                                mostrar_graficas_anuales,
                                mostrar_graficas_consultadas,
                                ambito_reactivo) {
   
-  message("📊 Inicializando graficas_ui_render v2.13")
+  message("📊 Inicializando graficas_ui_render v2.14")
   ns <- session$ns
   
   # ════════════════════════════════════════════════════════════════════════════
@@ -124,8 +126,6 @@ graficas_ui_render <- function(input, output, session, estado_app,
   ui_seccion_sexo <- function(ns) {
     tagList(
       
-      uiOutput(ns("semanal_subtitulo_sexo")),
-      
       # S1: Pirámide por 12 rangos individuales (H vs M)
       div(
         class = "well well-sm",
@@ -190,24 +190,32 @@ graficas_ui_render <- function(input, output, session, estado_app,
         )
       ),
       
-      # DataTable + descarga
+      # DataTable: misma estructura que la tabla histórica (título centrado + header + descarga + DT)
       div(
-        style = "margin-top:10px;",
+        class = "datatable-section",
+        style = "margin-top:30px;",
+        h3("Tabla de Datos",
+           align = "center",
+           style = "margin-top:0;margin-bottom:15px;",
+           class = "datatable-title"),
+        div(class = "datatable-header",
+            uiOutput(ns("semanal_dt_sexo_header"))),
         div(
-          style = "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
-          tags$h5(
-            style = "margin:0;font-size:14px;color:#2c3e50;font-weight:600;",
-            icon("table"), " Detalle por Sexo"
-          ),
+          style = "display:flex;justify-content:flex-end;align-items:center;margin:10px 0 6px 0;",
           downloadButton(
             ns("semanal_dt_sexo_descarga"),
             label = "Descargar CSV",
             icon  = icon("download"),
-            class = "btn btn-xs btn-outline-secondary",
-            style = "font-size:11px;"
+            class = "btn btn-primary btn-sm",
+            style = "font-size:12px;padding:5px 12px;"
           )
         ),
-        DT::dataTableOutput(ns("semanal_dt_sexo"))
+        shinycssloaders::withSpinner(
+          DT::dataTableOutput(ns("semanal_dt_sexo")),
+          type  = 6,
+          color = "#44559B",
+          size  = 0.8
+        )
       )
     )
   }
@@ -414,8 +422,8 @@ graficas_ui_render <- function(input, output, session, estado_app,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_ui_render v2.13 inicializado")
+  message("✅ graficas_ui_render v2.14 inicializado")
   message("   ✅ ui_seccion_edad: tabla con header ámbito+alcance, descarga azul, dom=lfrtip")
-  message("   ✅ ui_seccion_sexo: S1, S2 (widget), S3 (proyección+widget), S4 (barras)")
+  message("   ✅ ui_seccion_sexo: S1-S4 + DataTable homologado con Edad")
   message("   ✅ Vista histórica sin cambios")
 }

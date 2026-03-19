@@ -453,33 +453,85 @@ graficas_semanal <- function(input, output, session,
     if (is.null(tot)) return(NULL)
     ph <- tot$padron_hombres; pm <- tot$padron_mujeres
     lh <- tot$lista_hombres;  lm <- tot$lista_mujeres
-    nb_p <- tot$padron_no_binario; nb_l <- tot$lista_no_binario
+    nb_p <- tot$padron_no_binario %||% 0
+    nb_l <- tot$lista_no_binario  %||% 0
     data.frame(
-      Sexo = c("Hombres","Mujeres","No binario"),
+      Sexo = c("Hombres", "Mujeres", "No Binario"),
       `Padrón Electoral`      = c(ph, pm, nb_p),
       `Lista Nominal`         = c(lh, lm, nb_l),
       `Tasa de Inclusión (%)` = c(
-        round(lh / ph * 100, 2),
-        round(lm / pm * 100, 2),
+        if (!is.na(ph) && ph > 0) round(lh / ph * 100, 2) else NA,
+        if (!is.na(pm) && pm > 0) round(lm / pm * 100, 2) else NA,
         if (!is.na(nb_p) && nb_p > 0) round(nb_l / nb_p * 100, 2) else NA
       ),
       stringsAsFactors = FALSE, check.names = FALSE
     )
   })
+
+  # Header: ámbito + alcance (patrón idéntico a semanal_dt_edad_header)
+  output$semanal_dt_sexo_header <- renderUI({
+    if (es_historico() || desglose_activo() != "sexo") return(NULL)
+    df <- datos_dt_sexo_r()
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    ambito_display <- etiq_ambito(ambito_reactivo())
+    alcance_texto  <- isolate(texto_alcance())
+    tags$div(
+      class = "datatable-header-content",
+      style = "text-align:center;margin-bottom:15px;padding:10px;background-color:#f8f9fa;border-radius:6px;border:1px solid #e9ecef;",
+      tags$div(
+        style = "font-size:15px;font-weight:700;color:#006988;margin-bottom:5px;",
+        paste0("\u00c1mbito: ", ambito_display)
+      ),
+      tags$div(
+        style = "font-size:12px;color:#555555;line-height:1.4;",
+        alcance_texto
+      )
+    )
+  }) %>%
+    bindEvent(
+      estado_app(), input$btn_consultar, ambito_reactivo(),
+      ignoreNULL = FALSE, ignoreInit = FALSE
+    )
+
   output$semanal_dt_sexo <- DT::renderDataTable({
     df <- datos_dt_sexo_r()
     if (is.null(df))
       return(DT::datatable(data.frame(Mensaje = "Sin datos"),
                            options = list(dom = "t")))
-    DT::datatable(df, rownames = FALSE,
-                  options = list(pageLength = 5, dom = "t")) %>%
-      DT::formatRound(c("Padrón Electoral","Lista Nominal"), digits = 0) %>%
-      DT::formatRound("Tasa de Inclusión (%)", digits = 2)
+    DT::datatable(
+      df,
+      rownames = FALSE,
+      options  = list(
+        pageLength = 10,
+        lengthMenu = list(c(10, -1), c("10", "Todos")),
+        dom        = "lfrtip",
+        autoWidth  = FALSE,
+        language   = list(
+          search       = "Buscar:",
+          lengthMenu   = "Mostrar _MENU_",
+          info         = "Mostrando _START_ a _END_ de _TOTAL_",
+          infoEmpty    = "Sin registros",
+          infoFiltered = "(de _MAX_ totales)",
+          paginate     = list(
+            first    = "\u00ab",
+            last     = "\u00bb",
+            `next`   = "\u203a",
+            previous = "\u2039"
+          )
+        )
+      )
+    ) %>%
+      DT::formatRound(c("Padr\u00f3n Electoral", "Lista Nominal"), digits = 0) %>%
+      DT::formatRound("Tasa de Inclusi\u00f3n (%)", digits = 2)
   })
+
   output$semanal_dt_sexo_descarga <- downloadHandler(
-    filename = function() paste0("sefix_sexo_", etiq_ambito(ambito_reactivo()),
-                                 "_", anio_semanal(), "_",
-                                 format(Sys.Date(), "%Y%m%d"), ".csv"),
+    filename = function() {
+      paste0("sefix_semanal_sexo_",
+             etiq_ambito(ambito_reactivo()), "_",
+             anio_semanal(), "_",
+             format(Sys.Date(), "%Y%m%d"), ".csv")
+    },
     content  = function(file) {
       df <- datos_dt_sexo_r()
       if (!is.null(df)) write.csv(df, file, row.names = FALSE)

@@ -802,18 +802,19 @@ graficas_semanal_sexo <- function(input, output, session,
     tot <- extraer_totales_sexo(datos, ambito)
     if (is.null(tot)) return(plot_vacio("Sin datos de sexo"))
 
+    # X = Tipo (Padrón / LNE), color = Sexo → mismos tonos H/M que S1-S3
     df_g <- data.frame(
-      Sexo     = rep(c("Hombres", "Mujeres"), 2),
       Tipo     = rep(c("Padr\u00f3n Electoral", "Lista Nominal"), each = 2),
+      Sexo     = rep(c("Hombres", "Mujeres"), 2),
       Cantidad = c(tot$padron_hombres, tot$padron_mujeres,
                    tot$lista_hombres,  tot$lista_mujeres),
       stringsAsFactors = FALSE
     )
 
     p <- plot_ly(
-      data  = df_g, x = ~Sexo, y = ~Cantidad, color = ~Tipo,
-      colors = c("Padr\u00f3n Electoral" = color_padron(ambito),
-                 "Lista Nominal"       = color_lista(ambito)),
+      data  = df_g, x = ~Tipo, y = ~Cantidad, color = ~Sexo,
+      colors = c("Hombres" = color_h_loc(ambito),
+                 "Mujeres" = color_m_loc(ambito)),
       type  = "bar",
       text  = ~paste0(format(Cantidad, big.mark = ","), " electores"),
       hovertemplate = "<b>%{x}</b> \u2013 %{data.name}<br>%{text}<extra></extra>"
@@ -832,18 +833,22 @@ graficas_semanal_sexo <- function(input, output, session,
         annotations = list(ann_alcance(alcance, y_pos = 1.10))
       )
 
-    # Card No Binario
+    # Card No Binario — mismo estilo que S3
     nb_p <- tot$padron_no_binario %||% 0
     nb_l <- tot$lista_no_binario  %||% 0
     if (!is.na(nb_p) && nb_p > 0) {
+      texto_nb_s4 <- paste0(
+        "<span style='font-size:12px;font-weight:bold;color:#9B59B6;'>\u26a7 No Binario</span><br>",
+        "<span style='font-size:11px;color:#333;'>Padr\u00f3n: ", fmt_num(nb_p), "</span><br>",
+        "<span style='font-size:11px;color:#333;'>LNE: ", fmt_num(nb_l), "</span>"
+      )
       p <- p %>% add_annotations(
-        text = paste0("<b>No binario:</b><br>Padr\u00f3n: ", fmt_num(nb_p),
-                      "<br>LNE: ", fmt_num(nb_l)),
-        x = 1, y = 0.85, xref = "paper", yref = "paper",
-        xanchor = "right", yanchor = "top", showarrow = FALSE,
-        bgcolor = "#f8f9fa", bordercolor = "#9B59B6",
-        borderwidth = 1, borderpad = 6,
-        font = list(size = 12, color = "#444")
+        text      = texto_nb_s4,
+        x = 0.03, y = 0.97, xref = "paper", yref = "paper",
+        xanchor = "left", yanchor = "top", showarrow = FALSE,
+        bgcolor = "rgba(255,255,255,0.95)",
+        bordercolor = "#9B59B6", borderwidth = 1.5, borderpad = 8,
+        font = list(size = 11, color = "#333", family = "Arial, sans-serif")
       )
     }
     p
