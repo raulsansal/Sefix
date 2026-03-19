@@ -1,22 +1,19 @@
 # modules/lista_nominal_graficas/graficas_ui_render.R
 # Renderizado dinámico de UI para gráficas históricas Y semanales
-# Versión: 2.12 — Tabla semanal_dt_edad con estilo histórico (header + descarga azul)
+# Versión: 2.13 — ui_seccion_sexo: S3 (proyección+widget) y S4 (barras) reemplazan S5/S6/S7
 #
-# CAMBIOS vs v2.11:
-#   ui_seccion_edad(): bloque DataTable rediseñado con estructura idéntica al histórico:
-#     - uiOutput(semanal_dt_edad_header): header con ámbito + alcance
-#     - tags$hr() separador
-#     - Título "Tabla de Datos" centrado (igual que en historico)
-#     - downloadButton azul (btn-primary) con ns() correcto → semanal_dt_edad_descarga
-#     - withSpinner sobre DT::dataTableOutput (igual que main-table_data)
-#     - dom='lfrtip' gestionado en graficas_semanal.R (Mostrar + Buscar visibles)
+# CAMBIOS vs v2.12:
+#   ui_seccion_sexo(): reestructuración S3/S4/S6:
+#     - Eliminados: semanal_s5_barras (div), fluidRow S6+S7 (columnas 5/7)
+#     - Nueva S3 (ancho completo): widget centrado + plotlyOutput semanal_s3_proyeccion + fuente
+#     - Nueva S4 (ancho completo): plotlyOutput semanal_s4_barras + fuente
 
 graficas_ui_render <- function(input, output, session, estado_app,
                                mostrar_graficas_anuales,
                                mostrar_graficas_consultadas,
                                ambito_reactivo) {
   
-  message("📊 Inicializando graficas_ui_render v2.11")
+  message("📊 Inicializando graficas_ui_render v2.13")
   ns <- session$ns
   
   # ════════════════════════════════════════════════════════════════════════════
@@ -136,81 +133,60 @@ graficas_ui_render <- function(input, output, session, estado_app,
         withSpinner(
           plotlyOutput(ns("semanal_s1_piramide"), height = "480px"),
           type = 4, color = "#44559B", size = 0.8
-        )
-      ),
-      
-      # S2 / S3 / S4: LNE por grupo etario × sexo (3 columnas)
-      div(
-        style = "margin-bottom:18px;",
-        tags$h6(
-          style = "font-size:13px;font-weight:600;color:#555;margin-bottom:8px;text-align:center;",
-          "Lista Nominal Electoral por Grupo Etario y Sexo"
         ),
-        fluidRow(
-          column(4,
-                 div(
-                   class = "well well-sm",
-                   style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:10px;",
-                   withSpinner(
-                     plotlyOutput(ns("semanal_s2_mujeres"), height = "280px"),
-                     type = 4, color = "#C0311A", size = 0.6
-                   )
-                 )
-          ),
-          column(4,
-                 div(
-                   class = "well well-sm",
-                   style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:10px;",
-                   withSpinner(
-                     plotlyOutput(ns("semanal_s3_hombres"), height = "280px"),
-                     type = 4, color = "#44559B", size = 0.6
-                   )
-                 )
-          ),
-          column(4,
-                 div(
-                   class = "well well-sm",
-                   style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:10px;",
-                   withSpinner(
-                     plotlyOutput(ns("semanal_s4_nobinario"), height = "280px"),
-                     type = 4, color = "#9B59B6", size = 0.6
-                   )
-                 )
-          )
+        div(
+          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:4px 0 2px 0;",
+          "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
+        )
+      ),
+
+      # S2: barras horizontales agrupadas LNE × Grupo Etario × Sexo — ancho completo
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        div(
+          style = "position:relative;z-index:10;",
+          uiOutput(ns("semanal_s2_widget_ui"))
+        ),
+        withSpinner(
+          plotlyOutput(ns("semanal_s2_barras"), height = "420px"),
+          type = 4, color = "#44559B", size = 0.8
+        ),
+        div(
+          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:4px 0 2px 0;",
+          "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
         )
       ),
       
-      # S5: Barras agrupadas Padrón/LNE por sexo
+      # S3: Evolución y Proyección Semanal por Sexo — ancho completo + widget
+      div(
+        class = "well well-sm",
+        style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
+        div(
+          style = "position:relative;z-index:10;",
+          uiOutput(ns("semanal_s3_widget_ui"))
+        ),
+        withSpinner(
+          plotlyOutput(ns("semanal_s3_proyeccion"), height = "420px"),
+          type = 4, color = "#44559B", size = 0.8
+        ),
+        div(
+          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:4px 0 2px 0;",
+          "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
+        )
+      ),
+
+      # S4: Padrón y LNE por Sexo — ancho completo
       div(
         class = "well well-sm",
         style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
         withSpinner(
-          plotlyOutput(ns("semanal_s5_barras"), height = "380px"),
+          plotlyOutput(ns("semanal_s4_barras"), height = "380px"),
           type = 4, color = "#44559B", size = 0.8
-        )
-      ),
-      
-      # S6 + S7: Dona y proyección (columnas 5/7)
-      fluidRow(
-        column(5,
-               div(
-                 class = "well well-sm",
-                 style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
-                 withSpinner(
-                   plotlyOutput(ns("semanal_s6_dona"), height = "380px"),
-                   type = 4, color = "#44559B", size = 0.8
-                 )
-               )
         ),
-        column(7,
-               div(
-                 class = "well well-sm",
-                 style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
-                 withSpinner(
-                   plotlyOutput(ns("semanal_s7_proyeccion"), height = "380px"),
-                   type = 4, color = "#44559B", size = 0.8
-                 )
-               )
+        div(
+          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:4px 0 2px 0;",
+          "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
         )
       ),
       
@@ -438,8 +414,8 @@ graficas_ui_render <- function(input, output, session, estado_app,
       ignoreInit = FALSE
     )
   
-  message("✅ graficas_ui_render v2.12 inicializado")
+  message("✅ graficas_ui_render v2.13 inicializado")
   message("   ✅ ui_seccion_edad: tabla con header ámbito+alcance, descarga azul, dom=lfrtip")
-  message("   ✅ Fase 3: E1–E4 (edad), S1–S7 (sexo), O1–O2 (origen) en UI")
+  message("   ✅ ui_seccion_sexo: S1, S2 (widget), S3 (proyección+widget), S4 (barras)")
   message("   ✅ Vista histórica sin cambios")
 }
