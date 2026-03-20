@@ -267,7 +267,7 @@ graficas_ui_render <- function(input, output, session, estado_app,
         )
       ),
 
-      # O3: Proyección semanal por entidad de origen (antes O2)
+      # O3: Evolución semanal LNE/Padrón por origen × receptor
       div(
         class = "well well-sm",
         style = "background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:14px;margin-bottom:18px;",
@@ -275,14 +275,8 @@ graficas_ui_render <- function(input, output, session, estado_app,
           style = "position:relative;z-index:10;",
           uiOutput(ns("semanal_o3_controles_ui"))
         ),
-        withSpinner(
-          plotlyOutput(ns("semanal_o3_proyeccion"), height = "460px"),
-          type = 4, color = "#44559B", size = 0.8
-        ),
-        div(
-          style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:4px 0 2px 0;",
-          "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
-        )
+        uiOutput(ns("semanal_o3_grafica_ui")),
+        uiOutput(ns("semanal_o3_leyenda_ui"))
       ),
 
       # DataTable: estructura homologada con Edad / Sexo

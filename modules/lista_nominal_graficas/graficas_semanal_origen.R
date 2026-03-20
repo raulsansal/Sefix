@@ -112,16 +112,203 @@ graficas_semanal_origen <- function(input, output, session,
     "zacatecas"           = "Zacatecas"
   )
 
-  # Paleta O3 — 34 colores para trazas de proyección
-  PALETA_O3_NAC <- colorRampPalette(c(
-    "#003E66","#44559B","#AE0E35","#C0311A","#9B59B6",
-    "#1ABC9C","#E67E22","#2ECC71","#E74C3C","#3498DB"))(34)
-  PALETA_O3_EXT <- colorRampPalette(c(
-    "#8F6A00","#D4A500","#EAC43E","#B3D491","#5C9900",
-    "#8FB369","#CCE4B1","#F5CA45","#D4666C","#6B8F00"))(34)
+  # ══════════════════════════════════════════════════════════════════════════
+  # O3 — CONSTANTES Y HELPERS DE SERIE TEMPORAL
+  # ══════════════════════════════════════════════════════════════════════════
 
-  paleta_o3 <- function(ambito) {
-    if (ambito == "extranjero") PALETA_O3_EXT else PALETA_O3_NAC
+  # Valores exactos que usa input$entidad en el sidebar
+  ESTADOS_SIDEBAR <- c(
+    "AGUASCALIENTES","BAJA CALIFORNIA","BAJA CALIFORNIA SUR",
+    "CAMPECHE","COAHUILA","COLIMA","CHIAPAS","CHIHUAHUA",
+    "CIUDAD DE MEXICO","DURANGO","GUANAJUATO","GUERRERO",
+    "HIDALGO","JALISCO","MEXICO","MICHOACAN","MORELOS",
+    "NAYARIT","NUEVO LEON","OAXACA","PUEBLA","QUERETARO",
+    "QUINTANA ROO","SAN LUIS POTOSI","SINALOA","SONORA",
+    "TABASCO","TAMAULIPAS","TLAXCALA","VERACRUZ","YUCATAN","ZACATECAS"
+  )
+
+  LABELS_RECEPTORA <- c(
+    "Aguascalientes","Baja California","Baja California Sur",
+    "Campeche","Coahuila","Colima","Chiapas","Chihuahua",
+    "Ciudad de M\u00e9xico","Durango","Guanajuato","Guerrero",
+    "Hidalgo","Jalisco","M\u00e9xico","Michoac\u00e1n","Morelos",
+    "Nayarit","Nuevo Le\u00f3n","Oaxaca","Puebla","Quer\u00e9taro",
+    "Quintana Roo","San Luis Potos\u00ed","Sinaloa","Sonora",
+    "Tabasco","Tamaulipas","Tlaxcala","Veracruz","Yucat\u00e1n","Zacatecas"
+  )
+
+  CHOICES_RECEPTORA_O3 <- c(
+    "Todas (Nacional)" = "Nacional",
+    setNames(ESTADOS_SIDEBAR, LABELS_RECEPTORA)
+  )
+
+  # Construye choices para el selectInput de entidad de origen
+  choices_origen_tipo <- function(tipo) {
+    prefijo <- if (tipo == "lne") "ln" else "pad"
+    c(
+      "Todas" = "todas",
+      setNames(paste0(prefijo, "_", names(MAPA_NOMBRE)), unname(MAPA_NOMBRE)),
+      if (tipo == "lne")
+        c("LN87 (Nacidos en el extranjero)" = "ln87",
+          "LN88 (Naturalizados)"             = "ln88")
+      else
+        c("PAD87 (Nacidos en el extranjero)" = "pad87",
+          "PAD88 (Naturalizados)"             = "pad88")
+    )
+  }
+
+  # Etiqueta legible para receptora (valor sidebar → nombre en español)
+  label_receptora <- function(valor) {
+    if (valor == "Nacional") return("Nacional")
+    idx <- match(valor, ESTADOS_SIDEBAR)
+    if (!is.na(idx)) LABELS_RECEPTORA[idx] else valor
+  }
+
+  # Carga la serie temporal de origen para una entidad receptora específica.
+  # "Nacional" (y sin filtros sub-entidad) → datos_semanal_serie_origen().
+  # Otra entidad → carga semana a semana con filtros geográficos completos.
+  cargar_serie_o3 <- function(entidad,
+                               distrito  = "Todos",
+                               municipio = "Todos",
+                               seccion   = "Todas",
+                               ambito) {
+    if (is.null(entidad) || entidad == "Nacional") {
+      return(datos_semanal_serie_origen())
+    }
+
+    slug <- function(x) gsub("[^a-z0-9]", "_", tolower(x))
+    clave_cache <- paste0("serie_o3_",
+                          slug(entidad), "_",
+                          slug(distrito), "_",
+                          slug(municipio), "_",
+                          slug(seccion),  "_",
+                          ambito)
+
+    # Verificar caché
+    if (exists("LNE_CACHE_SEMANAL", envir = .GlobalEnv)) {
+      cache <- get("LNE_CACHE_SEMANAL", envir = .GlobalEnv)
+      if (!is.null(cache[[clave_cache]]) && !is.null(cache$timestamp) &&
+          difftime(Sys.time(), cache$timestamp, units = "hours") < 24) {
+        message("✅ [O3 CACHÉ] ", clave_cache, " — ",
+                nrow(cache[[clave_cache]]), " semanas")
+        return(cache[[clave_cache]])
+      }
+    }
+
+    # Obtener fechas disponibles
+    fechas <- tryCatch({
+      if (!exists("LNE_CATALOG", envir = .GlobalEnv)) return(NULL)
+      catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
+      f <- sort(as.Date(catalog$semanal_comun, origin = "1970-01-01"))
+      f[f <= Sys.Date()]
+    }, error = function(e) NULL)
+
+    if (is.null(fechas) || length(fechas) == 0) return(NULL)
+
+    cols_id <- c("cve_entidad","nombre_entidad","cve_distrito",
+                 "cabecera_distrital","cve_municipio","nombre_municipio","seccion")
+    filas <- list()
+    n_ok  <- 0L
+    n_err <- 0L
+
+    carga_loop <- function() {
+      for (i in seq_along(fechas)) {
+        fecha_d <- as.Date(fechas[[i]], origin = "1970-01-01")
+        tryCatch({
+          res <- cargar_lne(tipo_corte = "semanal", fecha = fecha_d,
+                            dimension  = "origen",
+                            estado     = entidad,
+                            distrito   = distrito,
+                            municipio  = municipio,
+                            seccion    = seccion,
+                            incluir_extranjero = TRUE)
+          if (is.null(res) || is.null(res$datos) || nrow(res$datos) == 0) {
+            n_err <<- n_err + 1L; return()
+          }
+          df <- res$datos
+
+          # Agregar según ámbito
+          if (ambito == "extranjero") {
+            if ("cabecera_distrital" %in% colnames(df)) {
+              filas_agg <- df[grepl("RESIDENTES EXTRANJERO",
+                                    toupper(trimws(df$cabecera_distrital)),
+                                    fixed = TRUE), , drop = FALSE]
+            } else {
+              filas_agg <- data.frame()
+            }
+          } else {
+            mask <- if ("cabecera_distrital" %in% colnames(df))
+              grepl("RESIDENTES EXTRANJERO",
+                    toupper(trimws(df$cabecera_distrital)), fixed = TRUE)
+            else rep(FALSE, nrow(df))
+            if ("cve_entidad" %in% colnames(df))
+              mask <- mask | is.na(df$cve_entidad)
+            filas_agg <- df[!mask, , drop = FALSE]
+          }
+
+          if (is.null(filas_agg) || nrow(filas_agg) == 0) {
+            n_err <<- n_err + 1L; return()
+          }
+
+          cols_num <- setdiff(colnames(filas_agg), cols_id)
+          cols_pad <- grep("^pad_[a-z]|^pad87$|^pad88$", cols_num,
+                           value = TRUE, ignore.case = TRUE)
+          cols_ln  <- grep("^ln_[a-z]|^ln87$|^ln88$",   cols_num,
+                           value = TRUE, ignore.case = TRUE)
+
+          resultado <- list(fecha = fecha_d)
+          for (col in c(cols_pad, cols_ln)) {
+            v <- sum(as.numeric(filas_agg[[col]]), na.rm = TRUE)
+            resultado[[col]] <- if (is.na(v)) 0 else v
+          }
+          if (length(resultado) > 1) {
+            filas[[length(filas) + 1]] <<- as.data.frame(resultado,
+                                                          stringsAsFactors = FALSE)
+            n_ok <<- n_ok + 1L
+          } else {
+            n_err <<- n_err + 1L
+          }
+        }, error = function(e) {
+          n_err <<- n_err + 1L
+          message("⚠️ [O3] Error en fecha ", format(fecha_d, "%Y-%m-%d"),
+                  ": ", e$message)
+        })
+      }
+    }
+
+    msg_prog <- paste0("Cargando serie: ", label_receptora(entidad),
+                       if (distrito != "Todos") paste0(" \u2013 D.", distrito) else "",
+                       "...")
+    shiny::withProgress(
+      message = msg_prog,
+      value   = NULL,
+      carga_loop()
+    )
+
+    if (length(filas) == 0) {
+      message("❌ [O3] Sin datos para ", entidad)
+      return(NULL)
+    }
+
+    serie <- tryCatch(
+      dplyr::bind_rows(filas),
+      error = function(e) do.call(rbind, filas)
+    )
+    serie[is.na(serie)] <- 0
+    serie <- serie[order(serie$fecha), ]
+    rownames(serie) <- NULL
+
+    # Guardar en caché
+    if (exists("LNE_CACHE_SEMANAL", envir = .GlobalEnv)) {
+      cache <- get("LNE_CACHE_SEMANAL", envir = .GlobalEnv)
+      cache[[clave_cache]] <- serie
+      if (is.null(cache$timestamp)) cache$timestamp <- Sys.time()
+      assign("LNE_CACHE_SEMANAL", cache, envir = .GlobalEnv)
+    }
+
+    message("✅ [O3] ", entidad, " — ", nrow(serie),
+            " semanas (OK=", n_ok, " ERR=", n_err, ")")
+    serie
   }
 
   # ══════════════════════════════════════════════════════════════════════════
@@ -657,49 +844,173 @@ graficas_semanal_origen <- function(input, output, session,
     )
 
   # ══════════════════════════════════════════════════════════════════════════
-  # O3 — Widget: top N + checks 87/88  (antes era O2)
+  # O3 — Widget: 2 filas de filtros independientes + botón Consultar
   # ══════════════════════════════════════════════════════════════════════════
 
   output$semanal_o3_controles_ui <- renderUI({
     if (es_historico() || desglose_activo() != "origen") return(NULL)
-    div(
-      style = paste(
-        "background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;",
-        "padding:10px 14px 6px 14px;margin-bottom:10px;"
-      ),
+
+    tipo    <- isolate(input$semanal_o3_tipo %||% "lne")
+    choices <- choices_origen_tipo(tipo)
+    ns_id   <- session$ns("semanal_o3_widget")
+
+    tagList(
+      # ── CSS: fuente reducida en dropdowns de este widget ────────────────
+      tags$style(HTML(paste0(
+        "#", ns_id, " .selectize-input,",
+        "#", ns_id, " .selectize-dropdown { font-size:11px !important; }",
+        "#", ns_id, " .selectize-dropdown-content .option { ",
+        "  font-size:11px !important; padding:3px 8px !important; }"
+      ))),
+      # ── JS: prevenir salto al header al abrir un dropdown ───────────────
+      tags$script(HTML(paste0(
+        "(function() {",
+        "  var el = document.getElementById('", ns_id, "');",
+        "  if (!el) return;",
+        "  el.addEventListener('mousedown', function(e) {",
+        "    if (e.target.closest && e.target.closest('.selectize-input')) {",
+        "      var st = window.pageYOffset || document.documentElement.scrollTop;",
+        "      setTimeout(function() { window.scrollTo(0, st); }, 0);",
+        "    }",
+        "  }, true);",
+        "})();"
+      ))),
+
       div(
-        style = "display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap;",
+        id    = ns_id,
+        style = paste(
+          "background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;",
+          "padding:8px 14px 10px 14px;margin-bottom:10px;"
+        ),
+
+        # ── Fila 0: Vista ────────────────────────────────────────────────
         div(
-          style = "display:flex;align-items:center;gap:10px;",
+          style = "display:flex;align-items:center;gap:8px;margin-bottom:8px;",
           tags$span(
             style = "font-size:13px;font-weight:600;color:#2c3e50;white-space:nowrap;",
-            icon("chart-line"), " Top entidades de origen:"
+            "Vista:"
           ),
+          radioButtons(
+            inputId  = session$ns("semanal_o3_tipo"),
+            label    = NULL,
+            choices  = c("Lista Nominal Electoral" = "lne",
+                         "Padr\u00f3n Electoral"   = "pad"),
+            selected = tipo,
+            inline   = TRUE
+          )
+        ),
+
+        # ── Fila 1: Entidad Receptora | Distrito Electoral | Municipio ───
+        div(
+          style = "display:flex;align-items:flex-end;gap:10px;flex-wrap:nowrap;margin-bottom:8px;",
+
           div(
-            style = "width:115px;margin-bottom:0;",
-            selectInput(
-              inputId  = session$ns("semanal_o3_top_n"),
-              label    = NULL,
-              choices  = c("Top 1"  = "1", "Top 5"  = "5",
-                           "Top 10" = "10", "Top 15" = "15", "Todos" = "0"),
-              selected = "1",
-              width    = "100%"
+            tags$label(
+              style = "font-size:11px;font-weight:600;color:#2c3e50;display:block;margin-bottom:2px;",
+              "Entidad Receptora"
+            ),
+            div(
+              style = "width:185px;",
+              selectInput(
+                inputId  = session$ns("semanal_o3_entidad_rec"),
+                label    = NULL,
+                choices  = c("Nacional" = "Nacional",
+                             setNames(ESTADOS_SIDEBAR, LABELS_RECEPTORA)),
+                selected = "Nacional",
+                width    = "100%"
+              )
+            )
+          ),
+
+          div(
+            tags$label(
+              style = "font-size:11px;font-weight:600;color:#2c3e50;display:block;margin-bottom:2px;",
+              "Distrito Electoral"
+            ),
+            div(
+              style = "width:235px;",
+              selectInput(
+                inputId  = session$ns("semanal_o3_distrito_rec"),
+                label    = NULL,
+                choices  = c("Todos" = "Todos"),
+                selected = "Todos",
+                width    = "100%"
+              )
+            )
+          ),
+
+          div(
+            tags$label(
+              style = "font-size:11px;font-weight:600;color:#2c3e50;display:block;margin-bottom:2px;",
+              "Municipio"
+            ),
+            div(
+              style = "width:210px;",
+              selectInput(
+                inputId  = session$ns("semanal_o3_municipio_rec"),
+                label    = NULL,
+                choices  = c("Todos" = "Todos"),
+                selected = "Todos",
+                width    = "100%"
+              )
             )
           )
         ),
+
+        # ── Fila 2: Sección | ● Entidad de Origen | Consultar ────────────
         div(
-          style = "display:flex;gap:20px;align-items:center;padding-top:4px;",
-          checkboxInput(
-            inputId = session$ns("semanal_o3_incl_87"),
-            label   = tags$span(style = "font-size:12px;color:#444;",
-                                "Mexicanos nacidos en el extranjero"),
-            value   = TRUE
+          style = "display:flex;align-items:flex-end;gap:10px;flex-wrap:nowrap;",
+
+          div(
+            tags$label(
+              style = "font-size:11px;font-weight:600;color:#2c3e50;display:block;margin-bottom:2px;",
+              "Secci\u00f3n Electoral"
+            ),
+            div(
+              style = "width:150px;",
+              selectInput(
+                inputId  = session$ns("semanal_o3_seccion_rec"),
+                label    = NULL,
+                choices  = c("Todas" = "Todas"),
+                selected = "Todas",
+                width    = "100%"
+              )
+            )
           ),
-          checkboxInput(
-            inputId = session$ns("semanal_o3_incl_88"),
-            label   = tags$span(style = "font-size:12px;color:#444;",
-                                "Ciudadanos naturalizados"),
-            value   = TRUE
+
+          # Separador visual
+          tags$div(
+            style = "width:1px;background:#ccc;align-self:stretch;margin:0 4px 5px 4px;"
+          ),
+
+          # Entidad de origen (morado)
+          div(
+            tags$label(
+              style = "font-size:11px;font-weight:600;color:#6c3483;display:block;margin-bottom:2px;",
+              "\u25cf Entidad de origen"
+            ),
+            div(
+              style = "width:220px;",
+              selectInput(
+                inputId  = session$ns("semanal_o3_origen"),
+                label    = NULL,
+                choices  = choices,
+                selected = "todas",
+                width    = "100%"
+              )
+            )
+          ),
+
+          # Botón Consultar
+          div(
+            style = "margin-bottom:5px;",
+            actionButton(
+              inputId = session$ns("semanal_o3_consultar"),
+              label   = "Consultar",
+              icon    = icon("search"),
+              class   = "btn btn-sm",
+              style   = "background-color:#44559B;border-color:#44559B;color:#fff;font-weight:600;"
+            )
           )
         )
       )
@@ -707,121 +1018,273 @@ graficas_semanal_origen <- function(input, output, session,
   })
 
   # ══════════════════════════════════════════════════════════════════════════
-  # O3 — Proyección semanal LNE por entidad de origen  (antes era O2)
+  # O3 — Actualizar choices de origen cuando cambia el tipo LNE/Padrón
   # ══════════════════════════════════════════════════════════════════════════
 
-  output$semanal_o3_proyeccion <- renderPlotly({
+  observeEvent(input$semanal_o3_tipo, {
+    tipo    <- input$semanal_o3_tipo %||% "lne"
+    choices <- choices_origen_tipo(tipo)
+    updateSelectInput(session, "semanal_o3_origen", choices = choices, selected = "todas")
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # O3 — Cascada geográfica: Entidad → Distrito → Municipio → Sección
+  # ══════════════════════════════════════════════════════════════════════════
+
+  # Helper: fecha semanal más reciente (para el título de la gráfica O3)
+  fecha_semanal_o3 <- function() {
+    tryCatch({
+      if (!exists("LNE_CATALOG", envir = .GlobalEnv)) return(NULL)
+      catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
+      fechas  <- sort(as.Date(catalog$semanal_comun, origin = "1970-01-01"))
+      fechas  <- fechas[fechas <= Sys.Date()]
+      if (length(fechas) == 0) NULL else max(fechas)
+    }, error = function(e) NULL)
+  }
+
+  # Helper: fecha histórica más reciente (requerida por get_distritos/municipios/secciones)
+  fecha_historica_o3 <- function() {
+    tryCatch({
+      if (!exists("LNE_CATALOG", envir = .GlobalEnv)) return(NULL)
+      catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
+      if (length(catalog$historico) == 0) return(NULL)
+      as.Date(max(catalog$historico), origin = "1970-01-01")
+    }, error = function(e) NULL)
+  }
+
+  observeEvent(input$semanal_o3_entidad_rec, {
+    entidad <- input$semanal_o3_entidad_rec %||% "Nacional"
+    if (entidad == "Nacional") {
+      updateSelectInput(session, "semanal_o3_distrito_rec",  choices = c("Todos" = "Todos"), selected = "Todos")
+      updateSelectInput(session, "semanal_o3_municipio_rec", choices = c("Todos" = "Todos"), selected = "Todos")
+      updateSelectInput(session, "semanal_o3_seccion_rec",   choices = c("Todas" = "Todas"), selected = "Todas")
+      return()
+    }
+    fecha     <- fecha_historica_o3()
+    distritos <- tryCatch(
+      get_distritos_por_entidad(entidad = entidad, fecha = fecha),
+      error = function(e) { message("⚠️ [O3 cascada] get_distritos error: ", e$message); c("Todos") }
+    )
+    # get_distritos_por_entidad ya incluye "Todos" como primer elemento
+    updateSelectInput(session, "semanal_o3_distrito_rec",  choices = distritos,          selected = "Todos")
+    updateSelectInput(session, "semanal_o3_municipio_rec", choices = c("Todos" = "Todos"), selected = "Todos")
+    updateSelectInput(session, "semanal_o3_seccion_rec",   choices = c("Todas" = "Todas"), selected = "Todas")
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+
+  observeEvent(input$semanal_o3_distrito_rec, {
+    entidad  <- input$semanal_o3_entidad_rec %||% "Nacional"
+    distrito <- input$semanal_o3_distrito_rec %||% "Todos"
+    if (entidad == "Nacional" || distrito == "Todos") {
+      updateSelectInput(session, "semanal_o3_municipio_rec", choices = c("Todos" = "Todos"), selected = "Todos")
+      updateSelectInput(session, "semanal_o3_seccion_rec",   choices = c("Todas" = "Todas"), selected = "Todas")
+      return()
+    }
+    fecha      <- fecha_historica_o3()
+    municipios <- tryCatch(
+      get_municipios_por_distrito(entidad = entidad, distrito = distrito, fecha = fecha),
+      error = function(e) { message("⚠️ [O3 cascada] get_municipios error: ", e$message); c("Todos") }
+    )
+    # get_municipios_por_distrito ya incluye "Todos" como primer elemento
+    updateSelectInput(session, "semanal_o3_municipio_rec", choices = municipios,          selected = "Todos")
+    updateSelectInput(session, "semanal_o3_seccion_rec",   choices = c("Todas" = "Todas"), selected = "Todas")
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+
+  observeEvent(input$semanal_o3_municipio_rec, {
+    entidad   <- input$semanal_o3_entidad_rec  %||% "Nacional"
+    distrito  <- input$semanal_o3_distrito_rec  %||% "Todos"
+    municipio <- input$semanal_o3_municipio_rec %||% "Todos"
+    if (entidad == "Nacional" || municipio == "Todos") {
+      updateSelectInput(session, "semanal_o3_seccion_rec", choices = c("Todas" = "Todas"), selected = "Todas")
+      return()
+    }
+    fecha     <- fecha_historica_o3()
+    secciones <- tryCatch(
+      get_secciones_por_municipio(entidad   = entidad,   distrito  = distrito,
+                                  municipio = municipio, fecha     = fecha),
+      error = function(e) { message("⚠️ [O3 cascada] get_secciones error: ", e$message); c("Todas") }
+    )
+    # get_secciones_por_municipio ya incluye "Todas" como primer elemento
+    updateSelectInput(session, "semanal_o3_seccion_rec", choices = secciones, selected = "Todas")
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # O3 — Reactive: serie temporal (cargada por filtros propios + botón Consultar)
+  # ══════════════════════════════════════════════════════════════════════════
+
+  serie_o3_r <- reactive({
+    if (es_historico() || desglose_activo() != "origen") return(NULL)
+    entidad   <- input$semanal_o3_entidad_rec  %||% "Nacional"
+    distrito  <- input$semanal_o3_distrito_rec  %||% "Todos"
+    municipio <- input$semanal_o3_municipio_rec %||% "Todos"
+    seccion   <- input$semanal_o3_seccion_rec   %||% "Todas"
+    ambito    <- ambito_reactivo()
+    cargar_serie_o3(entidad, distrito, municipio, seccion, ambito)
+  }) %>% bindEvent(
+    input$semanal_o3_consultar, ambito_reactivo(),
+    ignoreNULL = FALSE, ignoreInit = FALSE
+  )
+
+  # Contenedor con altura fija para O3
+  output$semanal_o3_grafica_ui <- renderUI({
+    if (es_historico() || desglose_activo() != "origen") return(NULL)
+    withSpinner(
+      plotlyOutput(session$ns("semanal_o3_evolucion"), height = "460px"),
+      type = 4, color = "#44559B", size = 0.8
+    )
+  })
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # O3 — Gráfica: Evolución semanal LNE/Padrón por origen × receptor
+  # ══════════════════════════════════════════════════════════════════════════
+
+  output$semanal_o3_evolucion <- renderPlotly({
     if (es_historico() || desglose_activo() != "origen") return(NULL)
 
-    ambito  <- ambito_reactivo()
-    alcance <- isolate(texto_alcance())
-    anio    <- anio_semanal()
-    etiq    <- etiq_ambito(ambito)
+    ambito    <- ambito_reactivo()
+    etiq      <- etiq_ambito(ambito)
+    serie     <- serie_o3_r()
+    tipo      <- input$semanal_o3_tipo         %||% "lne"
+    origen    <- input$semanal_o3_origen       %||% "todas"
+    receptora <- input$semanal_o3_entidad_rec  %||% "Nacional"
+    distrito  <- input$semanal_o3_distrito_rec  %||% "Todos"
+    municipio <- input$semanal_o3_municipio_rec %||% "Todos"
+    seccion   <- input$semanal_o3_seccion_rec   %||% "Todas"
 
-    serie <- datos_semanal_serie_origen()
+    # Alcance construido desde los filtros propios de O3 (no del sidebar)
+    alcance_o3 <- paste0(
+      "Entidad receptora: ", label_receptora(receptora),
+      " \u2013 Distrito: ", distrito,
+      " \u2013 Municipio: ", municipio,
+      " \u2013 Secci\u00f3n: ", seccion
+    )
+
     if (is.null(serie) || nrow(serie) < 2)
-      return(plot_vacio("Sin datos de serie temporal para proyección"))
+      return(plot_vacio("Sin datos de serie temporal"))
 
-    top_n   <- suppressWarnings(as.integer(input$semanal_o3_top_n %||% "1"))
-    if (is.na(top_n)) top_n <- 1L
-    incl_87 <- isTRUE(input$semanal_o3_incl_87)
-    incl_88 <- isTRUE(input$semanal_o3_incl_88)
+    # Usar la fecha del catálogo (igual que O1/O2), no max(serie$fecha)
+    # para evitar mostrar fechas de caché desactualizadas.
+    fecha_cat <- fecha_semanal_o3()
+    etiq_fecha <- if (!is.null(fecha_cat)) fecha_es(fecha_cat)
+                  else as.character(anio_semanal())
 
-    # Columnas LN en la serie (ya agregadas por construir_fila_serie_origen)
-    cols_ln_serie <- detectar_cols_origen(serie, "ln")
-    if (length(cols_ln_serie) == 0)
-      return(plot_vacio("Sin columnas de origen en la serie"))
+    # Columnas disponibles según tipo (lne / pad)
+    col_prefix <- if (tipo == "lne") "ln" else "pad"
+    cols_tipo  <- detectar_cols_origen(serie, col_prefix)
+    if (length(cols_tipo) == 0)
+      return(plot_vacio("Sin columnas de datos disponibles"))
 
-    if (!incl_87) cols_ln_serie <- cols_ln_serie[!grepl("87$", cols_ln_serie)]
-    if (!incl_88) cols_ln_serie <- cols_ln_serie[!grepl("88$", cols_ln_serie)]
-    if (length(cols_ln_serie) == 0)
-      return(plot_vacio("Sin columnas de origen disponibles"))
-
-    ultima_fila <- serie[which.max(serie$fecha), cols_ln_serie, drop = FALSE]
-    totales_ult <- sort(unlist(ultima_fila), decreasing = TRUE)
-    n_sel       <- if (top_n == 0) length(totales_ult) else min(top_n, length(totales_ult))
-    cols_top    <- names(totales_ult)[seq_len(n_sel)]
-
-    ultima_fecha <- max(serie$fecha)
-    meses_rest   <- 12L - as.integer(format(ultima_fecha, "%m"))
-    colores      <- paleta_o3(ambito)
-    p            <- plot_ly()
-
-    for (i in seq_along(cols_top)) {
-      col    <- cols_top[i]
-      color  <- colores[((i - 1L) %% length(colores)) + 1L]
-      nombre <- nombre_origen(col)
-
-      proy <- NULL
-      if (meses_rest > 0) {
-        serie_tmp                  <- serie
-        serie_tmp$lista_nominal    <- serie_tmp[[col]]
-        serie_tmp$padron_electoral <- serie_tmp[[col]]
-        proy <- tryCatch(
-          proyectar_con_tasa_crecimiento(serie_tmp, meses_rest),
-          error = function(e) NULL
-        )
-      }
-
-      p <- p %>% add_trace(
-        data  = serie, x = ~fecha, y = serie[[col]],
-        type  = "scatter", mode = "lines+markers",
-        name  = nombre,
-        line   = list(color = color, width = 2.5),
-        marker = list(size  = 6,     color = color),
-        hovertemplate = paste0(
-          "<b>%{x|%d %b %Y}</b><br>", nombre, ": %{y:,.0f}<extra></extra>"
-        )
-      )
-
-      if (!is.null(proy) && nrow(proy) > 0) {
-        p <- p %>% add_trace(
-          data  = proy, x = ~fecha, y = ~lista_proyectada,
-          type  = "scatter", mode = "lines",
-          name  = paste0("Proy. ", nombre),
-          line  = list(color = color, width = 1.5, dash = "dash"),
-          showlegend = FALSE,
-          hovertemplate = paste0(
-            "<b>%{x|%d %b %Y}</b><br>Proy. ", nombre,
-            ": %{y:,.0f}<extra></extra>"
-          )
-        )
-      }
+    # Construir vector de valores Y
+    if (origen == "todas") {
+      y_vals            <- rowSums(serie[, cols_tipo, drop = FALSE], na.rm = TRUE)
+      nombre_origen_sel <- "Todas las entidades de origen"
+    } else {
+      if (!origen %in% colnames(serie))
+        return(plot_vacio(paste0("Columna '", origen, "' no disponible")))
+      y_vals            <- as.numeric(serie[[origen]])
+      nombre_origen_sel <- nombre_origen(origen)
     }
 
-    titulo_o3 <- if (n_sel == 1L)
-      paste0("Proyecci\u00f3n Semanal \u2013 Top 1 Entidad de Origen \u2013 ", etiq)
+    color_linea <- if (tipo == "lne")
+      (if (ambito == "extranjero") "#71A251" else "#AE0E35")
     else
-      paste0("Proyecci\u00f3n Semanal \u2013 Top ", n_sel,
-             " Entidades de Origen \u2013 ", etiq)
+      (if (ambito == "extranjero") "#D4A500" else "#003E66")
 
-    p %>% layout(
-      title = list(
-        text = titulo_o3,
-        font = list(size = 15, color = "#333", family = "Arial, sans-serif"),
-        x = 0.5, xanchor = "center"
-      ),
-      xaxis = list(
-        title = "", type = "date", tickformat = "%d %b",
-        range = c(min(serie$fecha) - 3, as.Date(paste0(anio, "-12-31")))
-      ),
-      yaxis       = list(title = "Lista Nominal Electoral",
-                         separatethousands = TRUE),
-      legend      = list(orientation = "h", xanchor = "center",
-                         x = 0.5, y = -0.22),
-      margin      = list(t = 120, b = 100, l = 90, r = 40),
-      hovermode   = "x unified",
-      annotations = list(ann_alcance(alcance, y_pos = 1.08), ann_fuente())
+    etiq_yaxis     <- if (tipo == "lne") "Lista Nominal Electoral"
+                      else "Padr\u00f3n Electoral"
+    receptora_lbl  <- label_receptora(receptora)
+    legend_nombre  <- if (origen == "todas")
+      paste0(etiq_yaxis, " \u2013 ", receptora_lbl)
+    else
+      paste0(nombre_origen_sel, " \u2192 ", receptora_lbl)
+
+    titulo <- paste0(
+      "Evoluci\u00f3n de Padr\u00f3n y LNE seg\u00fan entidad de origen",
+      " y entidad receptora \u2013 ", etiq_fecha, " \u2013 ", etiq
     )
+
+    plot_ly(
+      x    = serie$fecha,
+      y    = y_vals,
+      type = "scatter", mode = "lines+markers",
+      name = legend_nombre,
+      line   = list(color = color_linea, width = 2.5),
+      marker = list(size  = 6, color = color_linea),
+      hovertemplate = paste0(
+        "<b>%{x|%d %b %Y}</b><br>",
+        etiq_yaxis, ": <b>%{y:,.0f}</b><extra></extra>"
+      )
+    ) %>%
+      layout(
+        title = list(
+          text   = titulo,
+          font   = list(size = 15, color = "#333", family = "Arial, sans-serif"),
+          x = 0.5, xanchor = "center", y = 0.97
+        ),
+        xaxis = list(
+          title      = "",
+          type       = "date",
+          tickformat = "%d %b %Y",
+          tickangle  = -30,
+          tickfont   = list(size = 10)
+        ),
+        yaxis = list(
+          title             = etiq_yaxis,
+          separatethousands = TRUE,
+          tickfont          = list(size = 10)
+        ),
+        legend    = list(orientation = "h", xanchor = "center",
+                         x = 0.5, y = -0.18),
+        hovermode = "x unified",
+        height    = 460,
+        margin    = list(t = 140, b = 100, l = 90, r = 40),
+        annotations = list(ann_alcance(alcance_o3, y_pos = 1.10))
+      )
   }) %>%
     bindEvent(
-      estado_app(), input$btn_consultar, ambito_reactivo(),
-      input$semanal_o3_top_n, input$semanal_o3_incl_87, input$semanal_o3_incl_88,
+      input$semanal_o3_consultar, ambito_reactivo(),
+      input$semanal_o3_tipo, input$semanal_o3_origen,
       ignoreNULL = FALSE, ignoreInit = FALSE
     )
 
-  message("✅ graficas_semanal_origen v2.1 inicializado")
+  # ══════════════════════════════════════════════════════════════════════════
+  # O3 — Footer dinámico: leyendas LN87/88 | PAD87/88 según vista activa
+  # ══════════════════════════════════════════════════════════════════════════
+
+  output$semanal_o3_leyenda_ui <- renderUI({
+    if (es_historico() || desglose_activo() != "origen") return(NULL)
+    tipo <- input$semanal_o3_tipo %||% "lne"
+    div(
+      style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:6px 0 2px 0;line-height:1.9;",
+      if (tipo == "lne") {
+        tagList(
+          tags$div(
+            tags$b("LN87:"),
+            " Lista Nominal Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad",
+            "\u2003|\u2003",
+            tags$b("LN88:"),
+            " Lista Nominal de ciudadanos naturalizados mexicanos, residentes en la entidad"
+          )
+        )
+      } else {
+        tagList(
+          tags$div(
+            tags$b("PAD87:"),
+            " Padr\u00f3n Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad",
+            "\u2003|\u2003",
+            tags$b("PAD88:"),
+            " Padr\u00f3n Electoral de ciudadanos naturalizados mexicanos, residentes en la entidad"
+          )
+        )
+      },
+      tags$div(
+        style = "margin-top:4px;",
+        "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
+      )
+    )
+  })
+
+  message("✅ graficas_semanal_origen v3.0 inicializado")
   message("   O1: calor LNE — 32 estados + LN87/LN88 en eje Y, default Todos")
   message("   O2: calor Padrón vs LNE — absoluto (subplots) | dif. (Padrón−LNE)")
-  message("   O3: proyección semanal por entidad de origen (era O2 v1.0)")
+  message("   O3: evolución semanal LNE/Padrón por origen × receptor (v3.0)")
 }
