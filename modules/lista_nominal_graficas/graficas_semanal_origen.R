@@ -184,18 +184,7 @@ graficas_semanal_origen <- function(input, output, session,
                           slug(seccion),  "_",
                           ambito)
 
-    # Verificar caché
-    if (exists("LNE_CACHE_SEMANAL", envir = .GlobalEnv)) {
-      cache <- get("LNE_CACHE_SEMANAL", envir = .GlobalEnv)
-      if (!is.null(cache[[clave_cache]]) && !is.null(cache$timestamp) &&
-          difftime(Sys.time(), cache$timestamp, units = "hours") < 24) {
-        message("✅ [O3 CACHÉ] ", clave_cache, " — ",
-                nrow(cache[[clave_cache]]), " semanas")
-        return(cache[[clave_cache]])
-      }
-    }
-
-    # Obtener fechas disponibles
+    # Obtener fechas disponibles ANTES del caché (para invalidar si hay más semanas)
     fechas <- tryCatch({
       if (!exists("LNE_CATALOG", envir = .GlobalEnv)) return(NULL)
       catalog <- get("LNE_CATALOG", envir = .GlobalEnv)
@@ -204,6 +193,23 @@ graficas_semanal_origen <- function(input, output, session,
     }, error = function(e) NULL)
 
     if (is.null(fechas) || length(fechas) == 0) return(NULL)
+
+    # Verificar caché — solo válido si tiene tantas semanas como fechas disponibles
+    if (exists("LNE_CACHE_SEMANAL", envir = .GlobalEnv)) {
+      cache <- get("LNE_CACHE_SEMANAL", envir = .GlobalEnv)
+      if (!is.null(cache[[clave_cache]]) && !is.null(cache$timestamp) &&
+          difftime(Sys.time(), cache$timestamp, units = "hours") < 24 &&
+          nrow(cache[[clave_cache]]) >= length(fechas)) {
+        message("✅ [O3 CACHÉ] ", clave_cache, " — ",
+                nrow(cache[[clave_cache]]), " semanas")
+        return(cache[[clave_cache]])
+      }
+      if (!is.null(cache[[clave_cache]])) {
+        message("🔄 [O3 CACHÉ] ", clave_cache, " desactualizado (",
+                nrow(cache[[clave_cache]]), " cached < ", length(fechas),
+                " disponibles). Recargando...")
+      }
+    }
 
     cols_id <- c("cve_entidad","nombre_entidad","cve_distrito",
                  "cabecera_distrital","cve_municipio","nombre_municipio","seccion")
@@ -572,6 +578,13 @@ graficas_semanal_origen <- function(input, output, session,
 
     alto_px <- max(500, nrow(mat) * 26 + 230)
 
+    es_nacional_o1 <- (isolate(input$entidad) %||% "Nacional") == "Nacional"
+    xaxis_o1 <- if (es_nacional_o1) {
+      list(title = "Entidad Receptora", tickangle = -40, tickfont = list(size = 10))
+    } else {
+      list(title = "", showticklabels = FALSE)
+    }
+
     plot_ly(
       z             = mat,
       x             = colnames(mat),
@@ -595,11 +608,7 @@ graficas_semanal_origen <- function(input, output, session,
                          family = "Arial, sans-serif"),
           x = 0.5, xanchor = "center", y = 0.98
         ),
-        xaxis = list(
-          title    = "Entidad Receptora",
-          tickangle = -40,
-          tickfont = list(size = 10)
-        ),
+        xaxis = xaxis_o1,
         yaxis = list(
           title     = "Entidad de Origen",
           tickfont  = list(size = 10),
@@ -715,6 +724,18 @@ graficas_semanal_origen <- function(input, output, session,
       etiq_fecha, " \u2013 ", etiq
     )
 
+    es_nacional_o2 <- (isolate(input$entidad) %||% "Nacional") == "Nacional"
+    xaxis_o2 <- if (es_nacional_o2) {
+      list(title = "Entidad Receptora", tickangle = -40, tickfont = list(size = 10))
+    } else {
+      list(title = "", showticklabels = FALSE)
+    }
+    xaxis_o2_sub <- if (es_nacional_o2) {
+      list(title = "Receptor", tickangle = -40, tickfont = list(size = 9))
+    } else {
+      list(title = "", showticklabels = FALSE)
+    }
+
     # ── DIFERENCIAL: Padrón − LNE ───────────────────────────────────────────
     if (vista == "diferencial") {
       # Padrón ≥ LNE siempre. Valores ≥ 0: blanco(0)→naranja→rojo(máx brecha)
@@ -752,8 +773,7 @@ graficas_semanal_origen <- function(input, output, session,
                           family = "Arial, sans-serif"),
               x = 0.5, xanchor = "center", y = 0.98
             ),
-            xaxis = list(title = "Entidad Receptora", tickangle = -40,
-                         tickfont = list(size = 10)),
+            xaxis = xaxis_o2,
             yaxis = list(title = "Entidad de Origen",
                          tickfont = list(size = 10), autorange = "reversed"),
             height      = alto_px,
@@ -829,10 +849,8 @@ graficas_semanal_origen <- function(input, output, session,
         ),
         yaxis  = list(title = "Entidad de Origen",
                       tickfont = list(size = 10), autorange = "reversed"),
-        xaxis  = list(title = "Receptor", tickangle = -40,
-                      tickfont = list(size = 9)),
-        xaxis2 = list(title = "Receptor", tickangle = -40,
-                      tickfont = list(size = 9)),
+        xaxis  = xaxis_o2_sub,
+        xaxis2 = xaxis_o2_sub,
         height = alto_px,
         margin = list(t = 160, b = 80, l = 90, r = 100)
       )
@@ -855,13 +873,7 @@ graficas_semanal_origen <- function(input, output, session,
     ns_id   <- session$ns("semanal_o3_widget")
 
     tagList(
-      # ── CSS: fuente reducida en dropdowns de este widget ────────────────
-      tags$style(HTML(paste0(
-        "#", ns_id, " .selectize-input,",
-        "#", ns_id, " .selectize-dropdown { font-size:11px !important; }",
-        "#", ns_id, " .selectize-dropdown-content .option { ",
-        "  font-size:11px !important; padding:3px 8px !important; }"
-      ))),
+      # ── CSS: fuente igual al sidebar (14px Bootstrap default) ───────────
       # ── JS: prevenir salto al header al abrir un dropdown ───────────────
       tags$script(HTML(paste0(
         "(function() {",
@@ -900,116 +912,112 @@ graficas_semanal_origen <- function(input, output, session,
           )
         ),
 
-        # ── Fila 1: Entidad Receptora | Distrito Electoral | Municipio ───
+        # ── Grid 2×3: col1=185px col2=235px col3=210px ───────────────────
+        # Fila 1: Entidad | Distrito | Municipio
+        # Fila 2: Sección | ● Origen | Consultar  (col3 queda alineado con Municipio)
         div(
-          style = "display:flex;align-items:flex-end;gap:10px;flex-wrap:nowrap;margin-bottom:8px;",
+          style = paste(
+            "display:grid;",
+            "grid-template-columns:185px 235px 210px;",
+            "gap:8px 10px;",
+            "align-items:end;"
+          ),
 
+          # ── Fila 1, Col 1: Entidad Receptora ────────────────────────────
           div(
             tags$label(
               style = "font-size:11px;font-weight:600;color:#2c3e50;display:block;margin-bottom:2px;",
               "Entidad Receptora"
             ),
-            div(
-              style = "width:185px;",
-              selectInput(
-                inputId  = session$ns("semanal_o3_entidad_rec"),
-                label    = NULL,
-                choices  = c("Nacional" = "Nacional",
-                             setNames(ESTADOS_SIDEBAR, LABELS_RECEPTORA)),
-                selected = "Nacional",
-                width    = "100%"
-              )
+            selectInput(
+              inputId  = session$ns("semanal_o3_entidad_rec"),
+              label    = NULL,
+              choices  = c("Nacional" = "Nacional",
+                           setNames(ESTADOS_SIDEBAR, LABELS_RECEPTORA)),
+              selected = "Nacional",
+              width    = "100%"
             )
           ),
 
+          # ── Fila 1, Col 2: Distrito Electoral ───────────────────────────
           div(
             tags$label(
               style = "font-size:11px;font-weight:600;color:#2c3e50;display:block;margin-bottom:2px;",
               "Distrito Electoral"
             ),
-            div(
-              style = "width:235px;",
-              selectInput(
-                inputId  = session$ns("semanal_o3_distrito_rec"),
-                label    = NULL,
-                choices  = c("Todos" = "Todos"),
-                selected = "Todos",
-                width    = "100%"
-              )
+            selectInput(
+              inputId  = session$ns("semanal_o3_distrito_rec"),
+              label    = NULL,
+              choices  = c("Todos" = "Todos"),
+              selected = "Todos",
+              width    = "100%"
             )
           ),
 
+          # ── Fila 1, Col 3: Municipio ─────────────────────────────────────
           div(
             tags$label(
               style = "font-size:11px;font-weight:600;color:#2c3e50;display:block;margin-bottom:2px;",
               "Municipio"
             ),
-            div(
-              style = "width:210px;",
-              selectInput(
-                inputId  = session$ns("semanal_o3_municipio_rec"),
-                label    = NULL,
-                choices  = c("Todos" = "Todos"),
-                selected = "Todos",
-                width    = "100%"
-              )
+            selectInput(
+              inputId  = session$ns("semanal_o3_municipio_rec"),
+              label    = NULL,
+              choices  = c("Todos" = "Todos"),
+              selected = "Todos",
+              width    = "100%"
             )
-          )
-        ),
+          ),
 
-        # ── Fila 2: Sección | ● Entidad de Origen | Consultar ────────────
-        div(
-          style = "display:flex;align-items:flex-end;gap:10px;flex-wrap:nowrap;",
-
+          # ── Fila 2, Col 1: Sección Electoral ─────────────────────────────
           div(
             tags$label(
               style = "font-size:11px;font-weight:600;color:#2c3e50;display:block;margin-bottom:2px;",
               "Secci\u00f3n Electoral"
             ),
-            div(
-              style = "width:150px;",
-              selectInput(
-                inputId  = session$ns("semanal_o3_seccion_rec"),
-                label    = NULL,
-                choices  = c("Todas" = "Todas"),
-                selected = "Todas",
-                width    = "100%"
-              )
+            selectizeInput(
+              inputId  = session$ns("semanal_o3_seccion_rec"),
+              label    = NULL,
+              choices  = c("Todas"),
+              selected = "Todas",
+              multiple = TRUE,
+              options  = list(
+                placeholder = "Selecciona una o m\u00e1s secciones",
+                plugins     = list("remove_button"),
+                maxItems    = NULL
+              ),
+              width    = "100%"
             )
           ),
 
-          # Separador visual
-          tags$div(
-            style = "width:1px;background:#ccc;align-self:stretch;margin:0 4px 5px 4px;"
-          ),
-
-          # Entidad de origen (morado)
+          # ── Fila 2, Col 2: ● Entidad de Origen ───────────────────────────
           div(
+            style = "border-left:2px solid #dee2e6;padding-left:10px;",
             tags$label(
               style = "font-size:11px;font-weight:600;color:#6c3483;display:block;margin-bottom:2px;",
               "\u25cf Entidad de origen"
             ),
-            div(
-              style = "width:220px;",
-              selectInput(
-                inputId  = session$ns("semanal_o3_origen"),
-                label    = NULL,
-                choices  = choices,
-                selected = "todas",
-                width    = "100%"
-              )
+            selectInput(
+              inputId  = session$ns("semanal_o3_origen"),
+              label    = NULL,
+              choices  = choices,
+              selected = "todas",
+              width    = "100%"
             )
           ),
 
-          # Botón Consultar
+          # ── Fila 2, Col 3: Botón Consultar ───────────────────────────────
+          # margin-bottom:15px iguala el .form-group de Bootstrap que envuelve
+          # a los selectInput, de modo que el borde inferior del botón quede
+          # alineado con el borde inferior del campo "Entidad de origen".
           div(
-            style = "margin-bottom:5px;",
+            style = "align-self:end;margin-bottom:15px;",
             actionButton(
               inputId = session$ns("semanal_o3_consultar"),
               label   = "Consultar",
               icon    = icon("search"),
-              class   = "btn btn-sm",
-              style   = "background-color:#44559B;border-color:#44559B;color:#fff;font-weight:600;"
+              class   = "btn btn-primary btn-sm",
+              style   = "font-weight:600;"
             )
           )
         )
@@ -1052,12 +1060,20 @@ graficas_semanal_origen <- function(input, output, session,
     }, error = function(e) NULL)
   }
 
+  # Opciones compartidas para selectizeInput de sección (multiple)
+  .opts_seccion_o3 <- list(
+    placeholder = "Selecciona una o m\u00e1s secciones",
+    plugins     = list("remove_button"),
+    maxItems    = NULL
+  )
+
   observeEvent(input$semanal_o3_entidad_rec, {
     entidad <- input$semanal_o3_entidad_rec %||% "Nacional"
     if (entidad == "Nacional") {
       updateSelectInput(session, "semanal_o3_distrito_rec",  choices = c("Todos" = "Todos"), selected = "Todos")
       updateSelectInput(session, "semanal_o3_municipio_rec", choices = c("Todos" = "Todos"), selected = "Todos")
-      updateSelectInput(session, "semanal_o3_seccion_rec",   choices = c("Todas" = "Todas"), selected = "Todas")
+      updateSelectizeInput(session, "semanal_o3_seccion_rec", choices = c("Todas"), selected = "Todas",
+                           options = .opts_seccion_o3)
       return()
     }
     fecha     <- fecha_historica_o3()
@@ -1065,10 +1081,10 @@ graficas_semanal_origen <- function(input, output, session,
       get_distritos_por_entidad(entidad = entidad, fecha = fecha),
       error = function(e) { message("⚠️ [O3 cascada] get_distritos error: ", e$message); c("Todos") }
     )
-    # get_distritos_por_entidad ya incluye "Todos" como primer elemento
-    updateSelectInput(session, "semanal_o3_distrito_rec",  choices = distritos,          selected = "Todos")
+    updateSelectInput(session, "semanal_o3_distrito_rec",  choices = distritos,            selected = "Todos")
     updateSelectInput(session, "semanal_o3_municipio_rec", choices = c("Todos" = "Todos"), selected = "Todos")
-    updateSelectInput(session, "semanal_o3_seccion_rec",   choices = c("Todas" = "Todas"), selected = "Todas")
+    updateSelectizeInput(session, "semanal_o3_seccion_rec", choices = c("Todas"), selected = "Todas",
+                         options = .opts_seccion_o3)
   }, ignoreNULL = TRUE, ignoreInit = TRUE)
 
   observeEvent(input$semanal_o3_distrito_rec, {
@@ -1076,7 +1092,8 @@ graficas_semanal_origen <- function(input, output, session,
     distrito <- input$semanal_o3_distrito_rec %||% "Todos"
     if (entidad == "Nacional" || distrito == "Todos") {
       updateSelectInput(session, "semanal_o3_municipio_rec", choices = c("Todos" = "Todos"), selected = "Todos")
-      updateSelectInput(session, "semanal_o3_seccion_rec",   choices = c("Todas" = "Todas"), selected = "Todas")
+      updateSelectizeInput(session, "semanal_o3_seccion_rec", choices = c("Todas"), selected = "Todas",
+                           options = .opts_seccion_o3)
       return()
     }
     fecha      <- fecha_historica_o3()
@@ -1084,9 +1101,9 @@ graficas_semanal_origen <- function(input, output, session,
       get_municipios_por_distrito(entidad = entidad, distrito = distrito, fecha = fecha),
       error = function(e) { message("⚠️ [O3 cascada] get_municipios error: ", e$message); c("Todos") }
     )
-    # get_municipios_por_distrito ya incluye "Todos" como primer elemento
-    updateSelectInput(session, "semanal_o3_municipio_rec", choices = municipios,          selected = "Todos")
-    updateSelectInput(session, "semanal_o3_seccion_rec",   choices = c("Todas" = "Todas"), selected = "Todas")
+    updateSelectInput(session, "semanal_o3_municipio_rec", choices = municipios,           selected = "Todos")
+    updateSelectizeInput(session, "semanal_o3_seccion_rec", choices = c("Todas"), selected = "Todas",
+                         options = .opts_seccion_o3)
   }, ignoreNULL = TRUE, ignoreInit = TRUE)
 
   observeEvent(input$semanal_o3_municipio_rec, {
@@ -1094,7 +1111,8 @@ graficas_semanal_origen <- function(input, output, session,
     distrito  <- input$semanal_o3_distrito_rec  %||% "Todos"
     municipio <- input$semanal_o3_municipio_rec %||% "Todos"
     if (entidad == "Nacional" || municipio == "Todos") {
-      updateSelectInput(session, "semanal_o3_seccion_rec", choices = c("Todas" = "Todas"), selected = "Todas")
+      updateSelectizeInput(session, "semanal_o3_seccion_rec", choices = c("Todas"), selected = "Todas",
+                           options = .opts_seccion_o3)
       return()
     }
     fecha     <- fecha_historica_o3()
@@ -1103,8 +1121,16 @@ graficas_semanal_origen <- function(input, output, session,
                                   municipio = municipio, fecha     = fecha),
       error = function(e) { message("⚠️ [O3 cascada] get_secciones error: ", e$message); c("Todas") }
     )
-    # get_secciones_por_municipio ya incluye "Todas" como primer elemento
-    updateSelectInput(session, "semanal_o3_seccion_rec", choices = secciones, selected = "Todas")
+    updateSelectizeInput(session, "semanal_o3_seccion_rec", choices = secciones, selected = "Todas",
+                         options = .opts_seccion_o3)
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+
+  # Mutual exclusivity: si el usuario elige "Todas" junto con otras, quedar sólo con "Todas"
+  observeEvent(input$semanal_o3_seccion_rec, {
+    sel <- input$semanal_o3_seccion_rec
+    req(length(sel) > 1, "Todas" %in% sel)
+    updateSelectizeInput(session, "semanal_o3_seccion_rec", selected = "Todas",
+                         options = .opts_seccion_o3)
   }, ignoreNULL = TRUE, ignoreInit = TRUE)
 
   # ══════════════════════════════════════════════════════════════════════════
@@ -1151,11 +1177,20 @@ graficas_semanal_origen <- function(input, output, session,
     seccion   <- input$semanal_o3_seccion_rec   %||% "Todas"
 
     # Alcance construido desde los filtros propios de O3 (no del sidebar)
+    seccion_txt <- if (is.null(seccion) || length(seccion) == 0 || "Todas" %in% seccion) {
+      "Secci\u00f3n: Todas"
+    } else if (length(seccion) == 1) {
+      paste0("Secci\u00f3n: ", seccion)
+    } else if (length(seccion) <= 5) {
+      paste0("Secciones: ", paste(seccion, collapse = ", "))
+    } else {
+      paste0("Secciones: ", length(seccion), " seleccionadas")
+    }
     alcance_o3 <- paste0(
       "Entidad receptora: ", label_receptora(receptora),
       " \u2013 Distrito: ", distrito,
       " \u2013 Municipio: ", municipio,
-      " \u2013 Secci\u00f3n: ", seccion
+      " \u2013 ", seccion_txt
     )
 
     if (is.null(serie) || nrow(serie) < 2)

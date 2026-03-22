@@ -47,31 +47,22 @@ graficas_semanal_data_loaders <- function(input, output, session,
   #                   serie_origen_nacional, serie_origen_extranjero
   # ══════════════════════════════════════════════════════════════════════════
   
-  if (!exists("LNE_CACHE_SEMANAL", envir = .GlobalEnv)) {
-    assign("LNE_CACHE_SEMANAL",
-           list(edad       = NULL,
-                sexo       = NULL,
-                origen     = NULL,
-                serie_edad_nacional    = NULL,
-                serie_edad_extranjero  = NULL,
-                serie_sexo_nacional    = NULL,
-                serie_sexo_extranjero  = NULL,
-                serie_origen_nacional  = NULL,
-                serie_origen_extranjero = NULL,
-                fecha      = NULL,
-                timestamp  = NULL),
-           envir = .GlobalEnv)
-    message("📦 Caché semanal inicializado (v3.0)")
-  } else {
-    # Asegurar que las claves nuevas existan si el caché fue creado por v<3.0
-    cache <- get("LNE_CACHE_SEMANAL", envir = .GlobalEnv)
-    for (clave in c("serie_edad_nacional","serie_edad_extranjero",
-                    "serie_sexo_nacional","serie_sexo_extranjero",
-                    "serie_origen_nacional","serie_origen_extranjero")) {
-      if (is.null(cache[[clave]])) cache[[clave]] <- NULL
-    }
-    assign("LNE_CACHE_SEMANAL", cache, envir = .GlobalEnv)
-  }
+  # Siempre reinicializar el caché de series al cargar el módulo,
+  # para que nuevos archivos locales disponibles se carguen correctamente.
+  assign("LNE_CACHE_SEMANAL",
+         list(edad       = NULL,
+              sexo       = NULL,
+              origen     = NULL,
+              serie_edad_nacional    = NULL,
+              serie_edad_extranjero  = NULL,
+              serie_sexo_nacional    = NULL,
+              serie_sexo_extranjero  = NULL,
+              serie_origen_nacional  = NULL,
+              serie_origen_extranjero = NULL,
+              fecha      = NULL,
+              timestamp  = NULL),
+         envir = .GlobalEnv)
+  message("📦 Caché semanal reinicializado (v3.5 — local-first)")
   
   # ══════════════════════════════════════════════════════════════════════════
   # HELPERS
@@ -269,24 +260,32 @@ graficas_semanal_data_loaders <- function(input, output, session,
   # ══════════════════════════════════════════════════════════════════════════
   
   cargar_serie_con_progreso <- function(tipo, ambito, con_progreso = TRUE) {
-    
+
     clave_cache <- paste0("serie_", tipo, "_", ambito)
-    
-    # Verificar caché primero → retorno inmediato si válido
-    if (cache_serie_valido(clave_cache)) {
-      cache <- get("LNE_CACHE_SEMANAL", envir = .GlobalEnv)
-      message("✅ [CACHÉ] serie_", tipo, " (", ambito, ") — ",
-              nrow(cache[[clave_cache]]), " semanas")
-      return(cache[[clave_cache]])
-    }
-    
+
+    # Obtener fechas disponibles ANTES de verificar caché,
+    # para invalidar si hay más semanas que las que tiene el caché
     fechas <- obtener_todas_fechas_semanal()
-    if (is.null(fechas) || length(fechas) == 0) {
+    n_fechas_disponibles <- if (is.null(fechas)) 0L else length(fechas)
+
+    if (cache_serie_valido(clave_cache)) {
+      cache    <- get("LNE_CACHE_SEMANAL", envir = .GlobalEnv)
+      n_cached <- nrow(cache[[clave_cache]])
+      if (n_cached >= n_fechas_disponibles) {
+        message("✅ [CACHÉ] serie_", tipo, " (", ambito, ") — ", n_cached, " semanas")
+        return(cache[[clave_cache]])
+      }
+      message("🔄 [CACHÉ] serie_", tipo, " desactualizada (",
+              n_cached, " cached < ", n_fechas_disponibles,
+              " disponibles). Recargando...")
+    }
+
+    if (is.null(fechas) || n_fechas_disponibles == 0L) {
       message("⚠️ [serie_", tipo, "] Sin fechas disponibles")
       return(NULL)
     }
     
-    n_total <- length(fechas)
+    n_total <- n_fechas_disponibles
     message("📥 [serie_", tipo, "] Cargando ", n_total,
             " semanas para ámbito=", ambito, "...")
     

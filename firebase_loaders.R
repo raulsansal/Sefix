@@ -16,6 +16,7 @@ library(data.table)
 FIREBASE_STORAGE_BASE <- "https://firebasestorage.googleapis.com/v0/b/eskemma-3c4c3.firebasestorage.app/o"
 
 # Caché en memoria para evitar recargas
+# Se reinicia en cada carga del módulo para que local-first tome efecto
 .firebase_cache <- new.env(parent = emptyenv())
 
 # ========== FUNCIONES AUXILIARES ==========
@@ -83,6 +84,21 @@ cargar_csv_firebase <- function(firebase_path, usar_cache = TRUE, verbose = TRUE
     if (status_code(response) != 200) {
       if (verbose) warning("❌ Error HTTP ", status_code(response), " al descargar: ", firebase_path)
       unlink(temp_file)
+      # ── Fallback: intentar leer desde directorio local data/ ─────────
+      local_path <- sub("^sefix/", "data/", firebase_path)
+      if (file.exists(local_path)) {
+        if (verbose) message("📁 [LOCAL] Fallback a archivo local: ", local_path)
+        datos_local <- tryCatch(
+          fread(local_path, encoding = "UTF-8", stringsAsFactors = FALSE,
+                na.strings = c("", "NA"), strip.white = TRUE,
+                showProgress = FALSE, blank.lines.skip = TRUE),
+          error = function(e) NULL
+        )
+        if (!is.null(datos_local) && nrow(datos_local) > 0) {
+          if (usar_cache) assign(firebase_path, datos_local, envir = .firebase_cache)
+          return(datos_local)
+        }
+      }
       return(NULL)
     }
     
@@ -165,7 +181,32 @@ cargar_pdln_semanal_firebase <- function(fecha, tipo = "edad", usar_cache = TRUE
   if (inherits(fecha, "Date")) {
     fecha <- format(fecha, "%Y%m%d")
   }
-  path <- paste0("sefix/pdln/semanal/derfe_pdln_", fecha, "_", tipo, ".csv")
+  path       <- paste0("sefix/pdln/semanal/derfe_pdln_", fecha, "_", tipo, ".csv")
+  local_path <- paste0("data/pdln/semanal/derfe_pdln_", fecha, "_", tipo, ".csv")
+
+  # ── Leer desde archivo local primero (rápido, no depende de red) ────────────
+  # Si el archivo local existe se usa directamente; Firebase queda como respaldo
+  # para entornos de producción donde data/ no esté disponible.
+  if (file.exists(local_path)) {
+    # Verificar caché usando la misma clave que Firebase para consistencia
+    if (usar_cache && exists(path, envir = .firebase_cache)) {
+      message("📦 [CACHE] Usando datos en caché: ", path)
+      return(get(path, envir = .firebase_cache))
+    }
+    message("📁 [LOCAL] Leyendo archivo local: ", local_path)
+    datos_local <- tryCatch(
+      fread(local_path, encoding = "UTF-8", stringsAsFactors = FALSE,
+            na.strings = c("", "NA"), strip.white = TRUE,
+            showProgress = FALSE, blank.lines.skip = TRUE),
+      error = function(e) { warning("❌ Error leyendo local: ", e$message); NULL }
+    )
+    if (!is.null(datos_local) && nrow(datos_local) > 0) {
+      if (usar_cache) assign(path, datos_local, envir = .firebase_cache)
+      return(datos_local)
+    }
+  }
+
+  # ── Respaldo: Firebase Storage ───────────────────────────────────────────────
   cargar_csv_firebase(path, usar_cache = usar_cache)
 }
 
@@ -188,25 +229,47 @@ cargar_resultados_federales_firebase <- function(year, cargo, usar_cache = TRUE)
 #' @description Retorna las fechas conocidas de archivos disponibles
 #' @return Lista con fechas de histórico, semanal y años electorales
 listar_fechas_disponibles_firebase <- function() {
-  message("ℹ️ Listado de archivos disponibles basado en estructura conocida")
-  
+  message("ℹ️ Construyendo catálogo desde archivos disponibles...")
+
   fechas_historico <- seq(
     from = as.Date("2017-01-31"),
-    to = as.Date("2025-07-31"),
-    by = "month"
+    to   = as.Date("2025-07-31"),
+    by   = "month"
   )
-  
-  fechas_semanal <- seq(
-    from = as.Date("2025-01-02"),
-    to = as.Date("2025-10-16"),
-    by = "week"
-  )
-  
+
+  # ── Fechas semanales: detectar automáticamente desde data/pdln/semanal/ ──
+  local_dir <- "data/pdln/semanal"
+  fechas_semanal <- NULL
+
+  if (dir.exists(local_dir)) {
+    archivos <- list.files(local_dir, pattern = "derfe_pdln_\\d{8}_origen\\.csv$",
+                           full.names = FALSE)
+    if (length(archivos) > 0) {
+      fechas_str   <- sub("derfe_pdln_(\\d{8})_origen\\.csv", "\\1", archivos)
+      fechas_parse <- as.Date(fechas_str, format = "%Y%m%d")
+      fechas_semanal <- sort(fechas_parse[!is.na(fechas_parse)])
+      message("📅 Fechas semanales detectadas automáticamente: ",
+              length(fechas_semanal), " (",
+              format(min(fechas_semanal), "%Y-%m-%d"), " → ",
+              format(max(fechas_semanal), "%Y-%m-%d"), ")")
+    }
+  }
+
+  # Fallback hardcodeado si el directorio local no existe
+  if (is.null(fechas_semanal) || length(fechas_semanal) == 0) {
+    fechas_semanal <- seq(
+      from = as.Date("2025-01-02"),
+      to   = as.Date("2025-10-16"),
+      by   = "week"
+    )
+    message("📅 Fechas semanales (fallback hardcoded): ", length(fechas_semanal))
+  }
+
   años_electorales <- c(2006, 2009, 2012, 2015, 2018, 2021, 2023, 2024)
-  
+
   list(
-    historico = fechas_historico,
-    semanal = fechas_semanal,
+    historico        = fechas_historico,
+    semanal          = fechas_semanal,
     años_electorales = años_electorales
   )
 }
