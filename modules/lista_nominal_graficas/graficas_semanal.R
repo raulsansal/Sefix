@@ -212,31 +212,70 @@ graficas_semanal <- function(input, output, session,
     "87"="Mexicanos nacidos en el extranjero",
     "88"="Ciudadanos naturalizados"
   )
+  # Mapa sufijo de columna → nombre completo (espejo de MAPA_NOMBRE en graficas_semanal_origen.R)
+  .NOM_ESTADO_ORIGEN <- c(
+    "aguascalientes"      = "Aguascalientes",
+    "baja_california"     = "Baja California",
+    "baja_california_sur" = "Baja California Sur",
+    "campeche"            = "Campeche",
+    "coahuila"            = "Coahuila",
+    "colima"              = "Colima",
+    "chiapas"             = "Chiapas",
+    "chihuahua"           = "Chihuahua",
+    "cdmx"                = "Ciudad de M\u00e9xico",
+    "durango"             = "Durango",
+    "guanajuato"          = "Guanajuato",
+    "guerrero"            = "Guerrero",
+    "hidalgo"             = "Hidalgo",
+    "jalisco"             = "Jalisco",
+    "estado_de_mexico"    = "Estado de M\u00e9xico",
+    "michoacan"           = "Michoac\u00e1n",
+    "morelos"             = "Morelos",
+    "nayarit"             = "Nayarit",
+    "nuevo_leon"          = "Nuevo Le\u00f3n",
+    "oaxaca"              = "Oaxaca",
+    "puebla"              = "Puebla",
+    "queretaro"           = "Quer\u00e9taro",
+    "quintana_roo"        = "Quintana Roo",
+    "san_luis_potosi"     = "San Luis Potos\u00ed",
+    "sinaloa"             = "Sinaloa",
+    "sonora"              = "Sonora",
+    "tabasco"             = "Tabasco",
+    "tamaulipas"          = "Tamaulipas",
+    "tlaxcala"            = "Tlaxcala",
+    "veracruz"            = "Veracruz",
+    "yucatan"             = "Yucat\u00e1n",
+    "zacatecas"           = "Zacatecas"
+  )
+
   construir_tabla_origen <- function(df, ambito) {
     if (is.null(df) || nrow(df) == 0) return(NULL)
     df_uso <- if (ambito == "extranjero")
-      # Usar identificador canónico: cabecera_distrital == "RESIDENTES EXTRANJERO"
       df[es_fila_extranjero(df), , drop = FALSE]
     else df_nacional(df)
     if (is.null(df_uso) || nrow(df_uso) == 0) return(NULL)
-    cols_pad <- grep("^pad_\\d{2}$|^pad8[78]$", colnames(df_uso),
-                     value = TRUE, ignore.case = TRUE)
-    if (length(cols_pad) == 0)
-      cols_pad <- grep("^padron_[0-9]", colnames(df_uso),
-                       value = TRUE, ignore.case = TRUE)
-    if (length(cols_pad) == 0) {
-      message("⚠️ [origen] Sin columnas de estados"); return(NULL)
+
+    # Mismo patrón que detectar_cols_origen() en graficas_semanal_origen.R:
+    # columnas con nombre de estado completo (ln_aguascalientes) + extranjero (ln87/ln88)
+    cols_ln <- grep("^ln_[a-z]|^ln87$|^ln88$", colnames(df_uso),
+                    value = TRUE, ignore.case = TRUE)
+    if (length(cols_ln) == 0) {
+      message("\u26a0\ufe0f [origen] Sin columnas de LN detectadas"); return(NULL)
     }
-    res <- do.call(rbind, lapply(cols_pad, function(cp) {
-      clave  <- sprintf("%02s", trimws(gsub("pad_|pad|padron_", "", cp,
-                                            ignore.case = TRUE)))
-      nombre <- NOM_ORIGEN[clave] %||% paste0("Entidad ", clave)
-      cl     <- gsub("pad", "ln", cp, ignore.case = TRUE)
+
+    res <- do.call(rbind, lapply(cols_ln, function(cl) {
+      col_pad <- gsub("^ln_", "pad_",
+                      gsub("^ln(8[78])$", "pad\\1", cl, ignore.case = TRUE),
+                      ignore.case = TRUE)
+      suf <- gsub("^ln_|^ln", "", cl, ignore.case = TRUE)
+      nombre <- if (suf == "87") "Mexicanos nacidos en el extranjero"
+                else if (suf == "88") "Ciudadanos naturalizados"
+                else .NOM_ESTADO_ORIGEN[suf] %||% paste0("(", suf, ")")
       data.frame(
         entidad_origen = nombre,
-        padron         = sum(as.numeric(df_uso[[cp]]), na.rm = TRUE),
-        lista_nominal  = if (cl %in% colnames(df_uso))
-          sum(as.numeric(df_uso[[cl]]), na.rm = TRUE) else NA,
+        padron         = if (col_pad %in% colnames(df_uso))
+          sum(as.numeric(df_uso[[col_pad]]), na.rm = TRUE) else NA_real_,
+        lista_nominal  = sum(as.numeric(df_uso[[cl]]), na.rm = TRUE),
         stringsAsFactors = FALSE
       )
     }))
@@ -547,20 +586,59 @@ graficas_semanal <- function(input, output, session,
                          "Lista Nominal","Tasa Inclusión (%)")
     tabla
   })
+  output$semanal_dt_origen_header <- renderUI({
+    if (es_historico() || desglose_activo() != "origen") return(NULL)
+    df <- datos_dt_origen_r()
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    ambito_display <- etiq_ambito(ambito_reactivo())
+    alcance_texto  <- isolate(texto_alcance())
+    tags$div(
+      class = "datatable-header-content",
+      style = "text-align:center;margin-bottom:15px;padding:10px;background-color:#f8f9fa;border-radius:6px;border:1px solid #e9ecef;",
+      tags$div(
+        style = "font-size:15px;font-weight:700;color:#006988;margin-bottom:5px;",
+        paste0("Ámbito: ", ambito_display)
+      ),
+      tags$div(
+        style = "font-size:12px;color:#555555;line-height:1.4;",
+        alcance_texto
+      )
+    )
+  }) %>%
+    bindEvent(
+      estado_app(), input$btn_consultar, ambito_reactivo(),
+      ignoreNULL = FALSE, ignoreInit = FALSE
+    )
+
   output$semanal_dt_origen <- DT::renderDataTable({
     df <- datos_dt_origen_r()
     if (is.null(df))
       return(DT::datatable(data.frame(Mensaje = "Sin datos"),
                            options = list(dom = "t")))
-    DT::datatable(df, rownames = FALSE,
-                  options = list(
-                    pageLength = 15, scrollX = TRUE, dom = "tip",
-                    language = list(
-                      paginate = list(previous = "Anterior", `next` = "Siguiente"),
-                      info = "Mostrando _START_ a _END_ de _TOTAL_ registros"
-                    )
-                  )) %>%
-      DT::formatRound(c("Padrón Electoral","Lista Nominal"), digits = 0) %>%
+    DT::datatable(
+      df,
+      rownames = FALSE,
+      options  = list(
+        pageLength = 15,
+        lengthMenu = list(c(10, 15, 25, -1), c("10", "15", "25", "Todos")),
+        dom        = "lfrtip",
+        autoWidth  = FALSE,
+        language   = list(
+          search       = "Buscar:",
+          lengthMenu   = "Mostrar _MENU_",
+          info         = "Mostrando _START_ a _END_ de _TOTAL_",
+          infoEmpty    = "Sin registros",
+          infoFiltered = "(de _MAX_ totales)",
+          paginate     = list(
+            first    = "«",
+            last     = "»",
+            `next`   = "›",
+            previous = "‹"
+          )
+        )
+      )
+    ) %>%
+      DT::formatRound(c("Padrón Electoral", "Lista Nominal"), digits = 0) %>%
       DT::formatRound("Tasa Inclusión (%)", digits = 2)
   })
   output$semanal_dt_origen_descarga <- downloadHandler(
