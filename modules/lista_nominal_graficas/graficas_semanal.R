@@ -342,7 +342,7 @@ graficas_semanal <- function(input, output, session,
     estado_app               = estado_app
   )
   
-  graficas_semanal_origen(
+  o3_mod <- graficas_semanal_origen(
     input                       = input,
     output                      = output,
     session                     = session,
@@ -658,26 +658,28 @@ graficas_semanal <- function(input, output, session,
   
   output$semanal_texto_titulo <- renderUI({
     if (es_historico()) return(NULL)
-    ambito   <- ambito_reactivo()
     anio     <- anio_semanal()
     desglose <- desglose_activo()
-    etiq_des <- switch(desglose,
-                       "edad"   = "Rango de Edad",
-                       "sexo"   = "Distribución por Sexo",
-                       "origen" = "Entidad de Origen",
-                       "Rango de Edad"
+    subtitulo <- switch(desglose,
+      "edad"   = "Rangos de Edad",
+      "sexo"   = "Distribuci\u00f3n por Sexo",
+      "origen" = "Entidad de Origen",
+      "Rangos de Edad"
     )
     HTML(paste0(
       "<div style='font-size:16px;line-height:1.6;color:#333;'>",
       "<h3 style='text-align:center;margin:0 0 2px 0;font-size:18px;",
-      "color:#2c3e50;font-weight:600;'>Análisis Semanal — ", etiq_des, "<br>",
+      "color:#2c3e50;font-weight:600;line-height:1.4;'>",
+      "An\u00e1lisis de la evoluci\u00f3n semanal del Padr\u00f3n y Lista Nominal Electoral",
       "<span style='display:block;text-align:center;color:#1a5276;",
-      "font-weight:700;font-size:20px;margin-top:4px;margin-bottom:4px;'>",
-      etiq_ambito(ambito), " ", anio, "</span></h3>",
-      "<p style='margin:12px 0 2px 0;font-size:14px;color:#555;",
-      "font-weight:600;text-align:left;'>Alcance:</p>",
+      "font-weight:700;font-size:20px;margin-top:4px;margin-bottom:6px;'>",
+      anio, "</span></h3>",
+      "<p style='text-align:center;margin:0 0 12px 0;font-size:16px;",
+      "color:#1a5276;font-weight:600;'>", subtitulo, "</p>",
+      "<p style='margin:0 0 2px 0;font-size:14px;color:#555;",
+      "font-weight:600;text-align:left;'>Alcance del an\u00e1lisis:</p>",
       "<p style='text-align:left;margin:0;font-size:14px;color:#777;line-height:1.4;'>",
-      gsub(" - ", " – ", isolate(texto_alcance())), "</p></div>"
+      gsub(" - ", " \u2013 ", texto_alcance()), "</p></div>"
     ))
   })
   
@@ -693,32 +695,111 @@ graficas_semanal <- function(input, output, session,
                           df <- construir_df_edad(datos_semanal_edad(), ambito)
                           if (is.null(df) || nrow(df) == 0)
                             return(HTML(paste0("<p style='", css_na, "'>Sin datos de edad disponibles.</p>")))
-                          df$lst <- df$lista_hombres + df$lista_mujeres
-                          df$pad <- df$padron_hombres + df$padron_mujeres
-                          tot_lne <- sum(df$lst, na.rm = TRUE)
-                          tot_pad <- sum(df$pad, na.rm = TRUE)
-                          gm      <- df$grupo[which.max(df$lst)]
-                          mx      <- max(df$lst)
-                          gm2     <- df$grupo[order(df$lst, decreasing = TRUE)[2]]
-                          lne_18_19 <- sum(df$lst[df$grupo %in% c("18","19")], na.rm = TRUE)
-                          lne_65p   <- sum(df$lst[df$grupo %in% c("65+")], na.rm = TRUE)
-                          pct_jov <- if (tot_lne > 0) round(lne_18_19 / tot_lne * 100, 2) else NA
-                          pct_65  <- if (tot_lne > 0) round(lne_65p   / tot_lne * 100, 2) else NA
+
+                          df$lst <- df$lista_hombres + df$lista_mujeres + df$lista_no_binario
+                          df$pad <- df$padron_hombres + df$padron_mujeres + df$padron_no_binario
+                          tot_lne  <- sum(df$lst, na.rm = TRUE)
+                          tot_pad  <- sum(df$pad, na.rm = TRUE)
                           tasa_inc <- if (tot_pad > 0) round(tot_lne / tot_pad * 100, 2) else NA
+
+                          # ── Comparación primera / última fecha via serie ──────────────
+                          meses_es <- c("enero","febrero","marzo","abril","mayo","junio",
+                                        "julio","agosto","septiembre","octubre","noviembre","diciembre")
+                          fmt_fecha_es <- function(d) paste(
+                            as.integer(format(d, "%d")),
+                            meses_es[as.integer(format(d, "%m"))],
+                            format(d, "%Y"))
+
+                          txt_variacion <- tryCatch({
+                            serie <- datos_semanal_serie_edad()
+                            if (is.null(serie) || nrow(serie) < 2 || !"fecha" %in% colnames(serie))
+                              return("")
+                            serie <- serie[order(serie$fecha), ]
+                            fecha_ini <- serie$fecha[1]
+                            pad_ini <- as.numeric(serie$padron_total[1])
+                            lst_ini <- as.numeric(serie$lista_total[1])
+                            pad_fin <- as.numeric(serie$padron_total[nrow(serie)])
+                            lst_fin <- as.numeric(serie$lista_total[nrow(serie)])
+                            var_pad <- if (!is.na(pad_ini) && pad_ini > 0)
+                              round((pad_fin - pad_ini) / abs(pad_ini) * 100, 2) else NA
+                            var_lst <- if (!is.na(lst_ini) && lst_ini > 0)
+                              round((lst_fin - lst_ini) / abs(lst_ini) * 100, 2) else NA
+                            if (is.na(var_pad) || is.na(var_lst)) return("")
+                            verbo_pad <- if (var_pad > 0) "aumentado" else if (var_pad < 0) "disminuido" else "se ha mantenido igual"
+                            verbo_lst <- if (var_lst > 0) "aumentado" else if (var_lst < 0) "disminuido" else "se ha mantenido igual"
+                            txt_p <- if (var_pad == 0) paste0("el padr\u00f3n ", verbo_pad)
+                                     else paste0("el padr\u00f3n ha ", verbo_pad, " en <strong>",
+                                                 fmt_pct(abs(var_pad)), "</strong>")
+                            txt_l <- if (var_lst == 0) paste0("la LNE ", verbo_lst)
+                                     else paste0("la LNE ha ", verbo_lst, " en <strong>",
+                                                 fmt_pct(abs(var_lst)), "</strong>")
+                            paste0(" Respecto al <strong>", fmt_fecha_es(fecha_ini), "</strong>, ",
+                                   txt_p, ", en tanto que ", txt_l, ".")
+                          }, error = function(e) "")
+
+                          # Fecha final (de la serie o del catálogo)
+                          fecha_fin_txt <- tryCatch({
+                            serie <- datos_semanal_serie_edad()
+                            if (!is.null(serie) && nrow(serie) > 0 && "fecha" %in% colnames(serie))
+                              fmt_fecha_es(max(serie$fecha, na.rm = TRUE))
+                            else as.character(anio_semanal())
+                          }, error = function(e) as.character(anio_semanal()))
+
+                          # ── Párrafo 1: totales + variación ────────────────────────────
+                          parr1 <- paste0(
+                            "<p style='", css_p, "'>Al <strong>", fecha_fin_txt,
+                            "</strong>, el Padr\u00f3n Electoral totaliza <strong>", fmt_num(tot_pad),
+                            "</strong> ciudadanos, de los cuales, <strong>", fmt_num(tot_lne),
+                            "</strong> est\u00e1n incluidos en la Lista Nominal Electoral (LNE), ",
+                            "lo que representa una tasa de inclusi\u00f3n de <strong>",
+                            fmt_pct(tasa_inc), "</strong>.", txt_variacion, "</p>"
+                          )
+
+                          # ── Párrafo 2: grupos etarios macro ───────────────────────────
+                          RANGOS_JOV <- c("18","19","20-24","25-29")
+                          RANGOS_ADU <- c("30-34","35-39","40-44","45-49","50-54","55-59")
+                          RANGOS_MAY <- c("60-64","65+")
+
+                          lne_jov <- sum(df$lst[df$grupo %in% RANGOS_JOV], na.rm = TRUE)
+                          lne_adu <- sum(df$lst[df$grupo %in% RANGOS_ADU], na.rm = TRUE)
+                          lne_may <- sum(df$lst[df$grupo %in% RANGOS_MAY], na.rm = TRUE)
+
+                          pct_jov <- if (tot_lne > 0) round(lne_jov / tot_lne * 100, 2) else NA
+                          pct_adu <- if (tot_lne > 0) round(lne_adu / tot_lne * 100, 2) else NA
+                          pct_may <- if (tot_lne > 0) round(lne_may / tot_lne * 100, 2) else NA
+
+                          cmp_may_jov <- if (!is.na(pct_may) && !is.na(pct_jov)) {
+                            if (pct_may > pct_jov) "mayor" else if (pct_may < pct_jov) "menor" else "igual"
+                          } else "N/D"
+
+                          parr2 <- paste0(
+                            "<p style='", css_p, "'>Observando los datos por grupo etario, tanto el ",
+                            "Padr\u00f3n como la LNE han mantenido una tendencia uniforme en <strong>",
+                            anio_semanal(), "</strong>. La LNE de j\u00f3venes entre 18 y 29 a\u00f1os suma el ",
+                            "<strong>", fmt_pct(pct_jov), "</strong>, los adultos entre 30 y 59 a\u00f1os ",
+                            "acumulan el mayor porcentaje con <strong>", fmt_pct(pct_adu), "</strong>; y el ",
+                            "porcentaje de las personas adultas mayores (60 y m\u00e1s a\u00f1os), es ",
+                            "<strong>", cmp_may_jov, "</strong> que el de j\u00f3venes con <strong>",
+                            fmt_pct(pct_may), "</strong>.</p>"
+                          )
+
+                          # ── Párrafo 3: top 3 rangos ───────────────────────────────────
+                          df_ord <- df[order(df$lst, decreasing = TRUE), ]
+                          top3   <- head(df_ord, 3)
+                          p3_pct <- function(i) if (tot_lne > 0) round(top3$lst[i] / tot_lne * 100, 2) else NA
+
+                          parr3 <- paste0(
+                            "<p style='", css_p, "'>El rango de edad con mayor cantidad de ciudadanos ",
+                            "en LNE es el formado por personas entre <strong>", top3$grupo[1],
+                            " a\u00f1os</strong> con <strong>", fmt_pct(p3_pct(1)), "</strong>, seguido por ",
+                            "<strong>", top3$grupo[2], " a\u00f1os</strong> con <strong>",
+                            fmt_pct(p3_pct(2)), "</strong> y <strong>", top3$grupo[3],
+                            " a\u00f1os</strong> con <strong>", fmt_pct(p3_pct(3)), "</strong>.</p>"
+                          )
+
                           paste0(
-                            "<h4 style='", css_h4, "'>Rango de edad — ", etiq, "</h4>",
-                            "<p style='", css_p, "'>La Lista Nominal ", etiq, " registra <strong>",
-                            fmt_num(tot_lne), "</strong> electores, con una tasa de inclusión de <strong>",
-                            fmt_pct(tasa_inc), "</strong> respecto al Padrón Electoral.</p>",
-                            "<p style='", css_p, "'>El grupo de mayor representación es el de <strong>",
-                            gm, " años</strong> (<strong>", fmt_num(mx), "</strong> electores), ",
-                            "seguido por el de <strong>", gm2, " años</strong>.</p>",
-                            if (!is.na(pct_jov)) paste0("<p style='", css_p,
-                                                        "'>Los electores de 18 y 19 años representan el <strong>",
-                                                        fmt_pct(pct_jov), "</strong> de la LNE.</p>") else "",
-                            if (!is.na(pct_65)) paste0("<p style='", css_p,
-                                                       "'>Los electores de 65 años o más representan el <strong>",
-                                                       fmt_pct(pct_65), "</strong> de la LNE.</p>") else ""
+                            "<h4 style='", css_h4, "'>An\u00e1lisis General</h4>",
+                            parr1, parr2, parr3
                           )
                         }, error = function(e)
                           paste0("<p style='", css_na, "'>Error al procesar datos de edad.</p>")),
@@ -726,70 +807,301 @@ graficas_semanal <- function(input, output, session,
                         "sexo" = tryCatch({
                           tot <- extraer_totales_sexo(datos_semanal_sexo(), ambito)
                           if (is.null(tot))
-                            return(HTML(paste0("<p style='", css_na, "'>Sin datos de sexo disponibles.</p>")))
-                          ph <- tot$padron_hombres; pm <- tot$padron_mujeres
-                          lh <- tot$lista_hombres;  lm <- tot$lista_mujeres
-                          pt <- ph + pm; lt <- lh + lm
-                          ti   <- if (pt > 0) round(lt / pt * 100, 2) else NA
+                            return(HTML(paste0("<p style='", css_na,
+                                              "'>Sin datos de sexo disponibles.</p>")))
+
+                          ph   <- tot$padron_hombres %||% 0
+                          pm   <- tot$padron_mujeres %||% 0
+                          pn   <- tot$padron_no_binario %||% 0
+                          lh   <- tot$lista_hombres %||% 0
+                          lm   <- tot$lista_mujeres %||% 0
+                          ln_n <- tot$lista_no_binario %||% 0
                           ti_h <- if (ph > 0) round(lh / ph * 100, 2) else NA
                           ti_m <- if (pm > 0) round(lm / pm * 100, 2) else NA
-                          pct_h_lne <- if (lt > 0) round(lh / lt * 100, 2) else NA
-                          pct_m_lne <- if (lt > 0) round(lm / lt * 100, 2) else NA
-                          sm_pad <- if (pm >= ph) "mujeres" else "hombres"
-                          sm_ln  <- if (lm >= lh) "mujeres" else "hombres"
-                          nb_p <- tot$padron_no_binario %||% 0
-                          nb_l <- tot$lista_no_binario  %||% 0
-                          txt_nb <- if (!is.na(nb_p) && nb_p > 0)
-                            paste0("<p style='", css_p, "'>El Padrón registra <strong>",
-                                   fmt_num(nb_p), "</strong> personas no binarias, con <strong>",
-                                   fmt_num(nb_l), "</strong> en la Lista Nominal.</p>") else ""
+                          ti_n <- if (pn > 0) round(ln_n / pn * 100, 2) else NA
+
+                          # ── Fecha última vía serie ─────────────────────────
+                          meses_es <- c("enero","febrero","marzo","abril",
+                                        "mayo","junio","julio","agosto",
+                                        "septiembre","octubre","noviembre",
+                                        "diciembre")
+                          fmt_f <- function(d) paste(
+                            as.integer(format(d, "%d")),
+                            meses_es[as.integer(format(d, "%m"))],
+                            format(d, "%Y"))
+
+                          fecha_fin_txt <- tryCatch({
+                            s <- datos_semanal_serie_sexo()
+                            if (!is.null(s) && nrow(s) > 0 && "fecha" %in% colnames(s))
+                              fmt_f(max(s$fecha, na.rm = TRUE))
+                            else as.character(anio_semanal())
+                          }, error = function(e) as.character(anio_semanal()))
+
+                          # ── Párrafo 1: totales + tasas de inclusión ────────
+                          txt_nb_ti <- if (!is.na(ti_n) && pn > 0)
+                            paste0(" y <strong>", fmt_pct(ti_n),
+                                   "</strong> de personas no binarias")
+                          else ""
+
+                          parr1 <- paste0(
+                            "<p style='", css_p, "'>Al <strong>", fecha_fin_txt,
+                            "</strong>, el Padr\u00f3n Electoral totaliza <strong>",
+                            fmt_num(ph), "</strong> hombres y <strong>",
+                            fmt_num(pm), "</strong> mujeres; en tanto que en la LNE",
+                            " se registran <strong>", fmt_num(lh),
+                            "</strong> hombres y <strong>", fmt_num(lm),
+                            "</strong> mujeres. La tasa de inclusi\u00f3n entre el",
+                            " Padr\u00f3n y la LNE para la categor\u00eda \u2018Sexo\u2019",
+                            " muestra <strong>", fmt_pct(ti_m), "</strong> para mujeres,",
+                            " <strong>", fmt_pct(ti_h), "</strong> para hombres",
+                            txt_nb_ti, ".</p>"
+                          )
+
+                          # ── Párrafos 2 y 3: desglose etario por sexo ──────
+                          parr2 <- ""
+                          parr3 <- ""
+                          df_ed <- construir_df_edad(datos_semanal_edad(), ambito)
+
+                          if (!is.null(df_ed) && nrow(df_ed) > 0) {
+                            JOV <- c("18","19","20-24","25-29")
+                            ADU <- c("30-34","35-39","40-44","45-49","50-54","55-59")
+                            MAY <- c("60-64","65+")
+
+                            tot_lm <- sum(df_ed$lista_mujeres,    na.rm = TRUE)
+                            tot_lh <- sum(df_ed$lista_hombres,    na.rm = TRUE)
+                            tot_ln <- sum(df_ed$lista_no_binario, na.rm = TRUE)
+
+                            pct_m <- function(r) {
+                              v <- sum(df_ed$lista_mujeres[df_ed$grupo %in% r],
+                                       na.rm = TRUE)
+                              if (tot_lm > 0) round(v / tot_lm * 100, 2) else NA
+                            }
+                            pct_h <- function(r) {
+                              v <- sum(df_ed$lista_hombres[df_ed$grupo %in% r],
+                                       na.rm = TRUE)
+                              if (tot_lh > 0) round(v / tot_lh * 100, 2) else NA
+                            }
+                            pct_n <- function(r) {
+                              v <- sum(df_ed$lista_no_binario[df_ed$grupo %in% r],
+                                       na.rm = TRUE)
+                              if (tot_ln > 0) round(v / tot_ln * 100, 2) else NA
+                            }
+
+                            txt_nb_p2 <- if (tot_ln > 0)
+                              paste0(" Las personas no binarias registran <strong>",
+                                     fmt_pct(pct_n(JOV)), "</strong> entre j\u00f3venes,",
+                                     " <strong>", fmt_pct(pct_n(ADU)),
+                                     "</strong> en adultos y <strong>",
+                                     fmt_pct(pct_n(MAY)), "</strong> en adultos mayores.")
+                            else ""
+
+                            parr2 <- paste0(
+                              "<p style='", css_p,
+                              "'>Del total de mujeres en la LNE, <strong>",
+                              fmt_pct(pct_m(JOV)),
+                              "</strong> son ciudadanas entre 18 y 29 a\u00f1os; <strong>",
+                              fmt_pct(pct_m(ADU)), "</strong> entre 30 y 59; y <strong>",
+                              fmt_pct(pct_m(MAY)),
+                              "</strong> son mayores de 60 a\u00f1os. En cuanto a los hombres,",
+                              " <strong>", fmt_pct(pct_h(JOV)),
+                              "</strong> son j\u00f3venes (18\u201329 a\u00f1os), <strong>",
+                              fmt_pct(pct_h(ADU)),
+                              "</strong> son adultos (30 y 59 a\u00f1os), y <strong>",
+                              fmt_pct(pct_h(MAY)),
+                              "</strong> son adultos mayores.", txt_nb_p2, "</p>"
+                            )
+
+                            # Top 3 rangos por sexo
+                            top3_m <- head(df_ed[order(df_ed$lista_mujeres,
+                                                       decreasing = TRUE), ], 3)
+                            top3_h <- head(df_ed[order(df_ed$lista_hombres,
+                                                       decreasing = TRUE), ], 3)
+                            top3_n <- head(df_ed[order(df_ed$lista_no_binario,
+                                                       decreasing = TRUE), ], 3)
+                            pm3 <- function(i)
+                              if (tot_lm > 0)
+                                round(top3_m$lista_mujeres[i] / tot_lm * 100, 2)
+                              else NA
+                            ph3 <- function(i)
+                              if (tot_lh > 0)
+                                round(top3_h$lista_hombres[i] / tot_lh * 100, 2)
+                              else NA
+                            pn3 <- function(i)
+                              if (tot_ln > 0)
+                                round(top3_n$lista_no_binario[i] / tot_ln * 100, 2)
+                              else NA
+
+                            txt_nb_p3 <- if (tot_ln > 0)
+                              paste0(
+                                " El mayor porcentaje de personas no binarias en la",
+                                " LNE se encuentra en el rango de <strong>",
+                                top3_n$grupo[1], " a\u00f1os</strong>, con <strong>",
+                                fmt_pct(pn3(1)), "</strong>; seguido por <strong>",
+                                top3_n$grupo[2], " a\u00f1os</strong>, (<strong>",
+                                fmt_pct(pn3(2)), "</strong>), y <strong>",
+                                top3_n$grupo[3], " a\u00f1os</strong>, con <strong>",
+                                fmt_pct(pn3(3)), "</strong>."
+                              )
+                            else ""
+
+                            parr3 <- paste0(
+                              "<p style='", css_p,
+                              "'>Por rangos de edad, la mayor cantidad de mujeres en",
+                              " LNE tiene entre <strong>", top3_m$grupo[1],
+                              " a\u00f1os</strong>, con <strong>", fmt_pct(pm3(1)),
+                              "</strong>, seguido por <strong>", top3_m$grupo[2],
+                              " a\u00f1os</strong> (<strong>", fmt_pct(pm3(2)),
+                              "</strong>) y <strong>", top3_m$grupo[3],
+                              " a\u00f1os</strong>, con <strong>", fmt_pct(pm3(3)),
+                              "</strong>. En cuanto a los hombres, en la LNE,",
+                              " la mayor\u00eda est\u00e1 en el rango de <strong>",
+                              top3_h$grupo[1], " a\u00f1os</strong>, con <strong>",
+                              fmt_pct(ph3(1)), "</strong>, seguido por <strong>",
+                              top3_h$grupo[2], " a\u00f1os</strong>, (<strong>",
+                              fmt_pct(ph3(2)), "</strong>) y <strong>",
+                              top3_h$grupo[3], " a\u00f1os</strong>, con <strong>",
+                              fmt_pct(ph3(3)), "</strong>.", txt_nb_p3, "</p>"
+                            )
+                          }
+
                           paste0(
-                            "<h4 style='", css_h4, "'>Distribución por sexo — ", etiq, "</h4>",
-                            "<p style='", css_p, "'>El Padrón Electoral ", etiq, " asciende a <strong>",
-                            fmt_num(pt), "</strong>, con mayor presencia de <strong>", sm_pad,
-                            "</strong>. La Lista Nominal totaliza <strong>", fmt_num(lt),
-                            "</strong> con tasa de inclusión global de <strong>", fmt_pct(ti), "</strong>.</p>",
-                            "<p style='", css_p, "'>En la LNE predominan las/los <strong>", sm_ln,
-                            "</strong>: <strong>", fmt_pct(pct_m_lne), "</strong> son mujeres y <strong>",
-                            fmt_pct(pct_h_lne), "</strong> son hombres.</p>",
-                            "<p style='", css_p, "'>Tasas de inclusión por sexo: hombres <strong>",
-                            fmt_pct(ti_h), "</strong> — mujeres <strong>", fmt_pct(ti_m), "</strong>.</p>",
-                            txt_nb
+                            "<h4 style='", css_h4, "'>An\u00e1lisis General</h4>",
+                            parr1, parr2, parr3
                           )
                         }, error = function(e)
-                          paste0("<p style='", css_na, "'>Error al procesar datos de sexo.</p>")),
+                          paste0("<p style='", css_na,
+                                 "'>Error al procesar datos de sexo.</p>")),
                         
                         "origen" = tryCatch({
                           tabla <- construir_tabla_origen(datos_semanal_origen(), ambito)
-                          if (is.null(tabla) || nrow(tabla) < 3)
+                          if (is.null(tabla) || nrow(tabla) < 5)
                             return(HTML(paste0("<p style='", css_na,
                                                "'>Sin datos suficientes de origen.</p>")))
-                          top3 <- head(tabla, 3)
-                          tlt  <- sum(tabla$lista_nominal, na.rm = TRUE)
-                          txt_top3 <- paste(sapply(1:3, function(i)
-                            paste0("<strong>", i, ". ", top3$entidad_origen[i], "</strong> (",
-                                   fmt_num(top3$lista_nominal[i]), " en LNE — ",
-                                   fmt_pct(round(top3$lista_nominal[i] / tlt * 100, 2)), ")")),
-                            collapse = "; ")
-                          r87 <- tabla[grepl("nacidos en el extranjero", tabla$entidad_origen,
-                                             ignore.case = TRUE), ]
-                          r88 <- tabla[grepl("naturalizados", tabla$entidad_origen,
-                                             ignore.case = TRUE), ]
-                          txt_87 <- if (nrow(r87) > 0 && !is.na(r87$lista_nominal[1]) &&
-                                        r87$lista_nominal[1] > 0)
-                            paste0("<p style='", css_p, "'>Mexicanos nacidos en el extranjero: <strong>",
-                                   fmt_num(r87$lista_nominal[1]), "</strong> en la LNE (<strong>",
-                                   fmt_pct(round(r87$lista_nominal[1] / tlt * 100, 2)),
-                                   "</strong>).</p>") else ""
-                          txt_88 <- if (nrow(r88) > 0 && !is.na(r88$lista_nominal[1]) &&
-                                        r88$lista_nominal[1] > 0)
-                            paste0("<p style='", css_p, "'>Ciudadanos naturalizados: <strong>",
-                                   fmt_num(r88$lista_nominal[1]), "</strong> electores en la LNE.</p>") else ""
+
+                          # ── Fecha final vía serie ──────────────────────────────────────
+                          meses_es_o <- c("enero","febrero","marzo","abril","mayo","junio",
+                                          "julio","agosto","septiembre","octubre","noviembre","diciembre")
+                          fmt_f_o <- function(d) paste(
+                            as.integer(format(d, "%d")),
+                            meses_es_o[as.integer(format(d, "%m"))],
+                            format(d, "%Y"))
+
+                          fecha_fin_o <- tryCatch({
+                            s <- datos_semanal_serie_origen()
+                            if (!is.null(s) && nrow(s) > 0 && "fecha" %in% colnames(s))
+                              fmt_f_o(max(s$fecha, na.rm = TRUE))
+                            else as.character(anio_semanal())
+                          }, error = function(e) as.character(anio_semanal()))
+
+                          # ── Top 5 entidades de origen por LNE ─────────────────────────
+                          top5 <- head(tabla, 5)
+                          noms <- top5$entidad_origen
+                          txt_top5 <- paste0(
+                            paste(noms[1:4], collapse = ", "),
+                            " y ", noms[5]
+                          )
+
+                          parr1 <- paste0(
+                            "<p style='", css_p, "'>Al <strong>", fecha_fin_o,
+                            "</strong>, las 5 entidades de origen con mayor n\u00famero de ciudadanos ",
+                            "registrados en la LNE son ",
+                            txt_top5, ".</p>"
+                          )
+
+                          # ── Posición de LN87 (nacidos extranjero) y LN88 (naturalizados) ─
+                          idx_87 <- which(grepl("nacidos en el extranjero", tabla$entidad_origen,
+                                                ignore.case = TRUE))
+                          idx_88 <- which(grepl("naturaliz", tabla$entidad_origen,
+                                                ignore.case = TRUE))
+                          pos_87 <- if (length(idx_87) > 0) idx_87[1] else NA
+                          pos_88 <- if (length(idx_88) > 0) idx_88[1] else NA
+
+                          txt_pos87 <- if (!is.na(pos_87))
+                            paste0("el lugar <strong>", pos_87, "</strong>")
+                          else "un lugar no determinado"
+                          txt_pos88 <- if (!is.na(pos_88))
+                            paste0("el lugar <strong>", pos_88, "</strong>")
+                          else "un lugar no determinado"
+
+                          parr2 <- paste0(
+                            "<p style='", css_p,
+                            "'>Las personas ciudadanas naturalizadas mexicanas ocupan ",
+                            txt_pos88, " en la LNE; en tanto que las personas mexicanas ",
+                            "nacidas en el extranjero ocupan ", txt_pos87, ".</p>"
+                          )
+
+                          # ── Variación temporal ligada a filtros de O3 ────────────────────
+                          parr3 <- tryCatch({
+                            # Serie reactiva a los filtros de O3 (entidad receptora + btn Consultar)
+                            serie_o <- o3_mod$serie_o3_r()
+                            if (is.null(serie_o) || nrow(serie_o) < 2 ||
+                                !"fecha" %in% colnames(serie_o)) return("")
+                            serie_o      <- serie_o[order(serie_o$fecha), ]
+                            fecha_ini_o  <- fmt_f_o(serie_o$fecha[1])
+                            fecha_fin_o3 <- fmt_f_o(serie_o$fecha[nrow(serie_o)])
+
+                            # Etiquetas de entidad receptora y origen seleccionadas en O3
+                            rec_lbl    <- o3_mod$label_receptora(
+                              input$semanal_o3_entidad_rec %||% "Nacional")
+                            origen_sel <- input$semanal_o3_origen %||% "todas"
+                            ori_lbl    <- if (origen_sel == "todas") "Todas"
+                                          else o3_mod$nombre_origen(origen_sel)
+
+                            # Filtrar columnas según entidad de origen seleccionada
+                            if (origen_sel == "todas") {
+                              cols_pad_o <- grep("^pad_[a-z]|^pad87$|^pad88$", colnames(serie_o),
+                                                 value = TRUE, ignore.case = TRUE)
+                              cols_ln_o  <- grep("^ln_[a-z]|^ln87$|^ln88$",   colnames(serie_o),
+                                                 value = TRUE, ignore.case = TRUE)
+                            } else {
+                              col_ln_sel  <- origen_sel
+                              col_pad_sel <- gsub("^ln_", "pad_",
+                                                  gsub("^ln(8[78])$", "pad\\1",
+                                                       origen_sel, ignore.case = TRUE),
+                                                  ignore.case = TRUE)
+                              cols_ln_o  <- intersect(col_ln_sel,  colnames(serie_o))
+                              cols_pad_o <- intersect(col_pad_sel, colnames(serie_o))
+                            }
+
+                            pad_ini_o  <- sum(as.numeric(serie_o[1,             cols_pad_o]), na.rm = TRUE)
+                            lst_ini_o  <- sum(as.numeric(serie_o[1,             cols_ln_o]),  na.rm = TRUE)
+                            pad_fin_o2 <- sum(as.numeric(serie_o[nrow(serie_o), cols_pad_o]), na.rm = TRUE)
+                            lst_fin_o2 <- sum(as.numeric(serie_o[nrow(serie_o), cols_ln_o]),  na.rm = TRUE)
+                            var_pad_o  <- if (!is.na(pad_ini_o) && pad_ini_o > 0)
+                              round((pad_fin_o2 - pad_ini_o) / abs(pad_ini_o) * 100, 2) else NA
+                            var_lst_o  <- if (!is.na(lst_ini_o) && lst_ini_o > 0)
+                              round((lst_fin_o2 - lst_ini_o) / abs(lst_ini_o) * 100, 2) else NA
+                            if (is.na(var_pad_o) || is.na(var_lst_o)) return("")
+                            v_pad <- if (var_pad_o > 0) "aumentado" else if (var_pad_o < 0) "disminuido" else "se ha mantenido igual"
+                            v_lst <- if (var_lst_o > 0) "aumentado" else if (var_lst_o < 0) "disminuido" else "se ha mantenido igual"
+                            txt_p_o <- if (var_pad_o == 0) paste0("ha ", v_pad)
+                                       else paste0("ha ", v_pad, " en <strong>",
+                                                   fmt_pct(abs(var_pad_o)), "</strong>")
+                            txt_l_o <- if (var_lst_o == 0) paste0("ha ", v_lst)
+                                       else paste0("ha ", v_lst, " en <strong>",
+                                                   fmt_pct(abs(var_lst_o)), "</strong>")
+                            paste0(
+                              "<h4 style='", css_h4,
+                              "'>An\u00e1lisis puntual entre \u2018entidad de origen\u2019 ",
+                              "y \u2018entidad receptora\u2019</h4>",
+                              "<p style='", css_p,
+                              "'>Considerando los datos de la consulta en la \u00faltima gr\u00e1fica",
+                              " (Entidad receptora: <strong>", rec_lbl,
+                              "</strong> y Entidad de origen: <strong>", ori_lbl, "</strong>), ",
+                              "entre el <strong>", fecha_ini_o, "</strong> y el <strong>",
+                              fecha_fin_o3, "</strong>, la LNE ha pasado de ",
+                              "<strong>", fmt_num(lst_ini_o), "</strong> a ",
+                              "<strong>", fmt_num(lst_fin_o2), "</strong>, por lo que ",
+                              txt_l_o, ". Respecto al Padr\u00f3n Electoral, ha pasado de ",
+                              "<strong>", fmt_num(pad_ini_o), "</strong> a ",
+                              "<strong>", fmt_num(pad_fin_o2), "</strong>, por lo que ",
+                              txt_p_o, ".</p>"
+                            )
+                          }, error = function(e) "")
+
                           paste0(
-                            "<h4 style='", css_h4, "'>Entidad de origen — ", etiq, "</h4>",
-                            "<p style='", css_p, "'>Los tres principales estados de origen son: ",
-                            txt_top3, ".</p>",
-                            txt_87, txt_88
+                            "<h4 style='", css_h4, "'>An\u00e1lisis General</h4>",
+                            parr1, parr2, parr3
                           )
                         }, error = function(e)
                           paste0("<p style='", css_na, "'>Error al procesar datos de origen.</p>")),

@@ -1030,9 +1030,30 @@ graficas_semanal_origen <- function(input, output, session,
   # ══════════════════════════════════════════════════════════════════════════
 
   observeEvent(input$semanal_o3_tipo, {
-    tipo    <- input$semanal_o3_tipo %||% "lne"
-    choices <- choices_origen_tipo(tipo)
-    updateSelectInput(session, "semanal_o3_origen", choices = choices, selected = "todas")
+    tipo       <- input$semanal_o3_tipo %||% "lne"
+    choices    <- choices_origen_tipo(tipo)
+    sel_actual <- input$semanal_o3_origen %||% "todas"
+
+    # Mapear la selección actual al prefijo del nuevo tipo para preservarla
+    # ln_jalisco  ↔  pad_jalisco  |  ln87 ↔ pad87  |  ln88 ↔ pad88  |  todas ↔ todas
+    nuevo_sel <- if (sel_actual == "todas") {
+      "todas"
+    } else if (tipo == "pad") {
+      # venimos de lne → pad: sustituir prefijo ln_ por pad_, ln87/88 → pad87/88
+      gsub("^ln_", "pad_",
+           gsub("^ln(8[78])$", "pad\\1", sel_actual, ignore.case = TRUE),
+           ignore.case = TRUE)
+    } else {
+      # venimos de pad → lne: sustituir prefijo pad_ por ln_, pad87/88 → ln87/88
+      gsub("^pad_", "ln_",
+           gsub("^pad(8[78])$", "ln\\1", sel_actual, ignore.case = TRUE),
+           ignore.case = TRUE)
+    }
+
+    # Si el valor mapeado no existe en las nuevas choices, caer a "todas"
+    if (!nuevo_sel %in% unname(choices)) nuevo_sel <- "todas"
+
+    updateSelectInput(session, "semanal_o3_origen", choices = choices, selected = nuevo_sel)
   }, ignoreNULL = TRUE, ignoreInit = TRUE)
 
   # ══════════════════════════════════════════════════════════════════════════
@@ -1322,4 +1343,10 @@ graficas_semanal_origen <- function(input, output, session,
   message("   O1: calor LNE — 32 estados + LN87/LN88 en eje Y, default Todos")
   message("   O2: calor Padrón vs LNE — absoluto (subplots) | dif. (Padrón−LNE)")
   message("   O3: evolución semanal LNE/Padrón por origen × receptor (v3.0)")
+
+  return(list(
+    serie_o3_r      = serie_o3_r,
+    label_receptora = label_receptora,
+    nombre_origen   = nombre_origen
+  ))
 }

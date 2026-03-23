@@ -165,13 +165,27 @@ lista_nominal_ui <- function(id) {
     
     # ── Sidebar derecho: análisis textual ─────────────────────────────────────
     div(
-      id    = ns("sidebar-right-lista"), 
+      id    = ns("sidebar-right-lista"),
       class = "sidebar-right",
-      uiOutput(ns("text_analysis-titulo_lista")),
-      uiOutput(ns("text_analysis-alcance_lista")),
-      div(class = "sidebar-section", uiOutput(ns("text_analysis-resumen_general_lista"))),
-      div(class = "sidebar-section", uiOutput(ns("text_analysis-demografia_lista"))),
-      div(class = "sidebar-section", uiOutput(ns("text_analysis-comparacion_lista")))
+
+      # Análisis textual — Vista HISTÓRICA
+      conditionalPanel(
+        condition = "input.tipo_corte != 'semanal'",
+        ns = ns,
+        uiOutput(ns("text_analysis-titulo_lista")),
+        uiOutput(ns("text_analysis-alcance_lista")),
+        div(class = "sidebar-section", uiOutput(ns("text_analysis-resumen_general_lista"))),
+        div(class = "sidebar-section", uiOutput(ns("text_analysis-demografia_lista"))),
+        div(class = "sidebar-section", uiOutput(ns("text_analysis-comparacion_lista")))
+      ),
+
+      # Análisis textual — Vista SEMANAL
+      conditionalPanel(
+        condition = "input.tipo_corte == 'semanal'",
+        ns = ns,
+        uiOutput(ns("semanal_texto_titulo")),
+        div(class = "sidebar-section", uiOutput(ns("semanal_texto_analisis")))
+      )
     )
   )
 }
