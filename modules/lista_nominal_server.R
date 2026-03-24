@@ -109,7 +109,7 @@ lista_nominal_server <- function(id) {
       selectInput(
         ns("desglose"),
         "Desglose:",
-        choices  = c("Rango de Edad" = "edad", "Sexo" = "sexo", "Entidad de Origen" = "origen"),
+        choices  = c("Rango de Edad" = "edad", "Distribución por Sexo" = "sexo", "Entidad de Origen" = "origen"),
         selected = "edad"
       )
     })

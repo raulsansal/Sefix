@@ -526,7 +526,7 @@ graficas_semanal_origen <- function(input, output, session,
           label    = NULL,
           choices  = c("Top 5"  = "5", "Top 10" = "10",
                        "Top 15" = "15", "Todos"  = "0"),
-          selected = "0",
+          selected = "5",
           width    = "100%"
         )
       )
@@ -651,7 +651,7 @@ graficas_semanal_origen <- function(input, output, session,
             label    = NULL,
             choices  = c("Top 5"  = "5", "Top 10" = "10",
                          "Top 15" = "15", "Todos"  = "0"),
-            selected = "10",
+            selected = "5",
             width    = "100%"
           )
         )
@@ -1313,23 +1313,13 @@ graficas_semanal_origen <- function(input, output, session,
       style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:6px 0 2px 0;line-height:1.9;",
       if (tipo == "lne") {
         tagList(
-          tags$div(
-            tags$b("LN87:"),
-            " Lista Nominal Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad",
-            "\u2003|\u2003",
-            tags$b("LN88:"),
-            " Lista Nominal de ciudadanos naturalizados mexicanos, residentes en la entidad"
-          )
+          tags$div(tags$b("LN87:"), " Lista Nominal Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad"),
+          tags$div(tags$b("LN88:"), " Lista Nominal de ciudadanos naturalizados mexicanos, residentes en la entidad")
         )
       } else {
         tagList(
-          tags$div(
-            tags$b("PAD87:"),
-            " Padr\u00f3n Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad",
-            "\u2003|\u2003",
-            tags$b("PAD88:"),
-            " Padr\u00f3n Electoral de ciudadanos naturalizados mexicanos, residentes en la entidad"
-          )
+          tags$div(tags$b("PAD87:"), " Padr\u00f3n Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad"),
+          tags$div(tags$b("PAD88:"), " Padr\u00f3n Electoral de ciudadanos naturalizados mexicanos, residentes en la entidad")
         )
       },
       tags$div(

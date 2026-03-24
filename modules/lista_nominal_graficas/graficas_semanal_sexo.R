@@ -183,7 +183,26 @@ graficas_semanal_sexo <- function(input, output, session,
       estado_app(), input$btn_consultar, ambito_reactivo(),
       ignoreNULL = FALSE, ignoreInit = FALSE
     )
-  
+
+  # ── S1: Descarga CSV Pirámide ────────────────────────────────────────────
+  output$semanal_s1_descarga <- downloadHandler(
+    filename = function() {
+      ambito <- ambito_reactivo()
+      etiq   <- gsub("[^A-Za-z0-9_]", "_", etiq_ambito(ambito))
+      paste0("piramide_lne_sexo_", etiq, "_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      datos  <- datos_semanal_edad()
+      ambito <- ambito_reactivo()
+      df     <- construir_df_edad(datos, ambito)
+      if (is.null(df) || nrow(df) == 0) {
+        write.csv(data.frame(), file, row.names = FALSE)
+      } else {
+        write.csv(df, file, row.names = FALSE, fileEncoding = "UTF-8")
+      }
+    }
+  )
+
   # ══════════════════════════════════════════════════════════════════════════
   # S2 — Barras horizontales agrupadas: LNE por Grupo Etario × Sexo
   # Reemplaza las antiguas S2/S3/S4 (una por sexo) con un solo chart ancho

@@ -619,7 +619,7 @@ graficas_semanal <- function(input, output, session,
       df,
       rownames = FALSE,
       options  = list(
-        pageLength = 15,
+        pageLength = 10,
         lengthMenu = list(c(10, 15, 25, -1), c("10", "15", "25", "Todos")),
         dom        = "lfrtip",
         autoWidth  = FALSE,
@@ -799,7 +799,11 @@ graficas_semanal <- function(input, output, session,
 
                           paste0(
                             "<h4 style='", css_h4, "'>An\u00e1lisis General</h4>",
-                            parr1, parr2, parr3
+                            parr1,
+                            "<h4 style='", css_h4, "'>An\u00e1lisis por Grupo Etario</h4>",
+                            parr2,
+                            "<h4 style='", css_h4, "'>An\u00e1lisis por Rango de Edad</h4>",
+                            parr3
                           )
                         }, error = function(e)
                           paste0("<p style='", css_na, "'>Error al procesar datos de edad.</p>")),
@@ -966,7 +970,11 @@ graficas_semanal <- function(input, output, session,
 
                           paste0(
                             "<h4 style='", css_h4, "'>An\u00e1lisis General</h4>",
-                            parr1, parr2, parr3
+                            parr1,
+                            "<h4 style='", css_h4, "'>An\u00e1lisis por Sexo y Grupo Etario</h4>",
+                            parr2,
+                            "<h4 style='", css_h4, "'>An\u00e1lisis por Sexo y Rango de Edad</h4>",
+                            parr3
                           )
                         }, error = function(e)
                           paste0("<p style='", css_na,

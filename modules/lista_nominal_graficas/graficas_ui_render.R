@@ -134,6 +134,16 @@ graficas_ui_render <- function(input, output, session, estado_app,
           type = 4, color = "#44559B", size = 0.8
         ),
         div(
+          style = "display:flex;justify-content:flex-end;align-items:center;margin:8px 0 4px 0;",
+          downloadButton(
+            ns("semanal_s1_descarga"),
+            label = "Descargar CSV Pir\u00e1mide",
+            icon  = icon("download"),
+            class = "btn btn-primary btn-sm",
+            style = "font-size:12px;padding:5px 12px;"
+          )
+        ),
+        div(
           style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:4px 0 2px 0;",
           "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
         )
@@ -234,11 +244,8 @@ graficas_ui_render <- function(input, output, session, estado_app,
         uiOutput(ns("semanal_o1_grafica_ui")),
         div(
           style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:6px 0 2px 0;line-height:1.9;",
-          tags$div(
-            tags$b("LN87:"), " Lista Nominal Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad",
-            "\u2003|\u2003",
-            tags$b("LN88:"), " Lista Nominal de ciudadanos naturalizados mexicanos, residentes en la entidad"
-          ),
+          tags$div(tags$b("LN87:"), " Lista Nominal Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad"),
+          tags$div(tags$b("LN88:"), " Lista Nominal de ciudadanos naturalizados mexicanos, residentes en la entidad"),
           tags$div(style = "margin-top:4px;",
             "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
           )
@@ -256,11 +263,8 @@ graficas_ui_render <- function(input, output, session, estado_app,
         uiOutput(ns("semanal_o2_grafica_ui")),
         div(
           style = "text-align:center;font-size:10px;color:#666666;font-family:Arial,sans-serif;padding:6px 0 2px 0;line-height:1.9;",
-          tags$div(
-            tags$b("PAD87:"), " Padr\u00f3n Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad",
-            "\u2003|\u2003",
-            tags$b("PAD88:"), " Padr\u00f3n Electoral de ciudadanos naturalizados mexicanos, residentes en la entidad"
-          ),
+          tags$div(tags$b("PAD87:"), " Padr\u00f3n Electoral de ciudadanos mexicanos nacidos en el extranjero, residentes en la entidad"),
+          tags$div(tags$b("PAD88:"), " Padr\u00f3n Electoral de ciudadanos naturalizados mexicanos, residentes en la entidad"),
           tags$div(style = "margin-top:4px;",
             "Fuente: INE. Estad\u00edstica de Padr\u00f3n Electoral y Lista Nominal del Electorado"
           )
