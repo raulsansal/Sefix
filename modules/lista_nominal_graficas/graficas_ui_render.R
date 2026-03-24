@@ -342,18 +342,24 @@ graficas_ui_render <- function(input, output, session, estado_app,
         ))
       }
       
-      message("✅ [UI RENDER] Semanal — desglose: ", desglose_actual)
-      
-      bloque_desglose <- switch(desglose_actual,
-                                "edad"   = ui_seccion_edad(ns),
-                                "sexo"   = ui_seccion_sexo(ns),
-                                "origen" = ui_seccion_origen(ns),
-                                ui_seccion_edad(ns)   # fallback
-      )
-      
+      message("✅ [UI RENDER] Semanal — todas las secciones (conditionalPanel)")
+
+      # Las tres secciones siempre están en el DOM; conditionalPanel las muestra/oculta
+      # via CSS en el cliente — sin rerender del servidor al cambiar desglose.
       return(tagList(
         uiOutput(ns("semanal_titulo_principal")),
-        bloque_desglose
+        conditionalPanel(
+          condition = sprintf("input['%s'] === 'edad'",   ns("desglose")),
+          ui_seccion_edad(ns)
+        ),
+        conditionalPanel(
+          condition = sprintf("input['%s'] === 'sexo'",   ns("desglose")),
+          ui_seccion_sexo(ns)
+        ),
+        conditionalPanel(
+          condition = sprintf("input['%s'] === 'origen'", ns("desglose")),
+          ui_seccion_origen(ns)
+        )
       ))
     }
     
@@ -459,7 +465,6 @@ graficas_ui_render <- function(input, output, session, estado_app,
       estado_app(),
       input$btn_consultar,
       input$tipo_corte,
-      input$desglose,
       ambito_reactivo(),
       ignoreNULL = FALSE,
       ignoreInit = FALSE

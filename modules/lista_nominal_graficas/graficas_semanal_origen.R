@@ -401,16 +401,24 @@ graficas_semanal_origen <- function(input, output, session,
     abrev_neu_y <- sapply(cols_top, abrev_origen, tipo = "pad")
     full_y      <- sapply(cols_top, nombre_origen)
 
-    # Entidades receptoras únicas, ordenadas por cve_entidad
+    # Entidades receptoras únicas, ordenadas por clave_entidad
+    # NOTA: cargar_lne renombra cve_entidad → clave_entidad; usar ese nombre.
     df_geo <- df_uso[!grepl("^TOTALES$", toupper(trimws(df_uso$nombre_entidad))), ]
-    if ("cve_entidad" %in% colnames(df_geo)) {
-      entidades <- unique(df_geo[, c("cve_entidad", "nombre_entidad")])
+    col_cve <- if ("clave_entidad" %in% colnames(df_geo)) "clave_entidad" else
+               if ("cve_entidad"   %in% colnames(df_geo)) "cve_entidad"   else NULL
+    if (!is.null(col_cve)) {
+      entidades <- unique(df_geo[, c(col_cve, "nombre_entidad")])
+      colnames(entidades)[1] <- "cve_entidad"
       entidades <- entidades[order(as.integer(entidades$cve_entidad)), ]
     } else {
-      ents_u    <- unique(df_geo$nombre_entidad)
-      ents_u    <- ents_u[seq_len(min(32, length(ents_u)))]
-      entidades <- data.frame(cve_entidad    = seq_along(ents_u),
-                              nombre_entidad = ents_u,
+      # Fallback: asignar clave buscando por nombre en el mapa oficial
+      ents_u <- unique(df_geo$nombre_entidad)
+      ents_u <- ents_u[seq_len(min(32, length(ents_u)))]
+      claves <- sapply(toupper(ents_u), function(nom) {
+        idx <- which(toupper(entidades) == nom)
+        if (length(idx) > 0) as.integer(names(idx)[1]) else 99L
+      })
+      entidades <- data.frame(cve_entidad = claves, nombre_entidad = ents_u,
                               stringsAsFactors = FALSE)
     }
 
@@ -589,12 +597,12 @@ graficas_semanal_origen <- function(input, output, session,
       z             = mat,
       x             = colnames(mat),
       y             = rownames(mat),
-      customdata    = cdata,
+      text          = cdata,
       type          = "heatmap",
       colorscale    = cs,
       showscale     = TRUE,
       hovertemplate = paste0(
-        "Origen: <b>%{customdata}</b><br>",
+        "Origen: <b>%{text}</b><br>",
         "Receptor: <b>%{x}</b><br>",
         "LNE: %{z:,.0f}<extra></extra>"
       )
@@ -753,14 +761,14 @@ graficas_semanal_origen <- function(input, output, session,
           z             = mat_dif,
           x             = etiq_x,
           y             = abrev_neu_y,
-          customdata    = cdata,
+          text          = cdata,
           type          = "heatmap",
           colorscale    = cs_dif,
           zmin          = 0,
           showscale     = TRUE,
           colorbar      = list(title = "Padr\u00f3n \u2212 LNE"),
           hovertemplate = paste0(
-            "Origen: <b>%{customdata}</b><br>",
+            "Origen: <b>%{text}</b><br>",
             "Receptor: <b>%{x}</b><br>",
             "Padr\u00f3n \u2212 LNE: %{z:,.0f}<extra></extra>"
           )
@@ -797,13 +805,13 @@ graficas_semanal_origen <- function(input, output, session,
       z          = mat_pad,
       x          = etiq_x,
       y          = abrev_neu_y,
-      customdata = cdata,
+      text       = cdata,
       type       = "heatmap",
       colorscale = cs,
       zmin       = 0, zmax = zmax_g,
       showscale  = FALSE,
       hovertemplate = paste0(
-        "Origen: <b>%{customdata}</b><br>",
+        "Origen: <b>%{text}</b><br>",
         "Receptor: <b>%{x}</b><br>",
         "Padr\u00f3n Electoral: %{z:,.0f}<extra></extra>"
       )
@@ -813,14 +821,14 @@ graficas_semanal_origen <- function(input, output, session,
       z          = mat_ln,
       x          = etiq_x,
       y          = abrev_neu_y,
-      customdata = cdata,
+      text       = cdata,
       type       = "heatmap",
       colorscale = cs,
       zmin       = 0, zmax = zmax_g,
       showscale  = TRUE,
       colorbar   = list(title = "Electores"),
       hovertemplate = paste0(
-        "Origen: <b>%{customdata}</b><br>",
+        "Origen: <b>%{text}</b><br>",
         "Receptor: <b>%{x}</b><br>",
         "LNE: %{z:,.0f}<extra></extra>"
       )
