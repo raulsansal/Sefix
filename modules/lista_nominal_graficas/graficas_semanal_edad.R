@@ -510,9 +510,10 @@ graficas_semanal_edad <- function(input, output, session,
     
     serie <- datos_serie_edad_efectiva()
     if (is.null(serie) || nrow(serie) < 2) {
+      if (es_conflicto_ext() || es_conflicto_nac()) return(plot_cero())
       return(plot_vacio("Sin datos de serie temporal para proyección"))
     }
-    
+
     # Fecha de la última semana disponible en la serie
     ultima_fecha <- max(serie$fecha)
     etiq_fecha   <- fecha_es(ultima_fecha)
@@ -712,8 +713,10 @@ graficas_semanal_edad <- function(input, output, session,
     if (is.null(datos)) return(plot_vacio())
     
     df_rango <- construir_df_edad(datos, ambito)
-    if (is.null(df_rango) || nrow(df_rango) == 0)
-      return(plot_vacio("Sin datos de grupos de edad"))
+    if (is.null(df_rango) || nrow(df_rango) == 0) {
+      if (es_conflicto_ext() || es_conflicto_nac()) df_rango <- construir_df_edad_cero()
+      else return(plot_vacio("Sin datos de grupos de edad"))
+    }
     
     nombres_grupos <- names(GRUPOS_ETARIOS)
     colores_grupos <- if (ambito == "extranjero") COLOR_GRUPOS_EXT else COLOR_GRUPOS_NAC
@@ -994,14 +997,16 @@ graficas_semanal_edad <- function(input, output, session,
     etiq    <- etiq_ambito(ambito)
     
     serie <- datos_serie_edad_efectiva()
-    if (is.null(serie) || nrow(serie) < 2)
+    if (is.null(serie) || nrow(serie) < 2) {
+      if (es_conflicto_ext() || es_conflicto_nac()) return(plot_cero())
       return(plot_vacio("Sin datos de serie temporal para proyección"))
-    
+    }
+
     ultima_fecha <- max(serie$fecha)
     etiq_fecha   <- fecha_es(ultima_fecha)
     ultimo_mes   <- as.integer(format(ultima_fecha, "%m"))
     meses_rest   <- 12L - ultimo_mes
-    
+
     grupos_sel <- input$semanal_e3_grupos %||% GRUPOS_E3
     if (length(grupos_sel) == 0) grupos_sel <- GRUPOS_E3
     
@@ -1142,9 +1147,12 @@ graficas_semanal_edad <- function(input, output, session,
     
     datos <- datos_semanal_edad()
     if (is.null(datos)) return(plot_vacio())
-    
+
     df <- construir_df_edad(datos, ambito)
-    if (is.null(df) || nrow(df) == 0) return(plot_vacio("Sin datos de edad"))
+    if (is.null(df) || nrow(df) == 0) {
+      if (es_conflicto_ext() || es_conflicto_nac()) df <- construir_df_edad_cero()
+      else return(plot_vacio("Sin datos de edad"))
+    }
     
     df$padron_total <- df$padron_hombres + df$padron_mujeres + df$padron_no_binario
     df$lista_total  <- df$lista_hombres  + df$lista_mujeres  + df$lista_no_binario

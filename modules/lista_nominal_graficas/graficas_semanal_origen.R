@@ -229,50 +229,49 @@ graficas_semanal_origen <- function(input, output, session,
                             seccion    = seccion,
                             incluir_extranjero = TRUE)
           if (is.null(res) || is.null(res$datos) || nrow(res$datos) == 0) {
-            n_err <<- n_err + 1L; return()
-          }
-          df <- res$datos
-
-          # Agregar según ámbito
-          if (ambito == "extranjero") {
-            if ("cabecera_distrital" %in% colnames(df)) {
-              filas_agg <- df[grepl("RESIDENTES EXTRANJERO",
-                                    toupper(trimws(df$cabecera_distrital)),
-                                    fixed = TRUE), , drop = FALSE]
-            } else {
-              filas_agg <- data.frame()
-            }
-          } else {
-            mask <- if ("cabecera_distrital" %in% colnames(df))
-              grepl("RESIDENTES EXTRANJERO",
-                    toupper(trimws(df$cabecera_distrital)), fixed = TRUE)
-            else rep(FALSE, nrow(df))
-            if ("cve_entidad" %in% colnames(df))
-              mask <- mask | is.na(df$cve_entidad)
-            filas_agg <- df[!mask, , drop = FALSE]
-          }
-
-          if (is.null(filas_agg) || nrow(filas_agg) == 0) {
-            n_err <<- n_err + 1L; return()
-          }
-
-          cols_num <- setdiff(colnames(filas_agg), cols_id)
-          cols_pad <- grep("^pad_[a-z]|^pad87$|^pad88$", cols_num,
-                           value = TRUE, ignore.case = TRUE)
-          cols_ln  <- grep("^ln_[a-z]|^ln87$|^ln88$",   cols_num,
-                           value = TRUE, ignore.case = TRUE)
-
-          resultado <- list(fecha = fecha_d)
-          for (col in c(cols_pad, cols_ln)) {
-            v <- sum(as.numeric(filas_agg[[col]]), na.rm = TRUE)
-            resultado[[col]] <- if (is.na(v)) 0 else v
-          }
-          if (length(resultado) > 1) {
-            filas[[length(filas) + 1]] <<- as.data.frame(resultado,
-                                                          stringsAsFactors = FALSE)
-            n_ok <<- n_ok + 1L
-          } else {
             n_err <<- n_err + 1L
+          } else {
+            df <- res$datos
+
+            # Agregar según ámbito
+            if (ambito == "extranjero") {
+              filas_agg <- if ("cabecera_distrital" %in% colnames(df))
+                df[grepl("RESIDENTES EXTRANJERO",
+                          toupper(trimws(df$cabecera_distrital)),
+                          fixed = TRUE), , drop = FALSE]
+              else data.frame()
+            } else {
+              mask <- if ("cabecera_distrital" %in% colnames(df))
+                grepl("RESIDENTES EXTRANJERO",
+                      toupper(trimws(df$cabecera_distrital)), fixed = TRUE)
+              else rep(FALSE, nrow(df))
+              if ("cve_entidad" %in% colnames(df))
+                mask <- mask | is.na(df$cve_entidad)
+              filas_agg <- df[!mask, , drop = FALSE]
+            }
+
+            if (is.null(filas_agg) || nrow(filas_agg) == 0) {
+              n_err <<- n_err + 1L
+            } else {
+              cols_num <- setdiff(colnames(filas_agg), cols_id)
+              cols_pad <- grep("^pad_[a-z]|^pad87$|^pad88$", cols_num,
+                               value = TRUE, ignore.case = TRUE)
+              cols_ln  <- grep("^ln_[a-z]|^ln87$|^ln88$",   cols_num,
+                               value = TRUE, ignore.case = TRUE)
+
+              resultado <- list(fecha = fecha_d)
+              for (col in c(cols_pad, cols_ln)) {
+                v <- sum(as.numeric(filas_agg[[col]]), na.rm = TRUE)
+                resultado[[col]] <- if (is.na(v)) 0 else v
+              }
+              if (length(resultado) > 1) {
+                filas[[length(filas) + 1]] <<- as.data.frame(resultado,
+                                                              stringsAsFactors = FALSE)
+                n_ok <<- n_ok + 1L
+              } else {
+                n_err <<- n_err + 1L
+              }
+            }
           }
         }, error = function(e) {
           n_err <<- n_err + 1L
@@ -378,11 +377,10 @@ graficas_semanal_origen <- function(input, output, session,
     if (is.null(df) || nrow(df) == 0) return(NULL)
 
     df_uso <- if (ambito == "extranjero") {
-      df[grepl("RESIDENTES EXTRANJERO", toupper(df$nombre_entidad),
-               fixed = TRUE), ]
+      df[es_fila_extranjero(df), ]
     } else {
-      df[!grepl("RESIDENTES EXTRANJERO|^TOTALES$",
-                toupper(trimws(df$nombre_entidad))), ]
+      df[!es_fila_extranjero(df) &
+         !grepl("^TOTALES$", toupper(trimws(df$nombre_entidad))), ]
     }
     if (nrow(df_uso) == 0) return(NULL)
 
@@ -462,11 +460,10 @@ graficas_semanal_origen <- function(input, output, session,
     if (is.null(df) || nrow(df) == 0 || !"nombre_entidad" %in% colnames(df))
       return(NULL)
     filas <- if (ambito == "extranjero") {
-      df[grepl("RESIDENTES EXTRANJERO", toupper(df$nombre_entidad),
-               fixed = TRUE), ]
+      df[es_fila_extranjero(df), ]
     } else {
-      df[!grepl("RESIDENTES EXTRANJERO|^TOTALES$",
-                toupper(trimws(df$nombre_entidad))), ]
+      df[!es_fila_extranjero(df) &
+         !grepl("^TOTALES$", toupper(trimws(df$nombre_entidad))), ]
     }
     if (nrow(filas) == 0) return(NULL)
     cols_num <- union(detectar_cols_origen(filas, "ln"),
@@ -568,6 +565,7 @@ graficas_semanal_origen <- function(input, output, session,
 
     datos <- datos_semanal_origen()
     if (is.null(datos)) return(plot_vacio())
+    if (es_conflicto_ext() || es_conflicto_nac()) return(plot_cero())
 
     top_n <- suppressWarnings(as.integer(input$semanal_o1_top_n %||% "0"))
     if (is.na(top_n)) top_n <- 0L
@@ -712,6 +710,7 @@ graficas_semanal_origen <- function(input, output, session,
 
     datos <- datos_semanal_origen()
     if (is.null(datos)) return(plot_vacio())
+    if (es_conflicto_ext() || es_conflicto_nac()) return(plot_cero())
 
     top_n <- suppressWarnings(as.integer(input$semanal_o2_top_n %||% "10"))
     if (is.na(top_n)) top_n <- 10L
@@ -1222,8 +1221,10 @@ graficas_semanal_origen <- function(input, output, session,
       " \u2013 ", seccion_txt
     )
 
-    if (is.null(serie) || nrow(serie) < 2)
+    if (is.null(serie) || nrow(serie) < 2) {
+      if (es_conflicto_ext() || es_conflicto_nac()) return(plot_cero())
       return(plot_vacio("Sin datos de serie temporal"))
+    }
 
     # Usar la fecha del catálogo (igual que O1/O2), no max(serie$fecha)
     # para evitar mostrar fechas de caché desactualizadas.

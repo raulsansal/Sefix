@@ -97,10 +97,19 @@ lista_nominal_server <- function(id) {
               Información mensual agregada por entidad, distrito, municipio y sección.<br>
               Periodo: 2017 a la última actualización</small></div>")
       } else {
-        HTML("<div style='background-color:#fff4e6;padding:10px;border-radius:5px;margin-top:10px;'>
-              <small><strong>Datos detallados del año en curso</strong><br>
-              Desgloses por edad, sexo y entidad de origen.<br>
-              Periodo: enero 2025 a la última actualización</small></div>")
+        anio_sem <- tryCatch({
+          if (exists("LNE_CATALOG", envir = .GlobalEnv)) {
+            cat <- get("LNE_CATALOG", envir = .GlobalEnv)
+            format(max(as.Date(cat$semanal_comun, origin = "1970-01-01"),
+                       na.rm = TRUE), "%Y")
+          } else format(Sys.Date(), "%Y")
+        }, error = function(e) format(Sys.Date(), "%Y"))
+        HTML(paste0(
+          "<div style='background-color:#fff4e6;padding:10px;border-radius:5px;margin-top:10px;'>",
+          "<small><strong>Datos detallados del año en curso</strong><br>",
+          "Desgloses por edad, sexo y entidad de origen.<br>",
+          "Periodo: enero ", anio_sem, " a la \u00faltima actualizaci\u00f3n</small></div>"
+        ))
       }
     })
     

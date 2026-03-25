@@ -92,7 +92,76 @@ graficas_semanal <- function(input, output, session,
   
   es_historico    <- function() { tc <- input$tipo_corte %||% "historico"; tc != "semanal" }
   desglose_activo <- function() input$desglose %||% "edad"
-  
+
+  # ── HELPERS DE CONFLICTO ÁMBITO / FILTROS ─────────────────────────────────
+  # Caso 3: Extranjero + entidad específica + distrito distinto a RE y distinto a Todos
+  es_conflicto_ext <- function() {
+    if (ambito_reactivo() != "extranjero") return(FALSE)
+    ent  <- input$entidad  %||% "Nacional"
+    if (ent == "Nacional") return(FALSE)
+    dist <- input$distrito %||% "Todos"
+    if (dist == "Todos") return(FALSE)
+    !grepl("RESIDENTES EXTRANJERO", toupper(trimws(dist)), fixed = TRUE)
+  }
+  # Caso 4: Nacional + entidad específica + distrito RE seleccionado
+  es_conflicto_nac <- function() {
+    if (ambito_reactivo() != "nacional") return(FALSE)
+    ent  <- input$entidad  %||% "Nacional"
+    if (ent == "Nacional") return(FALSE)
+    dist <- input$distrito %||% "Todos"
+    grepl("RESIDENTES EXTRANJERO", toupper(trimws(dist)), fixed = TRUE)
+  }
+
+  # Estilos y textos de advertencia
+  css_adv <- paste0(
+    "background-color:#fff3cd;border:1px solid #ffc107;",
+    "border-radius:4px;padding:10px;margin:8px 0;",
+    "font-size:14px;color:#856404;"
+  )
+  txt_adv_ext <- paste0(
+    "<strong>\u26A0\uFE0F</strong> Selecciona \"RESIDENTES EXTRANJERO\" ",
+    "en el campo \"Distrito Electoral\" y luego da clic en el bot\u00f3n \"Consultar\". ",
+    "Estos datos est\u00e1n disponibles a nivel estatal."
+  )
+  txt_adv_nac <- paste0(
+    "<strong>\u26A0\uFE0F</strong> Si deseas realizar una consulta del \u00e1mbito ",
+    "de datos \"Nacional\", selecciona un Distrito Electoral distinto a ",
+    "\"RESIDENTES EXTRANJERO\" y luego presiona el bot\u00f3n \"Consultar\"."
+  )
+
+  # Gráfica de ceros (estado de conflicto ámbito/filtros)
+  plot_cero <- function() {
+    plot_ly() %>% layout(
+      xaxis = list(visible = FALSE), yaxis = list(visible = FALSE),
+      paper_bgcolor = "white", plot_bgcolor = "white",
+      annotations = list(list(
+        text = "<b>0</b>",
+        xref = "paper", yref = "paper",
+        x = 0.5, y = 0.5,
+        xanchor = "center", yanchor = "middle",
+        showarrow = FALSE,
+        font = list(size = 72, color = "#DDDDDD", family = "Arial, sans-serif")
+      ))
+    )
+  }
+
+  # Data frames de ceros para gráficas de barra (conflicto ámbito)
+  construir_df_edad_cero <- function() {
+    do.call(rbind, lapply(ORDEN_EDAD, function(g) data.frame(
+      grupo             = etiqueta_edad(g),
+      padron_hombres    = 0L, padron_mujeres    = 0L, padron_no_binario = 0L,
+      lista_hombres     = 0L, lista_mujeres     = 0L, lista_no_binario  = 0L,
+      stringsAsFactors  = FALSE
+    )))
+  }
+  extraer_totales_sexo_cero <- function() {
+    data.frame(
+      padron_hombres = 0, padron_mujeres = 0, padron_no_binario = 0,
+      lista_hombres  = 0, lista_mujeres  = 0, lista_no_binario  = 0,
+      stringsAsFactors = FALSE
+    )
+  }
+
   # ── HELPERS ARITMÉTICOS ────────────────────────────────────────────────────
   #
   # ESTRUCTURA DEL CSV (verificada contra derfe_pdln_20251016_edad.csv):
@@ -659,6 +728,7 @@ graficas_semanal <- function(input, output, session,
   output$semanal_texto_titulo <- renderUI({
     if (es_historico()) return(NULL)
     anio     <- anio_semanal()
+    ambito   <- ambito_reactivo()
     desglose <- desglose_activo()
     subtitulo <- switch(desglose,
       "edad"   = "Rangos de Edad",
@@ -670,9 +740,12 @@ graficas_semanal <- function(input, output, session,
       "<div style='font-size:16px;line-height:1.6;color:#333;'>",
       "<h3 style='text-align:center;margin:0 0 2px 0;font-size:18px;",
       "color:#2c3e50;font-weight:600;line-height:1.4;'>",
-      "An\u00e1lisis de la evoluci\u00f3n semanal del Padr\u00f3n y Lista Nominal Electoral",
+      "An\u00e1lisis de la evoluci\u00f3n semanal del Padr\u00f3n y LNE",
       "<span style='display:block;text-align:center;color:#1a5276;",
-      "font-weight:700;font-size:20px;margin-top:4px;margin-bottom:6px;'>",
+      "font-weight:600;font-size:17px;margin-top:6px;margin-bottom:2px;'>",
+      etiq_ambito(ambito), "</span>",
+      "<span style='display:block;text-align:center;color:#1a5276;",
+      "font-weight:700;font-size:20px;margin-top:2px;margin-bottom:6px;'>",
       anio, "</span></h3>",
       "<p style='text-align:center;margin:0 0 12px 0;font-size:16px;",
       "color:#1a5276;font-weight:600;'>", subtitulo, "</p>",
@@ -692,6 +765,11 @@ graficas_semanal <- function(input, output, session,
     contenido <- switch(desglose,
                         
                         "edad" = tryCatch({
+                          if (es_conflicto_ext())
+                            return(HTML(paste0("<div style='", css_adv, "'>", txt_adv_ext, "</div>")))
+                          if (es_conflicto_nac())
+                            return(HTML(paste0("<div style='", css_adv, "'>", txt_adv_nac, "</div>")))
+
                           df <- construir_df_edad(datos_semanal_edad(), ambito)
                           if (is.null(df) || nrow(df) == 0)
                             return(HTML(paste0("<p style='", css_na, "'>Sin datos de edad disponibles.</p>")))
@@ -701,6 +779,10 @@ graficas_semanal <- function(input, output, session,
                           tot_lne  <- sum(df$lst, na.rm = TRUE)
                           tot_pad  <- sum(df$pad, na.rm = TRUE)
                           tasa_inc <- if (tot_pad > 0) round(tot_lne / tot_pad * 100, 2) else NA
+                          etiq_ext <- if (ambito == "extranjero") " de Residentes en el Extranjero" else ""
+                          etiq_ent <- if (ambito == "extranjero")
+                            paste0(", en <strong>", input$entidad %||% "Nacional", "</strong>")
+                          else ""
 
                           # ── Comparación primera / última fecha via serie ──────────────
                           meses_es <- c("enero","febrero","marzo","abril","mayo","junio",
@@ -748,9 +830,10 @@ graficas_semanal <- function(input, output, session,
                           # ── Párrafo 1: totales + variación ────────────────────────────
                           parr1 <- paste0(
                             "<p style='", css_p, "'>Al <strong>", fecha_fin_txt,
-                            "</strong>, el Padr\u00f3n Electoral totaliza <strong>", fmt_num(tot_pad),
+                            "</strong>", etiq_ent, ", el Padr\u00f3n Electoral", etiq_ext,
+                            " totaliza <strong>", fmt_num(tot_pad),
                             "</strong> ciudadanos, de los cuales, <strong>", fmt_num(tot_lne),
-                            "</strong> est\u00e1n incluidos en la Lista Nominal Electoral (LNE), ",
+                            "</strong> est\u00e1n incluidos en la Lista Nominal Electoral (LNE)", etiq_ext, ", ",
                             "lo que representa una tasa de inclusi\u00f3n de <strong>",
                             fmt_pct(tasa_inc), "</strong>.", txt_variacion, "</p>"
                           )
@@ -774,7 +857,7 @@ graficas_semanal <- function(input, output, session,
 
                           parr2 <- paste0(
                             "<p style='", css_p, "'>Observando los datos por grupo etario, tanto el ",
-                            "Padr\u00f3n como la LNE han mantenido una tendencia uniforme en <strong>",
+                            "Padr\u00f3n como la LNE", etiq_ext, " han mantenido una tendencia uniforme en <strong>",
                             anio_semanal(), "</strong>. La LNE de j\u00f3venes entre 18 y 29 a\u00f1os suma el ",
                             "<strong>", fmt_pct(pct_jov), "</strong>, los adultos entre 30 y 59 a\u00f1os ",
                             "acumulan el mayor porcentaje con <strong>", fmt_pct(pct_adu), "</strong>; y el ",
@@ -790,7 +873,7 @@ graficas_semanal <- function(input, output, session,
 
                           parr3 <- paste0(
                             "<p style='", css_p, "'>El rango de edad con mayor cantidad de ciudadanos ",
-                            "en LNE es el formado por personas entre <strong>", top3$grupo[1],
+                            "en la LNE", etiq_ext, " es el formado por personas entre <strong>", top3$grupo[1],
                             " a\u00f1os</strong> con <strong>", fmt_pct(p3_pct(1)), "</strong>, seguido por ",
                             "<strong>", top3$grupo[2], " a\u00f1os</strong> con <strong>",
                             fmt_pct(p3_pct(2)), "</strong> y <strong>", top3$grupo[3],
@@ -809,6 +892,11 @@ graficas_semanal <- function(input, output, session,
                           paste0("<p style='", css_na, "'>Error al procesar datos de edad.</p>")),
                         
                         "sexo" = tryCatch({
+                          if (es_conflicto_ext())
+                            return(HTML(paste0("<div style='", css_adv, "'>", txt_adv_ext, "</div>")))
+                          if (es_conflicto_nac())
+                            return(HTML(paste0("<div style='", css_adv, "'>", txt_adv_nac, "</div>")))
+
                           tot <- extraer_totales_sexo(datos_semanal_sexo(), ambito)
                           if (is.null(tot))
                             return(HTML(paste0("<p style='", css_na,
@@ -823,6 +911,12 @@ graficas_semanal <- function(input, output, session,
                           ti_h <- if (ph > 0) round(lh / ph * 100, 2) else NA
                           ti_m <- if (pm > 0) round(lm / pm * 100, 2) else NA
                           ti_n <- if (pn > 0) round(ln_n / pn * 100, 2) else NA
+
+                          etiq_ext <- if (ambito == "extranjero")
+                            " de Residentes en el Extranjero" else ""
+                          etiq_ent <- if (ambito == "extranjero")
+                            paste0(" en <strong>", input$entidad %||% "Nacional", "</strong>")
+                          else ""
 
                           # ── Fecha última vía serie ─────────────────────────
                           meses_es <- c("enero","febrero","marzo","abril",
@@ -849,10 +943,11 @@ graficas_semanal <- function(input, output, session,
 
                           parr1 <- paste0(
                             "<p style='", css_p, "'>Al <strong>", fecha_fin_txt,
-                            "</strong>, el Padr\u00f3n Electoral totaliza <strong>",
+                            "</strong>, el Padr\u00f3n Electoral", etiq_ext, etiq_ent,
+                            " totaliza <strong>",
                             fmt_num(ph), "</strong> hombres y <strong>",
                             fmt_num(pm), "</strong> mujeres; en tanto que en la LNE",
-                            " se registran <strong>", fmt_num(lh),
+                            etiq_ext, " se registran <strong>", fmt_num(lh),
                             "</strong> hombres y <strong>", fmt_num(lm),
                             "</strong> mujeres. La tasa de inclusi\u00f3n entre el",
                             " Padr\u00f3n y la LNE para la categor\u00eda \u2018Sexo\u2019",
@@ -901,7 +996,8 @@ graficas_semanal <- function(input, output, session,
 
                             parr2 <- paste0(
                               "<p style='", css_p,
-                              "'>Del total de mujeres en la LNE, <strong>",
+                              "'>Del total de mujeres en la LNE", etiq_ext,
+                              ", <strong>",
                               fmt_pct(pct_m(JOV)),
                               "</strong> son ciudadanas entre 18 y 29 a\u00f1os; <strong>",
                               fmt_pct(pct_m(ADU)), "</strong> entre 30 y 59; y <strong>",
@@ -951,7 +1047,7 @@ graficas_semanal <- function(input, output, session,
                             parr3 <- paste0(
                               "<p style='", css_p,
                               "'>Por rangos de edad, la mayor cantidad de mujeres en",
-                              " LNE tiene entre <strong>", top3_m$grupo[1],
+                              " LNE", etiq_ext, " tiene entre <strong>", top3_m$grupo[1],
                               " a\u00f1os</strong>, con <strong>", fmt_pct(pm3(1)),
                               "</strong>, seguido por <strong>", top3_m$grupo[2],
                               " a\u00f1os</strong> (<strong>", fmt_pct(pm3(2)),
@@ -981,6 +1077,11 @@ graficas_semanal <- function(input, output, session,
                                  "'>Error al procesar datos de sexo.</p>")),
                         
                         "origen" = tryCatch({
+                          if (es_conflicto_ext())
+                            return(HTML(paste0("<div style='", css_adv, "'>", txt_adv_ext, "</div>")))
+                          if (es_conflicto_nac())
+                            return(HTML(paste0("<div style='", css_adv, "'>", txt_adv_nac, "</div>")))
+
                           tabla <- construir_tabla_origen(datos_semanal_origen(), ambito)
                           if (is.null(tabla) || nrow(tabla) < 5)
                             return(HTML(paste0("<p style='", css_na,
@@ -1001,6 +1102,13 @@ graficas_semanal <- function(input, output, session,
                             else as.character(anio_semanal())
                           }, error = function(e) as.character(anio_semanal()))
 
+                          etiq_ext_o <- if (ambito == "extranjero")
+                            " de Residentes en el Extranjero" else ""
+                          etiq_ent_o <- if (ambito == "extranjero")
+                            paste0("En <strong>", input$entidad %||% "Nacional",
+                                   "</strong>, ")
+                          else ""
+
                           # ── Top 5 entidades de origen por LNE ─────────────────────────
                           top5 <- head(tabla, 5)
                           noms <- top5$entidad_origen
@@ -1010,9 +1118,10 @@ graficas_semanal <- function(input, output, session,
                           )
 
                           parr1 <- paste0(
-                            "<p style='", css_p, "'>Al <strong>", fecha_fin_o,
+                            "<p style='", css_p, "'>", etiq_ent_o,
+                            "al <strong>", fecha_fin_o,
                             "</strong>, las 5 entidades de origen con mayor n\u00famero de ciudadanos ",
-                            "registrados en la LNE son ",
+                            "registrados en la LNE", etiq_ext_o, " son ",
                             txt_top5, ".</p>"
                           )
 
@@ -1097,10 +1206,12 @@ graficas_semanal <- function(input, output, session,
                               " (Entidad receptora: <strong>", rec_lbl,
                               "</strong> y Entidad de origen: <strong>", ori_lbl, "</strong>), ",
                               "entre el <strong>", fecha_ini_o, "</strong> y el <strong>",
-                              fecha_fin_o3, "</strong>, la LNE ha pasado de ",
+                              fecha_fin_o3, "</strong>, la LNE", etiq_ext_o,
+                              " ha pasado de ",
                               "<strong>", fmt_num(lst_ini_o), "</strong> a ",
                               "<strong>", fmt_num(lst_fin_o2), "</strong>, por lo que ",
-                              txt_l_o, ". Respecto al Padr\u00f3n Electoral, ha pasado de ",
+                              txt_l_o, ". Respecto al Padr\u00f3n Electoral",
+                              etiq_ext_o, ", ha pasado de ",
                               "<strong>", fmt_num(pad_ini_o), "</strong> a ",
                               "<strong>", fmt_num(pad_fin_o2), "</strong>, por lo que ",
                               txt_p_o, ".</p>"

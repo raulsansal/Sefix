@@ -22,7 +22,7 @@ lista_nominal_ui <- function(id) {
           ns("tipo_corte"), 
           "Tipo de datos:",
           choices = c("Histórico (Evolución anual y mensual)" = "historico", 
-                      "Semanal (Detallado)" = "semanal"),
+                      "Semanal (Datos detallados del año en curso)" = "semanal"),
           selected = "historico"
         ),
         uiOutput(ns("info_tipo_corte")),

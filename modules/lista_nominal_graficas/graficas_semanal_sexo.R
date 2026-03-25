@@ -138,7 +138,10 @@ graficas_semanal_sexo <- function(input, output, session,
     if (is.null(datos)) return(plot_vacio())
 
     df <- construir_df_edad(datos, ambito)
-    if (is.null(df) || nrow(df) == 0) return(plot_vacio("Sin datos de edad"))
+    if (is.null(df) || nrow(df) == 0) {
+      if (es_conflicto_ext() || es_conflicto_nac()) df <- construir_df_edad_cero()
+      else return(plot_vacio("Sin datos de edad"))
+    }
 
     niveles_y <- sapply(rev(RANGOS_EDAD), etiqueta_edad)
 
@@ -264,6 +267,7 @@ graficas_semanal_sexo <- function(input, output, session,
 
     datos <- datos_semanal_edad()
     if (is.null(datos)) return(plot_vacio())
+    if (es_conflicto_ext() || es_conflicto_nac()) return(plot_cero())
 
     # Calcular los 3 df siempre (escala X estable aunque se filtre)
     df_h  <- construir_df_grupos_sexo(datos, ambito, "hombres")
@@ -635,6 +639,7 @@ graficas_semanal_sexo <- function(input, output, session,
 
     serie <- datos_serie_sexo_efectiva()
     if (is.null(serie) || nrow(serie) < 2) {
+      if (es_conflicto_ext() || es_conflicto_nac()) return(plot_cero())
       return(plot_vacio("Sin datos de serie temporal para proyecci\u00f3n"))
     }
 
@@ -819,7 +824,10 @@ graficas_semanal_sexo <- function(input, output, session,
     if (is.null(datos)) return(plot_vacio())
 
     tot <- extraer_totales_sexo(datos, ambito)
-    if (is.null(tot)) return(plot_vacio("Sin datos de sexo"))
+    if (is.null(tot)) {
+      if (es_conflicto_ext() || es_conflicto_nac()) tot <- extraer_totales_sexo_cero()
+      else return(plot_vacio("Sin datos de sexo"))
+    }
 
     # X = Tipo (Padrón / LNE), color = Sexo → mismos tonos H/M que S1-S3
     df_g <- data.frame(
